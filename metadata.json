@@ -1,0 +1,6 @@
+{
+  "name": "Gestão Financeira e DRE",
+  "description": "Sistema completo de gestão financeira empresarial, controle de receitas e despesas, DRE gerencial, conciliação, caixa físico e fluxo de caixa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
