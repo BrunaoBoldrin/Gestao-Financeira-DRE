@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getDateRangeBounds, isDateInRange, normalizeDateValue } from '../../utils/dateRange';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
 import {
   LineChart,
   Line,
@@ -11,8 +13,6 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts';
-
-type PeriodoFluxo = 'DIARIO' | 'SEMANAL' | 'MENSAL';
 
 interface FluxoAgrupado {
   chave: string;
@@ -30,49 +30,33 @@ const parseDate = (value: string) => new Date(`${value}T12:00:00`);
 const toDateValue = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-const formatMonth = (date: Date) => {
-  const text = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
-
-const getPeriodInfo = (dateValue: string, periodo: PeriodoFluxo) => {
+const getPeriodInfo = (dateValue: string) => {
   const date = parseDate(dateValue);
-
-  if (periodo === 'MENSAL') {
-    return {
-      chave: dateValue.substring(0, 7),
-      periodo: formatMonth(date),
-      ordem: new Date(date.getFullYear(), date.getMonth(), 1).getTime()
-    };
-  }
-
-  if (periodo === 'SEMANAL') {
-    const start = new Date(date);
-    const day = start.getDay();
-    start.setDate(start.getDate() + (day === 0 ? -6 : 1 - day));
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6);
-
-    return {
-      chave: toDateValue(start),
-      periodo: `${start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} a ${end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`,
-      ordem: start.getTime()
-    };
-  }
-
   return {
     chave: dateValue,
-    periodo: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+    periodo: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }),
     ordem: date.getTime()
   };
 };
 
+const getCompetenciaRange = (competencia: string) => {
+  const [year, month] = competencia.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return {
+    inicio: `${competencia}-01`,
+    fim: `${competencia}-${String(lastDay).padStart(2, '0')}`
+  };
+};
+
 export const FluxoCaixaView: React.FC = () => {
-  const { lancamentos, selectedUnit } = useApp();
-  const [periodo, setPeriodo] = useState<PeriodoFluxo>('DIARIO');
-  const [dataInicioInput, setDataInicioInput] = useState('');
-  const [dataFimInput, setDataFimInput] = useState('');
-  const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
+  const { lancamentos, selectedUnit, fechamentoMensal } = useApp();
+  const competenciaAbertaRange = useMemo(
+    () => getCompetenciaRange(fechamentoMensal.mesAno),
+    [fechamentoMensal.mesAno]
+  );
+  const [dataInicioInput, setDataInicioInput] = useState(competenciaAbertaRange.inicio);
+  const [dataFimInput, setDataFimInput] = useState(competenciaAbertaRange.fim);
+  const [periodoAplicado, setPeriodoAplicado] = useState(competenciaAbertaRange);
   const periodoPersonalizadoInvalido = Boolean(
     dataInicioInput &&
     dataFimInput &&
@@ -116,7 +100,7 @@ export const FluxoCaixaView: React.FC = () => {
     };
 
     const ensureBucket = (date: string) => {
-      const info = getPeriodInfo(date, periodo);
+      const info = getPeriodInfo(date);
       const existing = buckets.get(info.chave);
       if (existing) return existing;
 
@@ -158,20 +142,9 @@ export const FluxoCaixaView: React.FC = () => {
       const cursor = parseDate(periodoAplicado.inicio);
       const end = parseDate(periodoAplicado.fim);
 
-      if (periodo === 'MENSAL') {
-        cursor.setDate(1);
-        const finalMonth = new Date(end.getFullYear(), end.getMonth(), 1, 12);
-        while (cursor <= finalMonth) {
-          ensureBucket(toDateValue(cursor));
-          cursor.setMonth(cursor.getMonth() + 1);
-        }
-      } else {
-        const stepInDays = periodo === 'DIARIO' ? 1 : 7;
-        while (cursor <= end) {
-          ensureBucket(toDateValue(cursor));
-          cursor.setDate(cursor.getDate() + stepInDays);
-        }
-        ensureBucket(periodoAplicado.fim);
+      while (cursor <= end) {
+        ensureBucket(toDateValue(cursor));
+        cursor.setDate(cursor.getDate() + 1);
       }
     }
 
@@ -182,13 +155,13 @@ export const FluxoCaixaView: React.FC = () => {
         saldoAcumulado += bucket.Realizado;
         return { ...bucket, SaldoAcumulado: saldoAcumulado };
       });
-  }, [lancamentosDaUnidade, periodo, periodoAplicado, periodoAplicadoAtivo]);
+  }, [lancamentosDaUnidade, periodoAplicado, periodoAplicadoAtivo]);
 
-  const periodoLabel = periodo === 'DIARIO' ? 'dia' : periodo === 'SEMANAL' ? 'semana' : 'mês';
   const formatDate = (value: string) => parseDate(value).toLocaleDateString('pt-BR');
   const periodoAplicadoLabel = periodoAplicadoAtivo
     ? `${formatDate(periodoAplicado.inicio)} até ${formatDate(periodoAplicado.fim)}`
-    : 'Todas as movimentações';
+    : `${formatDate(competenciaAbertaRange.inicio)} até ${formatDate(competenciaAbertaRange.fim)}`;
+  const { sortedItems: sortedFluxoData, sortConfig, requestSort } = useSortableData(fluxoData);
 
   return (
     <div className="space-y-6">
@@ -199,22 +172,8 @@ export const FluxoCaixaView: React.FC = () => {
             Fluxo de Caixa Operacional (Previsto vs Realizado)
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Valores agrupados por {periodoLabel}, respeitando a unidade e o período informado.
+            Visão diária da competência aberta, respeitando a unidade e o período informado.
           </p>
-        </div>
-
-        <div className="flex items-center gap-1 bg-[#f8f9ff] p-1 rounded-lg border border-[#d3e4fe]">
-          {(['DIARIO', 'SEMANAL', 'MENSAL'] as PeriodoFluxo[]).map((option) => (
-            <button
-              key={option}
-              onClick={() => setPeriodo(option)}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition ${
-                periodo === option ? 'bg-[#131b2e] text-white shadow-xs' : 'text-gray-600 hover:bg-white'
-              }`}
-            >
-              {option === 'DIARIO' ? 'Diário' : option === 'SEMANAL' ? 'Semanal' : 'Mensal'}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -222,7 +181,7 @@ export const FluxoCaixaView: React.FC = () => {
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
           <div>
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">Período personalizado</h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">Informe as duas datas e clique em Aplicar período. Sem filtro, serão exibidas todas as movimentações.</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">A aba inicia com a competência aberta ({fechamentoMensal.mesAno}). Altere as duas datas e clique em Aplicar período para consultar outro intervalo.</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <div>
@@ -258,13 +217,13 @@ export const FluxoCaixaView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setDataInicioInput('');
-                  setDataFimInput('');
-                  setPeriodoAplicado({ inicio: '', fim: '' });
+                  setDataInicioInput(competenciaAbertaRange.inicio);
+                  setDataFimInput(competenciaAbertaRange.fim);
+                  setPeriodoAplicado(competenciaAbertaRange);
                 }}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50"
               >
-                Limpar período
+                Restaurar competência
               </button>
             )}
           </div>
@@ -294,7 +253,7 @@ export const FluxoCaixaView: React.FC = () => {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-[#0b1c30]">Curva de Saldo Acumulado e Entradas/Saídas</h3>
           <span className="text-xs font-bold text-[#775a19] bg-[#ffdea5] px-2.5 py-1 rounded">
-            Visão por {periodoLabel} · {periodoAplicadoLabel}
+            Visão diária · {periodoAplicadoLabel}
           </span>
         </div>
 
@@ -320,7 +279,7 @@ export const FluxoCaixaView: React.FC = () => {
       <div className="bg-white rounded-xl border border-[#e5eeff] shadow-xs overflow-hidden">
         <div className="p-4 bg-[#f8f9ff] border-b border-[#e5eeff]">
           <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
-            Detalhamento do Fluxo de Caixa — agrupamento por {periodoLabel}
+            Detalhamento diário do Fluxo de Caixa
           </h3>
         </div>
 
@@ -328,15 +287,15 @@ export const FluxoCaixaView: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <th className="p-3">Período</th>
-                <th className="p-3 text-right">Entradas realizadas</th>
-                <th className="p-3 text-right">Saídas realizadas</th>
-                <th className="p-3 text-right">Resultado realizado</th>
-                <th className="p-3 text-right">Saldo acumulado</th>
+                <SortableTableHeader label="Período" sortKey="periodo" accessor={(item) => item.ordem} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Entradas realizadas" sortKey="entradas" accessor={(item) => item.EntradasRealizadas} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
+                <SortableTableHeader label="Saídas realizadas" sortKey="saidas" accessor={(item) => item.SaidasRealizadas} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
+                <SortableTableHeader label="Resultado realizado" sortKey="resultado" accessor={(item) => item.Realizado} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
+                <SortableTableHeader label="Saldo acumulado" sortKey="saldo" accessor={(item) => item.SaldoAcumulado} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {fluxoData.map((row) => {
+              {sortedFluxoData.map((row) => {
                 return (
                   <tr key={row.chave} className="hover:bg-gray-50 transition">
                     <td className="p-3 font-bold text-[#0b1c30]">{row.periodo}</td>
