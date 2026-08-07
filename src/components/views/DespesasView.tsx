@@ -51,7 +51,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {!isAuditor && <div className="flex items-center gap-2">
           <button
             onClick={() => {
               if (isAuditor) {
@@ -111,7 +111,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
             <span className="material-symbols-outlined text-base">add_circle</span>
             Nova Despesa
           </button>
-        </div>
+        </div>}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -184,7 +184,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                 <th className="p-3">Comprovante</th>
                 <th className="p-3 text-right">Valor (R$)</th>
                 <th className="p-3 text-center">Status</th>
-                <th className="p-3 text-center">Ações</th>
+                  {!isAuditor && <th className="p-3 text-center">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -216,7 +216,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                   <td className="p-3 text-right font-black text-rose-700">
                     R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="p-3 text-center">
+                  {!isAuditor && <td className="p-3 text-center">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         d.status === 'PAGO' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -224,7 +224,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                     >
                       {d.status}
                     </span>
-                  </td>
+                  </td>}
                   <td className="p-3 text-center">
                     <div className="flex items-center justify-center gap-1">
                       {d.status === 'PENDENTE' && (

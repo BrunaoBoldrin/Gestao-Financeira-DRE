@@ -284,6 +284,7 @@ export const INITIAL_LANCAMENTOS: Lancamento[] = [
 export const INITIAL_PARCELAMENTOS: Parcelamento[] = [
   {
     id: 'parc-1',
+    unidade: 'Royal Face - Matriz',
     titulo: 'Aparelho Lavieen Laser Thulium 1927nm',
     fornecedor: 'KLD Biosistemas Equipamentos',
     categoria: 'Investimento em Equipamentos (Capex)',
@@ -311,6 +312,7 @@ export const INITIAL_PARCELAMENTOS: Parcelamento[] = [
   },
   {
     id: 'parc-2',
+    unidade: 'Royal Face - Unidade Centro',
     titulo: 'Reforma e Ambientação Recepção VIP',
     fornecedor: 'Arquitetura & Cenografia SP Ltda',
     categoria: 'Obras & Benfeitorias',

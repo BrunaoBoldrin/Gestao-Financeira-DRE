@@ -19,7 +19,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
     units,
     users,
     showToast,
-    isAuditor
+    isFinance,
+    canExecuteFinancialActions
   } = useApp();
 
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -41,10 +42,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
             <select
               value={selectedUnit}
               onChange={(e) => setSelectedUnit(e.target.value)}
-              className="pl-8 pr-7 py-1.5 bg-[#f8f9ff] border border-[#d3e4fe] rounded-md text-xs font-semibold text-[#0b1c30] focus:outline-none focus:ring-2 focus:ring-[#131b2e] cursor-pointer max-w-[220px] truncate"
+              disabled={isFinance}
+              title={isFinance ? 'Perfil Financeiro limitado à unidade cadastrada' : undefined}
+              className={`pl-8 pr-7 py-1.5 bg-[#f8f9ff] border border-[#d3e4fe] rounded-md text-xs font-semibold text-[#0b1c30] focus:outline-none focus:ring-2 focus:ring-[#131b2e] max-w-[220px] truncate ${
+                isFinance ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
+              }`}
             >
-              <option value="Todas as Unidades">Todas as Unidades (Consolidado)</option>
-              {units.filter((u) => u.ativa !== false && u.id !== 'all').map((u) => (
+              {!isFinance && <option value="Todas as Unidades">Todas as Unidades (Consolidado)</option>}
+              {units.filter((u) =>
+                u.ativa !== false && u.id !== 'all' && (!isFinance || u.nome === currentUser?.unit)
+              ).map((u) => (
                 <option key={u.id} value={u.nome}>
                   {u.nome} ({u.cidade})
                 </option>
@@ -81,71 +88,39 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
       {/* Right: Quick Actions, Badges & User Menu */}
       <div className="flex items-center gap-2 lg:gap-4">
         {/* Quick Action Buttons */}
-        <button
-          onClick={() => {
-            if (isAuditor) {
-              showToast('Acesso negado: Perfil Auditoria possui apenas acesso de leitura.', 'error');
-              return;
-            }
-            onOpenUploadModal();
-          }}
-          disabled={isAuditor}
-          title={isAuditor ? 'Perfil Auditoria possui apenas permissão de leitura' : undefined}
-          className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${
-            isAuditor
-              ? 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-              : 'bg-[#eff4ff] border border-[#d3e4fe] text-[#0b1c30] hover:bg-[#e5eeff]'
-          }`}
-        >
-          <span className="material-symbols-outlined text-base">upload_file</span>
-          <span>Caixa de Entrada / OCR</span>
-        </button>
+        {canExecuteFinancialActions && (
+          <>
+            <button
+              onClick={onOpenUploadModal}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition bg-[#eff4ff] border border-[#d3e4fe] text-[#0b1c30] hover:bg-[#e5eeff]"
+            >
+              <span className="material-symbols-outlined text-base">upload_file</span>
+              <span>Caixa de Entrada / OCR</span>
+            </button>
 
-        <button
-          onClick={() => {
-            if (isAuditor) {
-              showToast('Acesso negado: Perfil Auditoria possui apenas acesso de leitura.', 'error');
-              return;
-            }
-            setCurrentView('import_excel');
-          }}
-          disabled={isAuditor}
-          title={isAuditor ? 'Perfil Auditoria possui apenas permissão de leitura' : undefined}
-          className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition ${
-            isAuditor
-              ? 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-              : 'bg-[#f8f9ff] border border-[#C5A059]/50 text-[#0b1c30] hover:bg-[#fff9ed]'
-          }`}
-        >
-          <span className="material-symbols-outlined text-base text-[#C5A059]">table_chart</span>
-          <span>Importar Excel</span>
-        </button>
+            <button
+              onClick={() => setCurrentView('import_excel')}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition bg-[#f8f9ff] border border-[#C5A059]/50 text-[#0b1c30] hover:bg-[#fff9ed]"
+            >
+              <span className="material-symbols-outlined text-base text-[#C5A059]">table_chart</span>
+              <span>Importar Excel</span>
+            </button>
 
-        <button
-          onClick={() => {
-            if (isAuditor) {
-              showToast('Acesso negado: Perfil Auditoria possui apenas acesso de leitura.', 'error');
-              return;
-            }
-            onOpenNovoLancamentoModal();
-          }}
-          disabled={isAuditor}
-          title={isAuditor ? 'Perfil Auditoria possui apenas permissão de leitura' : undefined}
-          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold shadow-xs transition ${
-            isAuditor
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-              : 'bg-[#131b2e] text-white hover:bg-[#0b1c30]'
-          }`}
-        >
-          <span className="material-symbols-outlined text-base">add_circle</span>
-          <span className="hidden sm:inline">Novo Lançamento</span>
-        </button>
+            <button
+              onClick={onOpenNovoLancamentoModal}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold shadow-xs transition bg-[#131b2e] text-white hover:bg-[#0b1c30]"
+            >
+              <span className="material-symbols-outlined text-base">add_circle</span>
+              <span className="hidden sm:inline">Novo Lançamento</span>
+            </button>
+          </>
+        )}
 
         <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
 
         {/* Notifications / Badges */}
         <div className="flex items-center gap-2">
-          {pendingOCRCount > 0 && (
+          {canExecuteFinancialActions && pendingOCRCount > 0 && (
             <button
               onClick={() => setCurrentView('pending_review')}
               className="relative p-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 transition flex items-center gap-1 text-xs font-medium"
@@ -191,7 +166,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
                 Alternar Perfil de Teste
               </div>
 
-              {users.map((u) => (
+              {users.filter((u) => u.active).map((u) => (
                 <button
                   key={u.id}
                   onClick={() => {

@@ -6,7 +6,9 @@ export const FechamentoMensalView: React.FC = () => {
     fechamentoMensal,
     toggleChecklistItemFechamento,
     travarFechamentoMensal,
-    reabrirFechamentoMensal
+    reabrirFechamentoMensal,
+    isAdmin,
+    canExecuteFinancialActions
   } = useApp();
 
   const [mostrarConfirmacaoTrava, setMostrarConfirmacaoTrava] = useState(false);
@@ -42,7 +44,7 @@ export const FechamentoMensalView: React.FC = () => {
           </h2>
         </div>
 
-        {fechamentoMensal.status !== 'FECHADO' ? (
+        {isAdmin && (fechamentoMensal.status !== 'FECHADO' ? (
           <button
             onClick={() => setMostrarConfirmacaoTrava(true)}
             disabled={progressoChecklistPct < 100}
@@ -63,7 +65,7 @@ export const FechamentoMensalView: React.FC = () => {
             <span className="material-symbols-outlined text-base">lock_open</span>
             Reabrir Competência para Edição
           </button>
-        )}
+        ))}
       </div>
 
       {/* Checklist Grid */}
@@ -89,9 +91,11 @@ export const FechamentoMensalView: React.FC = () => {
               <div
                 key={chk.id}
                 onClick={() =>
-                  fechamentoMensal.status !== 'FECHADO' && toggleChecklistItemFechamento(chk.id)
+                  canExecuteFinancialActions && fechamentoMensal.status !== 'FECHADO' && toggleChecklistItemFechamento(chk.id)
                 }
-                className={`p-3.5 rounded-xl border transition flex items-center justify-between gap-3 cursor-pointer ${
+                className={`p-3.5 rounded-xl border transition flex items-center justify-between gap-3 ${
+                  canExecuteFinancialActions && fechamentoMensal.status !== 'FECHADO' ? 'cursor-pointer' : 'cursor-default'
+                } ${
                   chk.concluido
                     ? 'bg-emerald-50/60 border-emerald-200'
                     : 'bg-white border-gray-200 hover:bg-gray-50'

@@ -28,7 +28,9 @@ export const ImportExcelView: React.FC = () => {
     fornecedores,
     bancos,
     setCurrentView,
-    showToast
+    showToast,
+    currentUser,
+    isFinance
   } = useApp();
 
   const [rawRows, setRawRows] = useState<any[]>([]);
@@ -204,7 +206,9 @@ export const ImportExcelView: React.FC = () => {
       else if (formaStr.includes('DINH') || formaStr.includes('ESP')) formaFinal = 'DINHEIRO';
       else if (formaStr.includes('TRANS') || formaStr.includes('TED')) formaFinal = 'TRANSFERENCIA';
 
-      const unidStr = String(row[mapping.unidade] || '').trim() || 'Royal Face - Matriz';
+      const unidStr = isFinance && currentUser
+        ? currentUser.unit
+        : String(row[mapping.unidade] || '').trim() || 'Royal Face - Matriz';
       const condStr = String(row[mapping.condicaoDDL] || '').trim();
 
       // Find matching DDL prazos

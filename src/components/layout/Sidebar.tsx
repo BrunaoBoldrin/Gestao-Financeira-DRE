@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { useApp, ViewKey } from '../../context/AppContext';
+import { useApp } from '../../context/AppContext';
+import { canAccessView } from '../../config/accessControl';
+import type { ViewKey } from '../../types';
 
 interface SidebarItem {
   key: ViewKey;
@@ -14,7 +16,7 @@ interface SidebarGroup {
 }
 
 export const Sidebar: React.FC = () => {
-  const { currentView, setCurrentView, documentosOCR } = useApp();
+  const { currentView, setCurrentView, documentosOCR, currentUser } = useApp();
   const [collapsed, setCollapsed] = useState(false);
 
   const pendingOCR = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO').length;
@@ -28,7 +30,8 @@ export const Sidebar: React.FC = () => {
       groupName: 'ENTRADA DE DOCUMENTOS',
       items: [
         { key: 'inbox', label: 'Caixa de Entrada', icon: 'inbox' },
-        { key: 'pending_review', label: 'Pendências / OCR', icon: 'rule', badge: pendingOCR }
+        { key: 'pending_review', label: 'Pendências / OCR', icon: 'rule', badge: pendingOCR },
+        { key: 'import_excel', label: 'Importar Excel', icon: 'file_upload' }
       ]
     },
     {
@@ -37,8 +40,7 @@ export const Sidebar: React.FC = () => {
         { key: 'receitas', label: 'Receitas', icon: 'trending_up' },
         { key: 'despesas', label: 'Despesas', icon: 'trending_down' },
         { key: 'parcelamentos', label: 'Parcelamentos', icon: 'view_kanban' },
-        { key: 'caixa_fisico', label: 'Caixa Físico', icon: 'point_of_sale' },
-        { key: 'import_excel', label: 'Importar Excel', icon: 'file_upload' }
+        { key: 'caixa_fisico', label: 'Caixa Físico', icon: 'point_of_sale' }
       ]
     },
     {
@@ -61,6 +63,14 @@ export const Sidebar: React.FC = () => {
       ]
     }
   ];
+
+  const userRole = currentUser?.role || 'AUDITOR';
+  const visibleMenuGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessView(userRole, item.key))
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <aside
@@ -105,8 +115,8 @@ export const Sidebar: React.FC = () => {
 
         {/* Navigation List */}
         <div className="py-3 px-2 overflow-y-auto max-h-[calc(100vh-110px)] space-y-4">
-          {menuGroups.map((group, idx) => (
-            <div key={idx}>
+          {visibleMenuGroups.map((group) => (
+            <div key={group.groupName}>
               {!collapsed && (
                 <p className="px-3 text-[10px] font-bold text-[#C5A059] tracking-wider uppercase mb-1.5 opacity-90">
                   {group.groupName}

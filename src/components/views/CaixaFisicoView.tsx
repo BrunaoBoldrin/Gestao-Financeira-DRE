@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 
 export const CaixaFisicoView: React.FC = () => {
-  const { sessaoCaixa, abrirCaixa, registrarMovimentacaoCaixa, fecharCaixa } = useApp();
+  const { sessaoCaixa, abrirCaixa, registrarMovimentacaoCaixa, fecharCaixa, canExecuteFinancialActions } = useApp();
 
   const [modalType, setModalType] = useState<'ABERTURA' | 'SANGRIA' | 'SUPRIMENTO' | 'VENDA' | 'FECHAMENTO' | null>(null);
   const [valorInput, setValorInput] = useState('');
@@ -50,7 +50,7 @@ export const CaixaFisicoView: React.FC = () => {
           </h2>
         </div>
 
-        {sessaoCaixa.status === 'ABERTO' ? (
+        {canExecuteFinancialActions && (sessaoCaixa.status === 'ABERTO' ? (
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
@@ -97,7 +97,7 @@ export const CaixaFisicoView: React.FC = () => {
           >
             Abrir Caixa Diário
           </button>
-        )}
+        ))}
       </div>
 
       {/* KPI Financial Overview */}
@@ -220,7 +220,7 @@ export const CaixaFisicoView: React.FC = () => {
       </div>
 
       {/* Modal Dialog for Actions */}
-      {modalType && (
+      {canExecuteFinancialActions && modalType && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
             <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">

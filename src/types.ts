@@ -1,5 +1,24 @@
 export type UserRole = 'ADMIN' | 'FINANCE' | 'AUDITOR';
 
+export type ViewKey =
+  | 'overview'
+  | 'inbox'
+  | 'pending_review'
+  | 'receitas'
+  | 'despesas'
+  | 'parcelamentos'
+  | 'caixa_fisico'
+  | 'fluxo_caixa'
+  | 'dre'
+  | 'documentos'
+  | 'fechamento'
+  | 'cadastros'
+  | 'import_excel'
+  | 'automacoes'
+  | 'historico'
+  | 'usuarios'
+  | 'configuracoes';
+
 export interface User {
   id: string;
   name: string;
@@ -38,6 +57,7 @@ export interface Lancamento {
 
 export interface Parcelamento {
   id: string;
+  unidade: string;
   titulo: string;
   fornecedor: string;
   categoria: string;
