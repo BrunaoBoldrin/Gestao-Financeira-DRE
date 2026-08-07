@@ -49,7 +49,7 @@ export const CompetenciaSelect: React.FC<CompetenciaSelectProps> = ({
       disabled={disabled}
       className={`px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed ${className}`}
     >
-      {allowAll && <option value="TODOS">Todas as competências</option>}
+      {allowAll && <option value="TODOS">Todos os meses</option>}
       {availableMonths.map((month) => (
         <option key={month} value={month}>
           {formatCompetencia(month)}{month === referenceMonth ? ' (Atual)' : ''}
