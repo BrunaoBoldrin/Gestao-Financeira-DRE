@@ -15,8 +15,10 @@ import {
   CentroCustoMaster,
   FornecedorMaster,
   BancoMaster,
-  CondicaoPagamento
+  CondicaoPagamento,
+  ViewKey
 } from '../types';
+import { ROLE_DEFAULT_VIEW, canAccessAllUnits, canAccessView } from '../config/accessControl';
 import {
   INITIAL_USERS,
   INITIAL_UNITS,
@@ -34,25 +36,6 @@ import {
   INITIAL_BANCOS,
   INITIAL_CONDICOES_PAGAMENTO
 } from '../data/initialData';
-
-export type ViewKey =
-  | 'overview'
-  | 'inbox'
-  | 'pending_review'
-  | 'receitas'
-  | 'despesas'
-  | 'parcelamentos'
-  | 'caixa_fisico'
-  | 'fluxo_caixa'
-  | 'dre'
-  | 'documentos'
-  | 'fechamento'
-  | 'cadastros'
-  | 'import_excel'
-  | 'automacoes'
-  | 'historico'
-  | 'usuarios'
-  | 'configuracoes';
 
 interface Toast {
   id: string;
@@ -141,7 +124,7 @@ interface AppContextType {
   deleteLancamento: (id: string) => void;
   marcarLancamentoComoPago: (id: string) => void;
   
-  addParcelamento: (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => void;
+  addParcelamento: (p: Omit<Parcelamento, 'id' | 'unidade' | 'parcelasPagas' | 'status' | 'cronograma'>) => void;
   pagarParcela: (parcelamentoId: string, numeroParcela: number) => void;
   
   uploadDocumentoOCR: (file: File) => void;
@@ -170,10 +153,10 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(INITIAL_USERS[0]);
-  const [selectedUnit, setSelectedUnit] = useState<string>('Todas as Unidades');
+  const [currentUser, setCurrentUserState] = useState<User | null>(INITIAL_USERS[0]);
+  const [selectedUnit, setSelectedUnitState] = useState<string>('Todas as Unidades');
   const [selectedMonthYear, setSelectedMonthYear] = useState<string>('2024-05');
-  const [currentView, setCurrentView] = useState<ViewKey>('overview');
+  const [currentView, setCurrentViewState] = useState<ViewKey>('overview');
   const [selectedDocumentForReviewId, setSelectedDocumentForReviewId] = useState<string | null>('ocr-101');
   
   const [units, setUnits] = useState<UnitConfig[]>(INITIAL_UNITS);
@@ -204,12 +187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const filteredParcelamentos = parcelamentos.filter((p) => {
-    if (selectedUnit === 'Todas as Unidades') return true;
-    const linkedLancs = lancamentos.filter((l) => l.parcelamentoId === p.id);
-    if (linkedLancs.length > 0) {
-      return linkedLancs.some((l) => l.unidade === selectedUnit);
-    }
-    return true;
+    return selectedUnit === 'Todas as Unidades' || p.unidade === selectedUnit;
   });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -227,6 +205,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isAuditor = userRole === 'AUDITOR';
   const canExecuteFinancialActions = isAdmin || isFinance;
   const canManageAdminSettings = isAdmin;
+
+  const setCurrentUser = (user: User | null) => {
+    if (user && !user.active) {
+      showToast('Acesso negado: esta conta está inativa.', 'error');
+      return;
+    }
+
+    setCurrentUserState(user);
+    setSelectedDocumentForReviewId(null);
+
+    if (!user) {
+      setCurrentViewState('overview');
+      setSelectedUnitState('Todas as Unidades');
+      return;
+    }
+
+    setCurrentViewState(ROLE_DEFAULT_VIEW[user.role]);
+    setSelectedUnitState(canAccessAllUnits(user.role) ? 'Todas as Unidades' : user.unit);
+  };
+
+  const setSelectedUnit = (unit: string) => {
+    if (isFinance && currentUser && unit !== currentUser.unit) {
+      showToast('Acesso negado: o perfil Financeiro está limitado à sua unidade.', 'error');
+      setSelectedUnitState(currentUser.unit);
+      return;
+    }
+
+    setSelectedUnitState(unit);
+  };
+
+  const setCurrentView = (view: ViewKey) => {
+    if (!canAccessView(userRole, view)) {
+      showToast('Acesso negado: esta página não está disponível para o seu perfil.', 'error');
+      setCurrentViewState(ROLE_DEFAULT_VIEW[userRole]);
+      return;
+    }
+
+    setCurrentViewState(view);
+  };
+
+  const resolveAllowedUnit = (requestedUnit: string): string => {
+    if (isFinance && currentUser) return currentUser.unit;
+    return requestedUnit || 'Royal Face - Matriz';
+  };
+
+  const canManageUnit = (unit: string, actionName: string): boolean => {
+    if (isFinance && currentUser && unit !== currentUser.unit) {
+      showToast(`Acesso negado: "${actionName}" pertence a outra unidade.`, 'error');
+      return false;
+    }
+    return true;
+  };
 
   const checkAdminPermission = (actionName: string): boolean => {
     if (!isAdmin) {
@@ -406,6 +436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     prazosDias: number[]
   ) => {
     if (!checkFinancialPermission('Lançamento DDL')) return;
+    dadosBase = { ...dadosBase, unidade: resolveAllowedUnit(dadosBase.unidade) };
     if (!prazosDias || prazosDias.length === 0) {
       prazosDias = [0];
     }
@@ -459,6 +490,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (totalParcelas > 1 && parcelamentoId) {
       const newParcelamento: Parcelamento = {
         id: parcelamentoId,
+        unidade: dadosBase.unidade,
         titulo: dadosBase.descricao,
         fornecedor: dadosBase.fornecedorCliente,
         categoria: dadosBase.categoria,
@@ -492,6 +524,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     numeroParcelas: number
   ) => {
     if (!checkFinancialPermission('Lançamento Parcelado')) return;
+    baseData = { ...baseData, unidade: resolveAllowedUnit(baseData.unidade) };
     if (numeroParcelas <= 1) {
       addLancamento(baseData);
       return;
@@ -538,6 +571,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const novoParcelamento: Parcelamento = {
       id: parcelamentoId,
+      unidade: baseData.unidade,
       titulo: baseData.descricao,
       fornecedor: baseData.fornecedorCliente,
       categoria: baseData.categoria,
@@ -570,6 +604,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     unidade: string;
   }) => {
     if (!checkFinancialPermission('Transferência de Contas')) return;
+    dados = { ...dados, unidade: resolveAllowedUnit(dados.unidade) };
     if (dados.origem.toLowerCase().includes('caixa')) {
       registrarMovimentacaoCaixa(
         'SANGRIA',
@@ -591,6 +626,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const exportBackupJSON = () => {
+    if (!checkAdminPermission('Exportar Backup Completo')) return '';
     return JSON.stringify(
       {
         exportedAt: new Date().toISOString(),
@@ -614,6 +650,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Lancamentos CRUD ---
   const addLancamento = (l: Omit<Lancamento, 'id' | 'criadoEm'>) => {
     if (!checkFinancialPermission('Criar Lançamento')) return;
+    l = { ...l, unidade: resolveAllowedUnit(l.unidade) };
     const id = (l.tipo === 'RECEITA' ? 'rec-' : 'desp-') + Date.now().toString().slice(-4);
     const newL: Lancamento = {
       ...l,
@@ -627,6 +664,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateLancamento = (id: string, l: Partial<Lancamento>) => {
     if (!checkFinancialPermission('Editar Lançamento')) return;
+    const existing = lancamentos.find((item) => item.id === id);
+    if (existing && !canManageUnit(existing.unidade, 'Editar Lançamento')) return;
+    if (isFinance && currentUser) l = { ...l, unidade: currentUser.unit };
     setLancamentos((prev) => prev.map((item) => (item.id === id ? { ...item, ...l } : item)));
     showToast('Lançamento atualizado!', 'info');
     addAuditLog('Lançamentos', 'EDICAO', `Atualizou lançamento ID ${id}`);
@@ -634,6 +674,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteLancamento = (id: string) => {
     if (!checkFinancialPermission('Excluir Lançamento')) return;
+    const existing = lancamentos.find((item) => item.id === id);
+    if (existing && !canManageUnit(existing.unidade, 'Excluir Lançamento')) return;
     setLancamentos((prev) => prev.filter((item) => item.id !== id));
     showToast('Lançamento removido.', 'info');
     addAuditLog('Lançamentos', 'EXCLUSAO', `Excluiu lançamento ID ${id}`);
@@ -641,6 +683,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const marcarLancamentoComoPago = (id: string) => {
     if (!checkFinancialPermission('Liquidar Lançamento')) return;
+    const existing = lancamentos.find((item) => item.id === id);
+    if (existing && !canManageUnit(existing.unidade, 'Liquidar Lançamento')) return;
     setLancamentos((prev) =>
       prev.map((item) =>
         item.id === id
@@ -657,7 +701,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // --- Parcelamentos ---
-  const addParcelamento = (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => {
+  const addParcelamento = (p: Omit<Parcelamento, 'id' | 'unidade' | 'parcelasPagas' | 'status' | 'cronograma'>) => {
     if (!checkFinancialPermission('Criar Parcelamento')) return;
     const id = 'parc-' + Date.now().toString().slice(-4);
     const valorParcela = p.valorTotal / p.numeroParcelas;
@@ -675,6 +719,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newP: Parcelamento = {
       ...p,
       id,
+      unidade: selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit,
       parcelasPagas: 0,
       valorParcela,
       status: 'EM_ANDAMENTO',
@@ -688,6 +733,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const pagarParcela = (parcelamentoId: string, numeroParcela: number) => {
     if (!checkFinancialPermission('Pagar Parcela')) return;
+    const parcelamento = parcelamentos.find((item) => item.id === parcelamentoId);
+    if (parcelamento && !canManageUnit(parcelamento.unidade, 'Pagar Parcela')) return;
     setParcelamentos((prev) =>
       prev.map((p) => {
         if (p.id !== parcelamentoId) return p;
@@ -713,7 +760,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fornecedorCliente: p.fornecedor,
           contaBancaria: 'Itaú Uniclass - C/C 45892-1',
           formaPagamento: 'BOLETO',
-          unidade: selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit,
+          unidade: p.unidade,
           parcelamentoId: p.id,
           numeroParcela: `${numeroParcela}/${p.numeroParcelas}`
         });

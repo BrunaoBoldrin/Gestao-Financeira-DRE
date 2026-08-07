@@ -11,7 +11,8 @@ export const PendingReviewView: React.FC = () => {
     addLancamentoComDDL,
     condicoesPagamento,
     setCurrentView,
-    showToast
+    showToast,
+    selectedUnit
   } = useApp();
 
   const pendingDocs = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO');
@@ -112,7 +113,7 @@ export const PendingReviewView: React.FC = () => {
         fornecedorCliente: fornecedor || 'Fornecedor Diverso',
         contaBancaria: 'Itaú Uniclass - C/C 45892-1',
         formaPagamento: 'BOLETO',
-        unidade: 'Royal Face - Matriz'
+        unidade: selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit
       },
       dataEmissao || new Date().toISOString().substring(0, 10),
       prazos

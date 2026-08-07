@@ -22,7 +22,8 @@ export const OverviewView: React.FC = () => {
     selectedUnit,
     selectedMonthYear,
     setCurrentView,
-    setSelectedDocumentForReviewId
+    setSelectedDocumentForReviewId,
+    canExecuteFinancialActions
   } = useApp();
 
   const totalReceitas = filteredLancamentos
@@ -76,7 +77,7 @@ export const OverviewView: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          {canExecuteFinancialActions && <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentView('pending_review')}
               className="px-4 py-2 bg-[#C5A059] text-white rounded-lg text-xs font-bold hover:bg-[#b08d46] transition flex items-center gap-1.5 shadow-md"
@@ -84,7 +85,7 @@ export const OverviewView: React.FC = () => {
               <span className="material-symbols-outlined text-base">auto_awesome</span>
               Revisar Fila OCR ({pendingOCRDocs.length})
             </button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -175,7 +176,7 @@ export const OverviewView: React.FC = () => {
       </div>
 
       {/* OCR & Excel Import Action Banners */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {canExecuteFinancialActions && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {pendingOCRDocs.length > 0 ? (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -233,7 +234,7 @@ export const OverviewView: React.FC = () => {
             <span className="material-symbols-outlined text-sm">arrow_forward</span>
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

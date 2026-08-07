@@ -6,7 +6,7 @@ interface ParcelamentosViewProps {
 }
 
 export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovoParcelamentoModal }) => {
-  const { filteredParcelamentos, pagarParcela } = useApp();
+  const { filteredParcelamentos, pagarParcela, canExecuteFinancialActions } = useApp();
   const [selectedParcelamentoId, setSelectedParcelamentoId] = useState<string>('');
 
   const activeContract = filteredParcelamentos.find((p) => p.id === selectedParcelamentoId) || filteredParcelamentos[0];
@@ -25,13 +25,13 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
           </p>
         </div>
 
-        <button
+        {canExecuteFinancialActions && <button
           onClick={onOpenNovoParcelamentoModal}
           className="px-4 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold hover:bg-[#0b1c30] flex items-center gap-1.5 transition shadow-xs"
         >
           <span className="material-symbols-outlined text-base">add_circle</span>
           Novo Parcelamento
-        </button>
+        </button>}
       </div>
 
       {/* Contracts Selector & Progress Cards */}
@@ -124,7 +124,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                       <th className="p-3">Data Vencimento</th>
                       <th className="p-3 text-right">Valor Parcela</th>
                       <th className="p-3 text-center">Status</th>
-                      <th className="p-3 text-center">Ação</th>
+                      {canExecuteFinancialActions && <th className="p-3 text-center">Ação</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -140,7 +140,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                         <td className="p-3 text-right font-black text-[#0b1c30]">
                           R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="p-3 text-center">
+                        {canExecuteFinancialActions && <td className="p-3 text-center">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               item.status === 'PAGO'
@@ -150,7 +150,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                           >
                             {item.status}
                           </span>
-                        </td>
+                        </td>}
                         <td className="p-3 text-center">
                           {item.status === 'PENDENTE' ? (
                             <button
