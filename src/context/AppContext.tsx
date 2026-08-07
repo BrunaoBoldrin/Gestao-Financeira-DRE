@@ -458,7 +458,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const vencimentoStr = dt.toISOString().substring(0, 10);
 
       const lancId = 'lanc-' + Date.now() + '-' + index;
-      const statusLanc: StatusLancamento = (dias === 0 && dadosBase.status === 'PAGO') ? 'PAGO' : 'PENDENTE';
+      const statusLanc: StatusLancamento = dadosBase.status === 'PAGO'
+        ? 'PAGO'
+        : dadosBase.status === 'CANCELADO'
+          ? 'CANCELADO'
+          : dadosBase.status === 'ATRASADO'
+            ? 'ATRASADO'
+            : 'PENDENTE';
 
       const descFinal = totalParcelas > 1
         ? `${dadosBase.descricao} (${index + 1}/${totalParcelas} - ${dias} DDL)`
@@ -471,6 +477,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         valor: valorUnitario,
         dataVencimento: vencimentoStr,
         status: statusLanc,
+        dataPagamento: statusLanc === 'PAGO'
+          ? dadosBase.dataPagamento || vencimentoStr
+          : undefined,
         numeroParcela: totalParcelas > 1 ? `${index + 1}/${totalParcelas}` : undefined,
         parcelamentoId,
         criadoEm: new Date().toISOString()
@@ -484,6 +493,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           vencimento: vencimentoStr,
           valor: valorUnitario,
           status: statusLanc,
+          dataPagamento: statusLanc === 'PAGO'
+            ? dadosBase.dataPagamento || vencimentoStr
+            : undefined,
           lancamentoId: lancId
         });
       }
@@ -501,10 +513,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         centroCusto: dadosBase.centroCusto,
         valorTotal: dadosBase.valor,
         numeroParcelas: totalParcelas,
-        parcelasPagas: 0,
+        parcelasPagas: cronogramaItems.filter((item) => item.status === 'PAGO').length,
         valorParcela: valorUnitario,
         dataInicio: dataEmissao || new Date().toISOString().substring(0, 10),
-        status: 'EM_ANDAMENTO',
+        status: cronogramaItems.every((item) => item.status === 'PAGO') ? 'CONCLUIDO' : 'EM_ANDAMENTO',
         cronograma: cronogramaItems
       };
       setParcelamentos((prev) => [newParcelamento, ...prev]);

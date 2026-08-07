@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { getDateRangeBounds, isDateInRange, normalizeDateValue } from '../../utils/dateRange';
 import {
   LineChart,
   Line,
@@ -72,20 +73,46 @@ export const FluxoCaixaView: React.FC = () => {
   const [dataInicioInput, setDataInicioInput] = useState('');
   const [dataFimInput, setDataFimInput] = useState('');
   const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
-  const periodoPersonalizadoInvalido = Boolean(dataInicioInput && dataFimInput && dataInicioInput > dataFimInput);
-  const periodoAplicadoAtivo = Boolean(periodoAplicado.inicio || periodoAplicado.fim);
+  const periodoPersonalizadoInvalido = Boolean(
+    dataInicioInput &&
+    dataFimInput &&
+    normalizeDateValue(dataInicioInput) > normalizeDateValue(dataFimInput)
+  );
+  const periodoInputCompleto = Boolean(dataInicioInput && dataFimInput);
+  const periodoAplicadoAtivo = Boolean(periodoAplicado.inicio && periodoAplicado.fim);
+
+  const lancamentosDaUnidade = useMemo(
+    () => lancamentos.filter((lancamento) =>
+      lancamento.status !== 'CANCELADO' &&
+      (selectedUnit === 'Todas as Unidades' || lancamento.unidade === selectedUnit)
+    ),
+    [lancamentos, selectedUnit]
+  );
+
+  const periodoDisponivel = useMemo(
+    () => getDateRangeBounds(lancamentosDaUnidade.flatMap((lancamento) => [
+      lancamento.dataVencimento,
+      lancamento.dataPagamento
+    ])),
+    [lancamentosDaUnidade]
+  );
+
+  const eventosNoPeriodo = useMemo(() => {
+    if (!periodoAplicadoAtivo) return null;
+
+    return lancamentosDaUnidade.reduce((total, lancamento) => {
+      const previstoNoPeriodo = isDateInRange(lancamento.dataVencimento, periodoAplicado) ? 1 : 0;
+      const realizadoNoPeriodo = lancamento.status === 'PAGO' &&
+        isDateInRange(lancamento.dataPagamento || lancamento.dataVencimento, periodoAplicado) ? 1 : 0;
+      return total + previstoNoPeriodo + realizadoNoPeriodo;
+    }, 0);
+  }, [lancamentosDaUnidade, periodoAplicado, periodoAplicadoAtivo]);
 
   const fluxoData = useMemo<FluxoAgrupado[]>(() => {
     const buckets = new Map<string, FluxoAgrupado>();
-    const lancamentosDaUnidade = lancamentos.filter((lancamento) =>
-      lancamento.status !== 'CANCELADO' &&
-      (selectedUnit === 'Todas as Unidades' || lancamento.unidade === selectedUnit)
-    );
 
     const isDateInScope = (date: string) => {
-      if (periodoAplicado.inicio && date < periodoAplicado.inicio) return false;
-      if (periodoAplicado.fim && date > periodoAplicado.fim) return false;
-      return true;
+      return !periodoAplicadoAtivo || isDateInRange(date, periodoAplicado);
     };
 
     const ensureBucket = (date: string) => {
@@ -107,14 +134,15 @@ export const FluxoCaixaView: React.FC = () => {
 
     lancamentosDaUnidade.forEach((lancamento) => {
       const signedValue = lancamento.tipo === 'RECEITA' ? lancamento.valor : -lancamento.valor;
+      const dueDate = normalizeDateValue(lancamento.dataVencimento);
 
-      if (isDateInScope(lancamento.dataVencimento)) {
-        ensureBucket(lancamento.dataVencimento).Previsto += signedValue;
+      if (dueDate && isDateInScope(dueDate)) {
+        ensureBucket(dueDate).Previsto += signedValue;
       }
 
       if (lancamento.status === 'PAGO') {
-        const paymentDate = lancamento.dataPagamento || lancamento.dataVencimento;
-        if (isDateInScope(paymentDate)) {
+        const paymentDate = normalizeDateValue(lancamento.dataPagamento || lancamento.dataVencimento);
+        if (paymentDate && isDateInScope(paymentDate)) {
           const bucket = ensureBucket(paymentDate);
           bucket.Realizado += signedValue;
           if (lancamento.tipo === 'RECEITA') {
@@ -126,7 +154,7 @@ export const FluxoCaixaView: React.FC = () => {
       }
     });
 
-    if (periodoAplicado.inicio && periodoAplicado.fim) {
+    if (periodoAplicadoAtivo) {
       const cursor = parseDate(periodoAplicado.inicio);
       const end = parseDate(periodoAplicado.fim);
 
@@ -154,16 +182,12 @@ export const FluxoCaixaView: React.FC = () => {
         saldoAcumulado += bucket.Realizado;
         return { ...bucket, SaldoAcumulado: saldoAcumulado };
       });
-  }, [lancamentos, periodo, periodoAplicado, selectedUnit]);
+  }, [lancamentosDaUnidade, periodo, periodoAplicado, periodoAplicadoAtivo]);
 
   const periodoLabel = periodo === 'DIARIO' ? 'dia' : periodo === 'SEMANAL' ? 'semana' : 'mês';
   const formatDate = (value: string) => parseDate(value).toLocaleDateString('pt-BR');
   const periodoAplicadoLabel = periodoAplicadoAtivo
-    ? periodoAplicado.inicio && periodoAplicado.fim
-      ? `${formatDate(periodoAplicado.inicio)} até ${formatDate(periodoAplicado.fim)}`
-      : periodoAplicado.inicio
-        ? `A partir de ${formatDate(periodoAplicado.inicio)}`
-        : `Até ${formatDate(periodoAplicado.fim)}`
+    ? `${formatDate(periodoAplicado.inicio)} até ${formatDate(periodoAplicado.fim)}`
     : 'Todas as movimentações';
 
   return (
@@ -198,7 +222,7 @@ export const FluxoCaixaView: React.FC = () => {
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
           <div>
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">Período personalizado</h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">Opcional. Sem datas informadas, serão exibidas todas as movimentações da unidade.</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">Informe as duas datas e clique em Aplicar período. Sem filtro, serão exibidas todas as movimentações.</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <div>
@@ -221,8 +245,11 @@ export const FluxoCaixaView: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={() => setPeriodoAplicado({ inicio: dataInicioInput, fim: dataFimInput })}
-              disabled={periodoPersonalizadoInvalido || (!dataInicioInput && !dataFimInput)}
+              onClick={() => setPeriodoAplicado({
+                inicio: normalizeDateValue(dataInicioInput),
+                fim: normalizeDateValue(dataFimInput)
+              })}
+              disabled={periodoPersonalizadoInvalido || !periodoInputCompleto}
               className="px-4 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold hover:bg-[#0b1c30] disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Aplicar período
@@ -246,7 +273,20 @@ export const FluxoCaixaView: React.FC = () => {
           <p className="text-[11px] font-semibold text-rose-600 mt-2">A data inicial não pode ser posterior à data final.</p>
         )}
         {!periodoPersonalizadoInvalido && (
-          <p className="text-[11px] font-semibold text-[#775a19] mt-2">Período exibido: {periodoAplicadoLabel}</p>
+          <div className="mt-2 space-y-1">
+            <p className="text-[11px] font-semibold text-[#775a19]">Período exibido: {periodoAplicadoLabel}</p>
+            {periodoDisponivel.min && periodoDisponivel.max && (
+              <p className="text-[11px] text-gray-500">
+                Movimentações cadastradas: {formatDate(periodoDisponivel.min)} até {formatDate(periodoDisponivel.max)}
+                {eventosNoPeriodo !== null && ` · ${eventosNoPeriodo} evento(s) financeiro(s) no intervalo`}
+              </p>
+            )}
+            {periodoAplicadoAtivo && eventosNoPeriodo === 0 && (
+              <p className="text-[11px] font-semibold text-amber-700">
+                Não existem vencimentos ou pagamentos no intervalo selecionado para esta unidade.
+              </p>
+            )}
+          </div>
         )}
       </div>
 
