@@ -58,20 +58,6 @@ export interface Parcelamento {
   }[];
 }
 
-export interface BoletoDDA {
-  id: string;
-  cedente: string;
-  cnpjCedente: string;
-  codigoBarras: string;
-  valor: number;
-  dataVencimento: string;
-  dataEmissao: string;
-  status: 'DISPONIVEL' | 'VINCULADO' | 'PAGO' | 'REJEITADO';
-  despesaVinculadaId?: string;
-  categoriaSugerida: string;
-  centroCustoSugerido: string;
-}
-
 export interface DocumentoOCR {
   id: string;
   nomeArquivo: string;
@@ -119,32 +105,6 @@ export interface SessaoCaixaFisico {
   operadorAbertura: string;
   operadorFechamento?: string;
   movimentacoes: MovimentacaoCaixaFisico[];
-}
-
-export interface ExtratoItem {
-  id: string;
-  data: string;
-  descricao: string;
-  valor: number; // positivo para entrada, negativo para saída
-  documento: string;
-  conciliado: boolean;
-  lancamentoId?: string;
-  sugestaoMatchId?: string;
-  scoreMatch?: number;
-}
-
-export interface RecebivelMaquininha {
-  id: string;
-  adquirente: 'STONE' | 'REDE' | 'CIELO' | 'PAGSEGURO';
-  bandeira: 'VISA' | 'MASTERCARD' | 'ELO' | 'AMEX';
-  modalidade: 'CREDITO_A_VISTA' | 'CREDITO_PARCELADO' | 'DEBITO';
-  dataVenda: string;
-  dataPrevisao: string;
-  valorBruto: number;
-  taxaContratada: number; // %
-  taxaAplicada: number; // %
-  valorLiquido: number;
-  status: 'A_RECEBER' | 'PAGO' | 'DIVERGENTE';
 }
 
 export interface FechamentoMensal {
@@ -248,4 +208,3 @@ export interface CondicaoPagamento {
   prazosDias: number[];
   ativa: boolean;
 }
-
