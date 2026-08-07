@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
 
 export const PendingReviewView: React.FC = () => {
   const {
@@ -31,6 +33,7 @@ export const PendingReviewView: React.FC = () => {
   const [centroCusto, setCentroCusto] = useState('');
   const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 dias default
   const [observacoes, setObservacoes] = useState('');
+  const itensSort = useSortableData(currentDoc?.dadosExtraidos.itens || []);
 
   useEffect(() => {
     if (currentDoc) {
@@ -394,14 +397,14 @@ export const PendingReviewView: React.FC = () => {
                   <table className="w-full text-left">
                     <thead className="bg-[#f8f9ff] text-gray-600 font-bold">
                       <tr>
-                        <th className="p-2">Item</th>
-                        <th className="p-2 text-center">Qtd</th>
-                        <th className="p-2 text-right">Unitário</th>
-                        <th className="p-2 text-right">Total</th>
+                        <SortableTableHeader label="Item" sortKey="item" accessor={(item) => item.descricao} sortConfig={itensSort.sortConfig} onSort={itensSort.requestSort} className="p-2" />
+                        <SortableTableHeader label="Qtd" sortKey="quantidade" accessor={(item) => item.quantidade} sortConfig={itensSort.sortConfig} onSort={itensSort.requestSort} className="p-2 text-center" />
+                        <SortableTableHeader label="Unitário" sortKey="unitario" accessor={(item) => item.valorUnitario} sortConfig={itensSort.sortConfig} onSort={itensSort.requestSort} className="p-2 text-right" />
+                        <SortableTableHeader label="Total" sortKey="total" accessor={(item) => item.valorTotal} sortConfig={itensSort.sortConfig} onSort={itensSort.requestSort} className="p-2 text-right" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {currentDoc.dadosExtraidos.itens.map((item, idx) => (
+                      {itensSort.sortedItems.map((item, idx) => (
                         <tr key={idx}>
                           <td className="p-2 text-gray-800">{item.descricao}</td>
                           <td className="p-2 text-center font-bold">{item.quantidade}</td>
