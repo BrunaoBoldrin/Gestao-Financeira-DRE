@@ -98,8 +98,6 @@ export const DREGerencialView: React.FC = () => {
     dreData,
     lancamentos,
     selectedUnit,
-    selectedMonthYear,
-    setSelectedMonthYear,
     fechamentoMensal,
     showToast
   } = useApp();
@@ -114,7 +112,7 @@ export const DREGerencialView: React.FC = () => {
   });
 
   const currentReferenceMonth = fechamentoMensal.mesAno;
-  const selectedMonth = selectedMonthYear === 'TODOS' ? currentReferenceMonth : selectedMonthYear;
+  const [selectedMonth, setSelectedMonth] = useState(currentReferenceMonth);
   const comparisonMonth = previousMonth(selectedMonth);
 
   const availableMonths = useMemo(() => {
@@ -274,7 +272,7 @@ export const DREGerencialView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedMonth}
-            onChange={(event) => setSelectedMonthYear(event.target.value)}
+            onChange={(event) => setSelectedMonth(event.target.value)}
             className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e]"
           >
             {availableMonths.map((month) => (

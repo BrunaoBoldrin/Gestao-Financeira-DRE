@@ -48,8 +48,6 @@ interface AppContextType {
   setCurrentUser: (user: User | null) => void;
   selectedUnit: string;
   setSelectedUnit: (unit: string) => void;
-  selectedMonthYear: string;
-  setSelectedMonthYear: (my: string) => void;
   currentView: ViewKey;
   setCurrentView: (view: ViewKey) => void;
   selectedDocumentForReviewId: string | null;
@@ -154,7 +152,9 @@ interface AppContextType {
   addRegraAutomacao: (r: Omit<RegraAutomacao, 'id'>) => void;
   
   addUser: (u: Omit<User, 'id' | 'lastAccess'>) => void;
+  updateUser: (id: string, u: Partial<Omit<User, 'id' | 'lastAccess'>>) => void;
   toggleUserActive: (id: string) => void;
+  deleteUser: (id: string) => void;
 
   exportBackupJSON: () => string;
 }
@@ -164,7 +164,6 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUserState] = useState<User | null>(INITIAL_USERS[0]);
   const [selectedUnit, setSelectedUnitState] = useState<string>('Todas as Unidades');
-  const [selectedMonthYear, setSelectedMonthYear] = useState<string>('2024-05');
   const [currentView, setCurrentViewState] = useState<ViewKey>('overview');
   const [selectedDocumentForReviewId, setSelectedDocumentForReviewId] = useState<string | null>('ocr-101');
   
@@ -188,11 +187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Filtering Logic
   const filteredLancamentos = lancamentos.filter((l) => {
-    const matchUnit = selectedUnit === 'Todas as Unidades' || l.unidade === selectedUnit;
-    const matchMonth = !selectedMonthYear || selectedMonthYear === 'TODOS' || 
-      l.dataVencimento.startsWith(selectedMonthYear) || 
-      (l.dataPagamento && l.dataPagamento.startsWith(selectedMonthYear));
-    return matchUnit && matchMonth;
+    return selectedUnit === 'Todas as Unidades' || l.unidade === selectedUnit;
   });
 
   const filteredParcelamentos = parcelamentos.filter((p) => {
@@ -1132,20 +1127,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Users ---
   const addUser = (u: Omit<User, 'id' | 'lastAccess'>) => {
     if (!checkAdminPermission('Cadastrar Usuário')) return;
+    if (users.some((user) => user.email.toLowerCase() === u.email.toLowerCase())) {
+      showToast('Já existe um usuário cadastrado com este e-mail.', 'error');
+      return;
+    }
     const newU: User = {
       ...u,
-      id: 'u' + (users.length + 1),
+      id: 'u-' + Date.now(),
       lastAccess: 'Nunca acessou'
     };
     setUsers((prev) => [...prev, newU]);
     showToast('Novo usuário adicionado!', 'success');
   };
 
+  const updateUser = (id: string, changes: Partial<Omit<User, 'id' | 'lastAccess'>>) => {
+    if (!checkAdminPermission('Editar Usuário')) return;
+    if (changes.email && users.some((user) => user.id !== id && user.email.toLowerCase() === changes.email!.toLowerCase())) {
+      showToast('Já existe outro usuário cadastrado com este e-mail.', 'error');
+      return;
+    }
+    const existing = users.find((user) => user.id === id);
+    if (!existing) return;
+    const updatedUser = { ...existing, ...changes };
+    setUsers((prev) => prev.map((user) => (user.id === id ? { ...user, ...changes } : user)));
+    if (currentUser?.id === id) {
+      setCurrentUserState(updatedUser);
+      if (updatedUser.role === 'FINANCE') setSelectedUnitState(updatedUser.unit);
+    }
+    showToast('Usuário atualizado com sucesso!', 'success');
+    addAuditLog('Usuários', 'EDICAO', `Atualizou o cadastro do usuário ID ${id}`);
+  };
+
   const toggleUserActive = (id: string) => {
     if (!checkAdminPermission('Alterar Status de Usuário')) return;
+    const user = users.find((item) => item.id === id);
+    if (currentUser?.id === id && user?.active) {
+      showToast('Não é possível desativar o próprio usuário durante a sessão.', 'error');
+      return;
+    }
     setUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, active: !u.active } : u))
     );
+  };
+
+  const deleteUser = (id: string) => {
+    if (!checkAdminPermission('Excluir Usuário')) return;
+    if (currentUser?.id === id) {
+      showToast('Não é possível excluir o próprio usuário durante a sessão.', 'error');
+      return;
+    }
+
+    const user = users.find((item) => item.id === id);
+    setUsers((prev) => prev.filter((item) => item.id !== id));
+    showToast('Usuário excluído com sucesso.', 'success');
+    addAuditLog('Usuários', 'EXCLUSAO', `Excluiu o usuário "${user?.name || id}"`);
   };
 
   return (
@@ -1155,8 +1190,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentUser,
         selectedUnit,
         setSelectedUnit,
-        selectedMonthYear,
-        setSelectedMonthYear,
         currentView,
         setCurrentView,
         selectedDocumentForReviewId,
@@ -1231,7 +1264,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleRegraAutomacao,
         addRegraAutomacao,
         addUser,
+        updateUser,
         toggleUserActive,
+        deleteUser,
         exportBackupJSON
       }}
     >

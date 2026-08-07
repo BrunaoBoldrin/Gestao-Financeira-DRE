@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { UserAvatar } from '../common/UserAvatar';
 
 interface HeaderProps {
   onOpenNovoLancamentoModal: () => void;
@@ -12,8 +13,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
     setCurrentUser,
     selectedUnit,
     setSelectedUnit,
-    selectedMonthYear,
-    setSelectedMonthYear,
     setCurrentView,
     documentosOCR,
     units,
@@ -60,29 +59,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
           </div>
         </div>
 
-        {/* Month Year Selector */}
-        <div>
-          <label className="block text-[10px] font-semibold text-[#45464d] uppercase tracking-wider mb-0.5">
-            Competência
-          </label>
-          <div className="relative flex items-center">
-            <span className="material-symbols-outlined text-gray-400 absolute left-2 pointer-events-none text-lg">
-              calendar_month
-            </span>
-            <select
-              value={selectedMonthYear}
-              onChange={(e) => setSelectedMonthYear(e.target.value)}
-              className="pl-8 pr-6 py-1.5 bg-[#f8f9ff] border border-[#d3e4fe] rounded-md text-xs font-semibold text-[#0b1c30] focus:outline-none focus:ring-2 focus:ring-[#131b2e] cursor-pointer"
-            >
-              <option value="TODOS">Todas as Competências</option>
-              <option value="2024-05">Maio / 2024 (Atual)</option>
-              <option value="2024-04">Abril / 2024</option>
-              <option value="2024-03">Março / 2024</option>
-              <option value="2024-02">Fevereiro / 2024</option>
-              <option value="2024-01">Janeiro / 2024</option>
-            </select>
-          </div>
-        </div>
       </div>
 
       {/* Right: Quick Actions, Badges & User Menu */}
@@ -140,11 +116,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-2.5 p-1 rounded-md hover:bg-gray-100 transition focus:outline-none"
           >
-            <img
-              src={currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}
-              alt={currentUser?.name}
-              className="w-8 h-8 rounded-full border border-[#C5A059] object-cover"
-            />
+            <UserAvatar name={currentUser?.name || 'Usuário'} avatarUrl={currentUser?.avatarUrl} />
             <div className="text-left hidden md:block">
               <p className="text-xs font-bold text-[#0b1c30] leading-tight">{currentUser?.name}</p>
               <span className="text-[10px] font-semibold text-[#775a19] bg-[#ffdea5] px-1.5 py-0.2 rounded">
@@ -178,9 +150,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
                     currentUser?.id === u.id ? 'bg-[#eff4ff] font-bold text-[#131b2e]' : 'text-gray-700'
                   }`}
                 >
-                  <div>
-                    <p>{u.name}</p>
-                    <span className="text-[10px] text-gray-500">{u.role}</span>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <UserAvatar name={u.name} avatarUrl={u.avatarUrl} sizeClass="w-7 h-7" textClass="text-[9px]" />
+                    <div className="min-w-0">
+                      <p className="truncate">{u.name}</p>
+                      <span className="text-[10px] text-gray-500">{u.role}</span>
+                    </div>
                   </div>
                   {currentUser?.id === u.id && (
                     <span className="material-symbols-outlined text-emerald-600 text-base">check</span>

@@ -17,8 +17,6 @@ export const FechamentoMensalView: React.FC = () => {
   const totalItens = fechamentoMensal.checklist.length;
   const progressoChecklistPct = Math.round((totalConcluido / totalItens) * 100);
 
-  const totalProvisoes = fechamentoMensal.provisoesDepreciacao.reduce((a, b) => a + b.valor, 0);
-
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -40,7 +38,7 @@ export const FechamentoMensalView: React.FC = () => {
           </div>
           <h2 className="text-lg font-bold text-[#0b1c30] flex items-center gap-2">
             <span className="material-symbols-outlined text-[#131b2e]">lock_clock</span>
-            Fechamento Mensal e Consolidação Contábil
+            Fechamento Mensal
           </h2>
         </div>
 
@@ -69,7 +67,7 @@ export const FechamentoMensalView: React.FC = () => {
       </div>
 
       {/* Checklist Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Verification Checklist */}
         <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
@@ -124,36 +122,6 @@ export const FechamentoMensalView: React.FC = () => {
               </div>
             ))}
           </div>
-        </div>
-
-        {/* Provisões & Depreciação */}
-        <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-            <div>
-              <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
-                Ajustes de Provisões & Depreciação
-              </h3>
-              <p className="text-[11px] text-gray-500">Lançamentos contábeis para apuração do DRE.</p>
-            </div>
-
-            <p className="text-sm font-black text-rose-700">
-              R$ {totalProvisoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-
-          <div className="space-y-2.5">
-            {fechamentoMensal.provisoesDepreciacao.map((p, idx) => (
-              <div key={idx} className="p-3 bg-[#f8f9ff] border border-[#d3e4fe] rounded-lg text-xs space-y-1">
-                <div className="flex justify-between items-center font-bold text-[#0b1c30]">
-                  <span>{p.descricao}</span>
-                  <span className="text-rose-700">
-                    R$ {p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-                <p className="text-[10px] text-gray-500">Categoria DRE: {p.categoria}</p>
-              </div>
-            ))}
-          </div>
 
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
             <strong>Atenção:</strong> Ao travar a competência, nenhum usuário poderá criar, editar ou excluir lançamentos financeiros com data do mês de {fechamentoMensal.mesAno}.
@@ -171,7 +139,7 @@ export const FechamentoMensalView: React.FC = () => {
             </div>
 
             <p className="text-xs text-gray-600 leading-relaxed">
-              Você está prestes a congelar e travar o mês de <strong>{fechamentoMensal.mesAno}</strong>. Todas as receitas, despesas e relatórios contábeis serão consolidados.
+              Você está prestes a congelar e travar o mês de <strong>{fechamentoMensal.mesAno}</strong>. Todas as receitas, despesas e relatórios financeiros serão consolidados.
             </p>
 
             <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
