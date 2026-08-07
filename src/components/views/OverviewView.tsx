@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { CompetenciaSelect } from '../common/CompetenciaSelect';
 import {
   BarChart,
   Bar,
@@ -15,46 +16,69 @@ import {
 
 export const OverviewView: React.FC = () => {
   const {
-    lancamentos,
     filteredLancamentos,
     documentosOCR,
     sessaoCaixa,
-    selectedUnit,
-    selectedMonthYear,
+    fechamentoMensal,
     setCurrentView,
     setSelectedDocumentForReviewId,
     canExecuteFinancialActions
   } = useApp();
 
-  const totalReceitas = filteredLancamentos
+  const [competencia, setCompetencia] = useState(fechamentoMensal.mesAno);
+
+  const lancamentosCompetencia = filteredLancamentos.filter((lancamento) =>
+    lancamento.status !== 'CANCELADO' && lancamento.dataVencimento.startsWith(competencia)
+  );
+
+  const totalReceitas = lancamentosCompetencia
     .filter((l) => l.tipo === 'RECEITA')
     .reduce((acc, curr) => acc + curr.valor, 0);
 
-  const totalDespesas = filteredLancamentos
+  const totalDespesas = lancamentosCompetencia
     .filter((l) => l.tipo === 'DESPESA')
     .reduce((acc, curr) => acc + curr.valor, 0);
 
   const resultadoOperacional = totalReceitas - totalDespesas;
   const margemOperacional = totalReceitas > 0 ? (resultadoOperacional / totalReceitas) * 100 : 0;
+  const [competenciaYear, competenciaMonth] = competencia.split('-').map(Number);
+  const previousDate = new Date(competenciaYear, competenciaMonth - 2, 1);
+  const previousCompetencia = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+  const previousRevenue = filteredLancamentos
+    .filter((item) => item.tipo === 'RECEITA' && item.status !== 'CANCELADO' && item.dataVencimento.startsWith(previousCompetencia))
+    .reduce((total, item) => total + item.valor, 0);
+  const revenueVariation = previousRevenue > 0 ? ((totalReceitas - previousRevenue) / previousRevenue) * 100 : null;
 
   const pendingOCRDocs = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO');
 
-  // Chart data
-  const chartData = [
-    { mes: 'Jan', Receitas: 112000, Despesas: 84000 },
-    { mes: 'Fev', Receitas: 118000, Despesas: 89000 },
-    { mes: 'Mar', Receitas: 125000, Despesas: 92000 },
-    { mes: 'Abr', Receitas: 128000, Despesas: 95400 },
-    { mes: 'Mai (Atual)', Receitas: totalReceitas, Despesas: totalDespesas }
-  ];
+  const chartData = useMemo(() => {
+    const [year, month] = competencia.split('-').map(Number);
+    return Array.from({ length: 5 }, (_, index) => {
+      const date = new Date(year, month - 5 + index, 1);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const items = filteredLancamentos.filter((item) =>
+        item.status !== 'CANCELADO' && item.dataVencimento.startsWith(monthKey)
+      );
+      const label = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+      return {
+        mes: label.charAt(0).toUpperCase() + label.slice(1),
+        Receitas: items.filter((item) => item.tipo === 'RECEITA').reduce((total, item) => total + item.valor, 0),
+        Despesas: items.filter((item) => item.tipo === 'DESPESA').reduce((total, item) => total + item.valor, 0)
+      };
+    });
+  }, [competencia, filteredLancamentos]);
 
-  const categoryPieData = [
-    { name: 'Insumos Médicos', value: 28900, color: '#131b2e' },
-    { name: 'Pessoal & Encargos', value: 28400, color: '#C5A059' },
-    { name: 'Ocupação/Aluguel', value: 12500, color: '#003366' },
-    { name: 'Marketing & Ads', value: 6800, color: '#94a3b8' },
-    { name: 'Outras Despesas', value: 4450, color: '#cbd5e1' }
-  ];
+  const categoryPieData = useMemo(() => {
+    const colors = ['#131b2e', '#C5A059', '#003366', '#64748b', '#94a3b8', '#cbd5e1'];
+    const totals = new Map<string, number>();
+    lancamentosCompetencia
+      .filter((item) => item.tipo === 'DESPESA')
+      .forEach((item) => totals.set(item.categoria, (totals.get(item.categoria) || 0) + item.valor));
+
+    return Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], index) => ({ name, value, color: colors[index % colors.length] }));
+  }, [lancamentosCompetencia]);
 
   return (
     <div className="space-y-6">
@@ -70,19 +94,29 @@ export const OverviewView: React.FC = () => {
               Painel de Controle Financeiro & DRE Gerencial
             </h2>
             <p className="text-xs text-gray-300 mt-1 max-w-xl">
-              Acompanhamento de fluxo de caixa, validação automática de notas via OCR, conciliação e apuração de DRE.
+              Acompanhamento financeiro por unidade, validação de documentos e apuração do DRE gerencial.
             </p>
           </div>
 
-          {canExecuteFinancialActions && <div className="flex items-center gap-2">
-            <button
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Competência do painel</label>
+              <CompetenciaSelect
+                value={competencia}
+                onChange={setCompetencia}
+                lancamentos={filteredLancamentos}
+                referenceMonth={fechamentoMensal.mesAno}
+                allowAll={false}
+              />
+            </div>
+            {canExecuteFinancialActions && <button
               onClick={() => setCurrentView('pending_review')}
               className="px-4 py-2 bg-[#C5A059] text-white rounded-lg text-xs font-bold hover:bg-[#b08d46] transition flex items-center gap-1.5 shadow-md"
             >
               <span className="material-symbols-outlined text-base">auto_awesome</span>
               Revisar Fila OCR ({pendingOCRDocs.length})
-            </button>
-          </div>}
+            </button>}
+          </div>
         </div>
       </div>
 
@@ -103,7 +137,9 @@ export const OverviewView: React.FC = () => {
           </p>
           <div className="mt-2 flex items-center text-[11px] text-emerald-700 font-semibold">
             <span className="material-symbols-outlined text-sm mr-0.5">arrow_upward</span>
-            +11,3% vs mês anterior
+            {revenueVariation === null
+              ? 'Sem base no mês anterior'
+              : `${revenueVariation >= 0 ? '+' : ''}${revenueVariation.toFixed(1)}% vs mês anterior`}
           </div>
         </div>
 
@@ -122,7 +158,7 @@ export const OverviewView: React.FC = () => {
           </p>
           <div className="mt-2 flex items-center text-[11px] text-rose-700 font-semibold">
             <span className="material-symbols-outlined text-sm mr-0.5">arrow_downward</span>
-            Dentro do orçamento previsto
+            Total da competência selecionada
           </div>
         </div>
 
@@ -130,7 +166,7 @@ export const OverviewView: React.FC = () => {
         <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
-              Lucro Líquido
+              Resultado do Período
             </span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
               <span className="material-symbols-outlined text-xl">account_balance_wallet</span>
@@ -140,7 +176,7 @@ export const OverviewView: React.FC = () => {
             R$ {resultadoOperacional.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <div className="mt-2 flex items-center text-[11px] text-blue-700 font-semibold">
-            <span>Margem Líquida: </span>
+              <span>Margem do período: </span>
             <span className="ml-1 px-1.5 py-0.2 bg-blue-100 rounded text-blue-900 font-bold">
               {margemOperacional.toFixed(1)}%
             </span>
@@ -240,7 +276,7 @@ export const OverviewView: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-bold text-[#0b1c30]">Evolução Mensal de Receitas vs Despesas</h3>
-              <p className="text-xs text-gray-500">Valores consolidados em R$ no ano de 2024</p>
+              <p className="text-xs text-gray-500">Cinco competências até o mês selecionado</p>
             </div>
             <span className="text-xs font-bold text-[#775a19] bg-[#ffdea5] px-2.5 py-1 rounded">
               Visão Competência
@@ -268,7 +304,7 @@ export const OverviewView: React.FC = () => {
         <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-[#0b1c30]">Distribuição de Custos por Categoria</h3>
-            <p className="text-xs text-gray-500 mb-2">Principais centros de despesa do mês</p>
+            <p className="text-xs text-gray-500 mb-2">Despesas da competência selecionada</p>
 
             <div className="h-44 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -313,7 +349,7 @@ export const OverviewView: React.FC = () => {
         <div className="p-4 border-b border-[#e5eeff] flex items-center justify-between bg-[#f8f9ff]">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#131b2e]">receipt</span>
-            <h3 className="text-sm font-bold text-[#0b1c30]">Últimos Lançamentos Registrados</h3>
+            <h3 className="text-sm font-bold text-[#0b1c30]">Últimos Lançamentos da Competência</h3>
           </div>
           <button
             onClick={() => setCurrentView('receitas')}
@@ -337,7 +373,7 @@ export const OverviewView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredLancamentos.slice(0, 5).map((l) => (
+              {lancamentosCompetencia.slice(0, 5).map((l) => (
                 <tr key={l.id} className="hover:bg-gray-50 transition">
                   <td className="p-3 font-semibold text-gray-600">{l.dataVencimento}</td>
                   <td className="p-3 font-bold text-[#0b1c30] max-w-xs truncate">{l.descricao}</td>

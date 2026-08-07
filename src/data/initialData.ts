@@ -424,13 +424,7 @@ export const INITIAL_FECHAMENTO: FechamentoMensal = {
     { id: 'chk-1', item: 'Conciliação Bancária de todas as contas 100% efetuada', concluido: true, responsavel: 'Carlos Eduardo' },
     { id: 'chk-2', item: 'Conferência de Caixa Físico e sangrias validada', concluido: true, responsavel: 'Carlos Eduardo' },
     { id: 'chk-3', item: 'Aprovação de todos os documentos da fila OCR', concluido: false, responsavel: 'Ana Claudia' },
-    { id: 'chk-4', item: 'Lançamento e apuração das provisões e depreciação', concluido: true, responsavel: 'Mariana Oliveira' },
     { id: 'chk-5', item: 'Conferência de impostos e tributos apurados (DAS/PIS/COFINS)', concluido: false, responsavel: 'Ana Claudia' }
-  ],
-  provisoesDepreciacao: [
-    { descricao: 'Depreciação Mensal Aparelho Lavieen Laser', categoria: 'Depreciação e Amortização', valor: 2000.00 },
-    { descricao: 'Provisão 13º Salário Equipe', categoria: 'Provisões Trabalhistas', valor: 2366.67 },
-    { descricao: 'Provisão Férias + 1/3 Equipe', categoria: 'Provisões Trabalhistas', valor: 3155.56 }
   ],
   observacoes: 'Mês com excelente volume de vendas de harmonização. Aguardando aprovação final dos dois últimos documentos do OCR para travar o período.'
 };

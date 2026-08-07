@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { canAccessView } from './config/accessControl';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
+import { UserAvatar } from './components/common/UserAvatar';
 
 // Modals
 import { NovoLancamentoModal } from './components/modals/NovoLancamentoModal';
@@ -66,9 +67,12 @@ const MainAppContent: React.FC = () => {
                 onClick={() => setCurrentUser(user)}
                 className="w-full p-3 border border-gray-200 rounded-xl flex items-center justify-between hover:bg-[#f8f9ff] hover:border-[#C5A059] transition text-left"
               >
-                <div>
-                  <p className="text-sm font-bold text-[#0b1c30]">{user.name}</p>
-                  <p className="text-xs text-gray-500">{user.email} • {user.unit}</p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <UserAvatar name={user.name} avatarUrl={user.avatarUrl} sizeClass="w-9 h-9" textClass="text-[11px]" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-[#0b1c30] truncate">{user.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{user.email} • {user.unit}</p>
+                  </div>
                 </div>
                 <span className="text-[10px] font-bold text-[#775a19] bg-[#ffdea5] px-2 py-1 rounded">
                   {user.role}

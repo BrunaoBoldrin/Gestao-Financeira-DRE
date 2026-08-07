@@ -64,8 +64,11 @@ const getPeriodInfo = (dateValue: string, periodo: PeriodoFluxo) => {
 };
 
 export const FluxoCaixaView: React.FC = () => {
-  const { lancamentos, selectedUnit, selectedMonthYear } = useApp();
+  const { lancamentos, selectedUnit } = useApp();
   const [periodo, setPeriodo] = useState<PeriodoFluxo>('DIARIO');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+  const periodoPersonalizadoInvalido = Boolean(dataInicio && dataFim && dataInicio > dataFim);
 
   const fluxoData = useMemo<FluxoAgrupado[]>(() => {
     const buckets = new Map<string, FluxoAgrupado>();
@@ -74,8 +77,12 @@ export const FluxoCaixaView: React.FC = () => {
       (selectedUnit === 'Todas as Unidades' || lancamento.unidade === selectedUnit)
     );
 
-    const isDateInScope = (date: string) =>
-      periodo === 'MENSAL' || selectedMonthYear === 'TODOS' || date.startsWith(selectedMonthYear);
+    const isDateInScope = (date: string) => {
+      if (periodoPersonalizadoInvalido) return false;
+      if (dataInicio && date < dataInicio) return false;
+      if (dataFim && date > dataFim) return false;
+      return true;
+    };
 
     const ensureBucket = (date: string) => {
       const info = getPeriodInfo(date, periodo);
@@ -122,7 +129,7 @@ export const FluxoCaixaView: React.FC = () => {
         saldoAcumulado += bucket.Realizado;
         return { ...bucket, SaldoAcumulado: saldoAcumulado };
       });
-  }, [lancamentos, periodo, selectedMonthYear, selectedUnit]);
+  }, [dataFim, dataInicio, lancamentos, periodo, periodoPersonalizadoInvalido, selectedUnit]);
 
   const periodoLabel = periodo === 'DIARIO' ? 'dia' : periodo === 'SEMANAL' ? 'semana' : 'mês';
 
@@ -135,7 +142,7 @@ export const FluxoCaixaView: React.FC = () => {
             Fluxo de Caixa Operacional (Previsto vs Realizado)
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Valores agrupados por {periodoLabel}, respeitando a unidade e a competência selecionadas.
+            Valores agrupados por {periodoLabel}, respeitando a unidade e o período informado.
           </p>
         </div>
 
@@ -152,6 +159,50 @@ export const FluxoCaixaView: React.FC = () => {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl border border-[#e5eeff] shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">Período personalizado</h3>
+            <p className="text-[11px] text-gray-500 mt-0.5">Opcional. Sem datas informadas, serão exibidas todas as movimentações da unidade.</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1">Data inicial</label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(event) => setDataInicio(event.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1">Data final</label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(event) => setDataFim(event.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
+              />
+            </div>
+            {(dataInicio || dataFim) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDataInicio('');
+                  setDataFim('');
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50"
+              >
+                Limpar período
+              </button>
+            )}
+          </div>
+        </div>
+        {periodoPersonalizadoInvalido && (
+          <p className="text-[11px] font-semibold text-rose-600 mt-2">A data inicial não pode ser posterior à data final.</p>
+        )}
       </div>
 
       <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs space-y-4">

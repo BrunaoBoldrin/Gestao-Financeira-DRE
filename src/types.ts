@@ -138,11 +138,6 @@ export interface FechamentoMensal {
     concluido: boolean;
     responsavel?: string;
   }[];
-  provisoesDepreciacao: {
-    descricao: string;
-    categoria: string;
-    valor: number;
-  }[];
   observacoes?: string;
 }
 
