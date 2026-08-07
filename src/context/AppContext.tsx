@@ -119,7 +119,16 @@ interface AppContextType {
   addLancamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>) => void;
   addLancamentoComDDL: (dadosBase: Omit<Lancamento, 'id' | 'criadoEm'>, dataEmissao: string, prazosDias: number[]) => void;
   addLancamentoComParcelamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>, numeroParcelas: number) => void;
-  addTransferencia: (dados: { origem: string; destino: string; valor: number; data: string; descricao: string; unidade: string }) => void;
+  addTransferencia: (dados: {
+    origem: string;
+    destino: string;
+    valor: number;
+    data: string;
+    descricao: string;
+    unidade: string;
+    comprovanteUrl?: string;
+    documentoRef?: string;
+  }) => void;
   updateLancamento: (id: string, l: Partial<Lancamento>) => void;
   deleteLancamento: (id: string) => void;
   marcarLancamentoComoPago: (id: string) => void;
@@ -602,6 +611,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     data: string;
     descricao: string;
     unidade: string;
+    comprovanteUrl?: string;
+    documentoRef?: string;
   }) => {
     if (!checkFinancialPermission('Transferência de Contas')) return;
     dados = { ...dados, unidade: resolveAllowedUnit(dados.unidade) };
@@ -609,14 +620,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       registrarMovimentacaoCaixa(
         'SANGRIA',
         `Transferência para ${dados.destino}: ${dados.descricao}`,
-        dados.valor
+        dados.valor,
+        dados.documentoRef
       );
     }
 
     addAuditLog(
       'Transferência de Contas',
       'CRIACAO',
-      `Transferência de R$ ${dados.valor.toFixed(2)} de [${dados.origem}] para [${dados.destino}]`
+      `Transferência de R$ ${dados.valor.toFixed(2)} de [${dados.origem}] para [${dados.destino}]${dados.documentoRef ? ` — anexo: ${dados.documentoRef}` : ''}`
     );
 
     showToast(

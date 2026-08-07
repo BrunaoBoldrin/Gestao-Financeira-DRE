@@ -23,7 +23,10 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     centrosCusto,
     fornecedores,
     bancos,
-    condicoesPagamento
+    condicoesPagamento,
+    currentUser,
+    isFinance,
+    showToast
   } = useApp();
 
   const [tipo, setTipo] = useState<TipoLancamento>(tipoInicial);
@@ -36,10 +39,16 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 Dias default
   const [fornecedorCliente, setFornecedorCliente] = useState('');
   const [contaBancaria, setContaBancaria] = useState('');
-  const [unidade, setUnidade] = useState(selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit);
+  const [unidade, setUnidade] = useState(selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
   const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'BOLETO' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'DINHEIRO' | 'TRANSFERENCIA'>('BOLETO');
   const [status, setStatus] = useState<StatusLancamento>('PENDENTE');
   const [contaDestinoTransferencia, setContaDestinoTransferencia] = useState('');
+  const [anexo, setAnexo] = useState<File | null>(null);
+
+  const handleClose = () => {
+    setAnexo(null);
+    onClose();
+  };
 
   // Set default selects when lists load
   React.useEffect(() => {
@@ -55,17 +64,65 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     }
   }, [categorias, centrosCusto, bancos, tipo]);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    if (isFinance && currentUser) {
+      setUnidade(currentUser.unit);
+      return;
+    }
+    setUnidade(selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
+  }, [isOpen, isFinance, currentUser?.unit, selectedUnit]);
+
   if (!isOpen) return null;
 
   const numVal = parseFloat(valor) || 0;
   const activeCond = condicoesPagamento.find((c) => c.id === selectedCondicaoId) || condicoesPagamento[0];
   const prazos = activeCond ? activeCond.prazosDias : [0];
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!descricao || numVal <= 0) return;
+  const handleAnexoChange = (file?: File) => {
+    if (!file) {
+      setAnexo(null);
+      return;
+    }
 
-    const targetUnit = unidade || (selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit);
+    const tiposPermitidos = ['application/pdf', 'image/jpeg'];
+    if (!tiposPermitidos.includes(file.type)) {
+      showToast('Formato inválido. Selecione um arquivo PDF, JPG ou JPEG.', 'error');
+      setAnexo(null);
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('O anexo deve ter no máximo 10 MB.', 'error');
+      setAnexo(null);
+      return;
+    }
+
+    setAnexo(file);
+  };
+
+  const readAnexo = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('Falha ao ler o anexo.'));
+    reader.readAsDataURL(file);
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!descricao || numVal <= 0 || !unidade) return;
+
+    const targetUnit = isFinance && currentUser ? currentUser.unit : unidade;
+    let comprovanteUrl: string | undefined;
+
+    if (anexo) {
+      try {
+        comprovanteUrl = await readAnexo(anexo);
+      } catch {
+        showToast('Não foi possível processar o anexo. Tente selecionar o arquivo novamente.', 'error');
+        return;
+      }
+    }
 
     if (formaPagamento === 'TRANSFERENCIA' && contaDestinoTransferencia) {
       addTransferencia({
@@ -74,9 +131,11 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
         valor: numVal,
         data: dataEmissao,
         descricao,
-        unidade: targetUnit
+        unidade: targetUnit,
+        comprovanteUrl,
+        documentoRef: anexo?.name
       });
-      onClose();
+      handleClose();
       return;
     }
 
@@ -92,7 +151,9 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       fornecedorCliente: fornecedorCliente || (tipo === 'RECEITA' ? 'Cliente Diverso' : 'Fornecedor Diverso'),
       contaBancaria: contaBancaria || 'Itaú Uniclass - C/C 45892-1',
       formaPagamento,
-      unidade: targetUnit
+      unidade: targetUnit,
+      comprovanteUrl,
+      documentoRef: anexo?.name
     };
 
     if (tipo === 'DESPESA' && prazos.length >= 1) {
@@ -101,7 +162,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       addLancamento(payload);
     }
 
-    onClose();
+    handleClose();
   };
 
   return (
@@ -112,7 +173,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <span className="material-symbols-outlined text-[#C5A059]">post_add</span>
             <h3 className="font-bold text-base">Novo Lançamento Financeiro</h3>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition">
+          <button onClick={handleClose} className="text-gray-400 hover:text-white transition">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -160,7 +221,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Valor Total (R$) <span className="text-red-500">*</span>
@@ -271,12 +332,61 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                 <option value="PAGO">Pago / Liquidado</option>
               </select>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Unidade / Filial <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={unidade}
+                onChange={(e) => setUnidade(e.target.value)}
+                required
+                disabled={isFinance}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white ${
+                  isFinance ? 'cursor-not-allowed opacity-75' : ''
+                }`}
+              >
+                <option value="" disabled>Selecione a unidade...</option>
+                {units.filter((unit) => unit.ativa && unit.id !== 'all').map((unit) => (
+                  <option key={unit.id} value={unit.nome}>{unit.nome} ({unit.cidade})</option>
+                ))}
+              </select>
+              {selectedUnit === 'Todas as Unidades' && !isFinance && !unidade && (
+                <p className="text-[10px] text-amber-700 mt-1">Informe a unidade responsável pelo lançamento.</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Anexo financeiro (opcional)</label>
+            <label className="flex items-center justify-between gap-3 w-full px-3 py-2.5 border border-dashed border-gray-300 rounded-md text-xs bg-gray-50 hover:bg-gray-100 cursor-pointer transition">
+              <span className="flex items-center gap-2 min-w-0 text-gray-700">
+                <span className="material-symbols-outlined text-lg text-[#131b2e]">attach_file</span>
+                <span className="truncate">{anexo ? anexo.name : 'Selecionar PDF, JPG ou JPEG'}</span>
+              </span>
+              <span className="shrink-0 text-[10px] font-bold text-gray-500">Máx. 10 MB</span>
+              <input
+                type="file"
+                accept="application/pdf,image/jpeg,.pdf,.jpg,.jpeg"
+                onChange={(event) => handleAnexoChange(event.target.files?.[0])}
+                className="sr-only"
+              />
+            </label>
+            {anexo && (
+              <button
+                type="button"
+                onClick={() => setAnexo(null)}
+                className="mt-1 text-[10px] font-semibold text-rose-600 hover:underline"
+              >
+                Remover anexo
+              </button>
+            )}
           </div>
 
           <div className="pt-4 border-t border-gray-100 flex justify-end gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 border border-gray-300 rounded-md text-xs font-semibold text-gray-700 hover:bg-gray-50 transition"
             >
               Cancelar

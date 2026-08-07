@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   LineChart,
@@ -11,24 +11,123 @@ import {
   Legend
 } from 'recharts';
 
-export const FluxoCaixaView: React.FC = () => {
-  const { lancamentos } = useApp();
-  const [periodo, setPeriodo] = useState<'DIARIO' | 'SEMANAL' | 'MENSAL'>('DIARIO');
+type PeriodoFluxo = 'DIARIO' | 'SEMANAL' | 'MENSAL';
 
-  const dailyData = [
-    { dia: '01/05', Previsto: 4500, Realizado: 4500, SaldoAcumulado: 42000 },
-    { dia: '02/05', Previsto: 2450, Realizado: 2450, SaldoAcumulado: 44450 },
-    { dia: '05/05', Previsto: 1800, Realizado: 1800, SaldoAcumulado: 46250 },
-    { dia: '08/05', Previsto: -5400, Realizado: -5400, SaldoAcumulado: 40850 },
-    { dia: '10/05', Previsto: -9300, Realizado: -9300, SaldoAcumulado: 31550 },
-    { dia: '15/05', Previsto: 680, Realizado: 680, SaldoAcumulado: 32230 },
-    { dia: '20/05', Previsto: -2150, Realizado: 0, SaldoAcumulado: 30080 },
-    { dia: '25/05', Previsto: 4500, Realizado: 0, SaldoAcumulado: 34580 }
-  ];
+interface FluxoAgrupado {
+  chave: string;
+  periodo: string;
+  ordem: number;
+  Previsto: number;
+  Realizado: number;
+  EntradasRealizadas: number;
+  SaidasRealizadas: number;
+  SaldoAcumulado: number;
+}
+
+const parseDate = (value: string) => new Date(`${value}T12:00:00`);
+
+const formatMonth = (date: Date) => {
+  const text = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+const getPeriodInfo = (dateValue: string, periodo: PeriodoFluxo) => {
+  const date = parseDate(dateValue);
+
+  if (periodo === 'MENSAL') {
+    return {
+      chave: dateValue.substring(0, 7),
+      periodo: formatMonth(date),
+      ordem: new Date(date.getFullYear(), date.getMonth(), 1).getTime()
+    };
+  }
+
+  if (periodo === 'SEMANAL') {
+    const start = new Date(date);
+    const day = start.getDay();
+    start.setDate(start.getDate() + (day === 0 ? -6 : 1 - day));
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+
+    return {
+      chave: start.toISOString().substring(0, 10),
+      periodo: `${start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} a ${end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`,
+      ordem: start.getTime()
+    };
+  }
+
+  return {
+    chave: dateValue,
+    periodo: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+    ordem: date.getTime()
+  };
+};
+
+export const FluxoCaixaView: React.FC = () => {
+  const { lancamentos, selectedUnit, selectedMonthYear } = useApp();
+  const [periodo, setPeriodo] = useState<PeriodoFluxo>('DIARIO');
+
+  const fluxoData = useMemo<FluxoAgrupado[]>(() => {
+    const buckets = new Map<string, FluxoAgrupado>();
+    const lancamentosDaUnidade = lancamentos.filter((lancamento) =>
+      lancamento.status !== 'CANCELADO' &&
+      (selectedUnit === 'Todas as Unidades' || lancamento.unidade === selectedUnit)
+    );
+
+    const isDateInScope = (date: string) =>
+      periodo === 'MENSAL' || selectedMonthYear === 'TODOS' || date.startsWith(selectedMonthYear);
+
+    const ensureBucket = (date: string) => {
+      const info = getPeriodInfo(date, periodo);
+      const existing = buckets.get(info.chave);
+      if (existing) return existing;
+
+      const bucket: FluxoAgrupado = {
+        ...info,
+        Previsto: 0,
+        Realizado: 0,
+        EntradasRealizadas: 0,
+        SaidasRealizadas: 0,
+        SaldoAcumulado: 0
+      };
+      buckets.set(info.chave, bucket);
+      return bucket;
+    };
+
+    lancamentosDaUnidade.forEach((lancamento) => {
+      const signedValue = lancamento.tipo === 'RECEITA' ? lancamento.valor : -lancamento.valor;
+
+      if (isDateInScope(lancamento.dataVencimento)) {
+        ensureBucket(lancamento.dataVencimento).Previsto += signedValue;
+      }
+
+      if (lancamento.status === 'PAGO') {
+        const paymentDate = lancamento.dataPagamento || lancamento.dataVencimento;
+        if (isDateInScope(paymentDate)) {
+          const bucket = ensureBucket(paymentDate);
+          bucket.Realizado += signedValue;
+          if (lancamento.tipo === 'RECEITA') {
+            bucket.EntradasRealizadas += lancamento.valor;
+          } else {
+            bucket.SaidasRealizadas += lancamento.valor;
+          }
+        }
+      }
+    });
+
+    let saldoAcumulado = 0;
+    return Array.from(buckets.values())
+      .sort((a, b) => a.ordem - b.ordem)
+      .map((bucket) => {
+        saldoAcumulado += bucket.Realizado;
+        return { ...bucket, SaldoAcumulado: saldoAcumulado };
+      });
+  }, [lancamentos, periodo, selectedMonthYear, selectedUnit]);
+
+  const periodoLabel = periodo === 'DIARIO' ? 'dia' : periodo === 'SEMANAL' ? 'semana' : 'mês';
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs">
         <div>
           <h2 className="text-lg font-bold text-[#0b1c30] flex items-center gap-2">
@@ -36,56 +135,41 @@ export const FluxoCaixaView: React.FC = () => {
             Fluxo de Caixa Operacional (Previsto vs Realizado)
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Projeção financeira contínua de movimentações diárias, saldo acumulado e previsibilidade.
+            Valores agrupados por {periodoLabel}, respeitando a unidade e a competência selecionadas.
           </p>
         </div>
 
-        {/* View Toggle */}
         <div className="flex items-center gap-1 bg-[#f8f9ff] p-1 rounded-lg border border-[#d3e4fe]">
-          <button
-            onClick={() => setPeriodo('DIARIO')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition ${
-              periodo === 'DIARIO' ? 'bg-[#131b2e] text-white shadow-xs' : 'text-gray-600 hover:bg-white'
-            }`}
-          >
-            Diário
-          </button>
-          <button
-            onClick={() => setPeriodo('SEMANAL')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition ${
-              periodo === 'SEMANAL' ? 'bg-[#131b2e] text-white shadow-xs' : 'text-gray-600 hover:bg-white'
-            }`}
-          >
-            Semanal
-          </button>
-          <button
-            onClick={() => setPeriodo('MENSAL')}
-            className={`px-3 py-1.5 rounded-md text-xs font-bold transition ${
-              periodo === 'MENSAL' ? 'bg-[#131b2e] text-white shadow-xs' : 'text-gray-600 hover:bg-white'
-            }`}
-          >
-            Mensal
-          </button>
+          {(['DIARIO', 'SEMANAL', 'MENSAL'] as PeriodoFluxo[]).map((option) => (
+            <button
+              key={option}
+              onClick={() => setPeriodo(option)}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold transition ${
+                periodo === option ? 'bg-[#131b2e] text-white shadow-xs' : 'text-gray-600 hover:bg-white'
+              }`}
+            >
+              {option === 'DIARIO' ? 'Diário' : option === 'SEMANAL' ? 'Semanal' : 'Mensal'}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Chart */}
       <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-[#0b1c30]">Curva de Saldo Acumulado e Entradas/Saídas</h3>
           <span className="text-xs font-bold text-[#775a19] bg-[#ffdea5] px-2.5 py-1 rounded">
-            Projeção Financeira
+            Visão {periodoLabel}
           </span>
         </div>
 
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dailyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <LineChart data={fluxoData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip
-                formatter={(val: any) => `R$ ${Number(val).toLocaleString('pt-BR')}`}
+                formatter={(val: number) => `R$ ${Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                 contentStyle={{ backgroundColor: '#0b1c30', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
               />
               <Legend />
@@ -97,11 +181,10 @@ export const FluxoCaixaView: React.FC = () => {
         </div>
       </div>
 
-      {/* Daily Cash Flow Table */}
       <div className="bg-white rounded-xl border border-[#e5eeff] shadow-xs overflow-hidden">
         <div className="p-4 bg-[#f8f9ff] border-b border-[#e5eeff]">
           <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
-            Detalhamento do Fluxo de Caixa ({periodo})
+            Detalhamento do Fluxo de Caixa — agrupamento por {periodoLabel}
           </h3>
         </div>
 
@@ -109,34 +192,26 @@ export const FluxoCaixaView: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <th className="p-3">Data</th>
-                <th className="p-3 text-right">Entradas (R$)</th>
-                <th className="p-3 text-right">Saídas (R$)</th>
-                <th className="p-3 text-right">Resultado do Dia</th>
-                <th className="p-3 text-right">Saldo Final Acumulado</th>
+                <th className="p-3">Período</th>
+                <th className="p-3 text-right">Entradas realizadas</th>
+                <th className="p-3 text-right">Saídas realizadas</th>
+                <th className="p-3 text-right">Resultado realizado</th>
+                <th className="p-3 text-right">Saldo acumulado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {dailyData.map((row, idx) => {
-                const entradas = row.Previsto > 0 ? row.Previsto : 0;
-                const saidas = row.Previsto < 0 ? Math.abs(row.Previsto) : 0;
-                const resultadoDia = entradas - saidas;
-
+              {fluxoData.map((row) => {
                 return (
-                  <tr key={idx} className="hover:bg-gray-50 transition">
-                    <td className="p-3 font-bold text-[#0b1c30]">{row.dia}</td>
+                  <tr key={row.chave} className="hover:bg-gray-50 transition">
+                    <td className="p-3 font-bold text-[#0b1c30]">{row.periodo}</td>
                     <td className="p-3 text-right font-bold text-emerald-700">
-                      R$ {entradas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {row.EntradasRealizadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="p-3 text-right font-bold text-rose-700">
-                      R$ {saidas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {row.SaidasRealizadas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
-                    <td
-                      className={`p-3 text-right font-bold ${
-                        resultadoDia >= 0 ? 'text-emerald-800' : 'text-rose-800'
-                      }`}
-                    >
-                      R$ {resultadoDia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <td className={`p-3 text-right font-bold ${row.Realizado >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
+                      R$ {row.Realizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="p-3 text-right font-black text-[#0b1c30]">
                       R$ {row.SaldoAcumulado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -144,6 +219,14 @@ export const FluxoCaixaView: React.FC = () => {
                   </tr>
                 );
               })}
+
+              {fluxoData.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-gray-500">
+                    Nenhuma movimentação encontrada para os filtros selecionados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

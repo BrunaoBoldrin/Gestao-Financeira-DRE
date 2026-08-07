@@ -127,7 +127,7 @@ export const ConfiguracoesGeraisView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Company Settings */}
         <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs space-y-4">
           <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
@@ -168,34 +168,6 @@ export const ConfiguracoesGeraisView: React.FC = () => {
           </div>
         </div>
 
-        {/* System Settings & Compliance */}
-        <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs space-y-4">
-          <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
-            Parâmetros Contábeis & Conformidade
-          </h3>
-
-          <div className="space-y-3 text-xs">
-            <div className="flex items-center justify-between p-3 bg-[#f8f9ff] border border-[#d3e4fe] rounded-lg">
-              <div>
-                <p className="font-bold text-[#0b1c30]">Regime de Contabilidade Padrão</p>
-                <p className="text-[10px] text-gray-500">DRE por Competência / Fluxo por Caixa</p>
-              </div>
-              <span className="text-[10px] font-bold bg-[#131b2e] text-white px-2 py-0.5 rounded">
-                NBC TG 26
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-[#f8f9ff] border border-[#d3e4fe] rounded-lg">
-              <div>
-                <p className="font-bold text-[#0b1c30]">Motor OCR com IA Gemini</p>
-                <p className="text-[10px] text-gray-500">Extração inteligente sem custo de uso</p>
-              </div>
-              <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
-                Gratuito
-              </span>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Modal Add/Edit Unit */}
