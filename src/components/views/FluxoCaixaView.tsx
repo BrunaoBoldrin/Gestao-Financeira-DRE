@@ -26,6 +26,9 @@ interface FluxoAgrupado {
 
 const parseDate = (value: string) => new Date(`${value}T12:00:00`);
 
+const toDateValue = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 const formatMonth = (date: Date) => {
   const text = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -50,7 +53,7 @@ const getPeriodInfo = (dateValue: string, periodo: PeriodoFluxo) => {
     end.setDate(end.getDate() + 6);
 
     return {
-      chave: start.toISOString().substring(0, 10),
+      chave: toDateValue(start),
       periodo: `${start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} a ${end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`,
       ordem: start.getTime()
     };
@@ -66,9 +69,11 @@ const getPeriodInfo = (dateValue: string, periodo: PeriodoFluxo) => {
 export const FluxoCaixaView: React.FC = () => {
   const { lancamentos, selectedUnit } = useApp();
   const [periodo, setPeriodo] = useState<PeriodoFluxo>('DIARIO');
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
-  const periodoPersonalizadoInvalido = Boolean(dataInicio && dataFim && dataInicio > dataFim);
+  const [dataInicioInput, setDataInicioInput] = useState('');
+  const [dataFimInput, setDataFimInput] = useState('');
+  const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
+  const periodoPersonalizadoInvalido = Boolean(dataInicioInput && dataFimInput && dataInicioInput > dataFimInput);
+  const periodoAplicadoAtivo = Boolean(periodoAplicado.inicio || periodoAplicado.fim);
 
   const fluxoData = useMemo<FluxoAgrupado[]>(() => {
     const buckets = new Map<string, FluxoAgrupado>();
@@ -78,9 +83,8 @@ export const FluxoCaixaView: React.FC = () => {
     );
 
     const isDateInScope = (date: string) => {
-      if (periodoPersonalizadoInvalido) return false;
-      if (dataInicio && date < dataInicio) return false;
-      if (dataFim && date > dataFim) return false;
+      if (periodoAplicado.inicio && date < periodoAplicado.inicio) return false;
+      if (periodoAplicado.fim && date > periodoAplicado.fim) return false;
       return true;
     };
 
@@ -122,6 +126,27 @@ export const FluxoCaixaView: React.FC = () => {
       }
     });
 
+    if (periodoAplicado.inicio && periodoAplicado.fim) {
+      const cursor = parseDate(periodoAplicado.inicio);
+      const end = parseDate(periodoAplicado.fim);
+
+      if (periodo === 'MENSAL') {
+        cursor.setDate(1);
+        const finalMonth = new Date(end.getFullYear(), end.getMonth(), 1, 12);
+        while (cursor <= finalMonth) {
+          ensureBucket(toDateValue(cursor));
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
+      } else {
+        const stepInDays = periodo === 'DIARIO' ? 1 : 7;
+        while (cursor <= end) {
+          ensureBucket(toDateValue(cursor));
+          cursor.setDate(cursor.getDate() + stepInDays);
+        }
+        ensureBucket(periodoAplicado.fim);
+      }
+    }
+
     let saldoAcumulado = 0;
     return Array.from(buckets.values())
       .sort((a, b) => a.ordem - b.ordem)
@@ -129,9 +154,17 @@ export const FluxoCaixaView: React.FC = () => {
         saldoAcumulado += bucket.Realizado;
         return { ...bucket, SaldoAcumulado: saldoAcumulado };
       });
-  }, [dataFim, dataInicio, lancamentos, periodo, periodoPersonalizadoInvalido, selectedUnit]);
+  }, [lancamentos, periodo, periodoAplicado, selectedUnit]);
 
   const periodoLabel = periodo === 'DIARIO' ? 'dia' : periodo === 'SEMANAL' ? 'semana' : 'mês';
+  const formatDate = (value: string) => parseDate(value).toLocaleDateString('pt-BR');
+  const periodoAplicadoLabel = periodoAplicadoAtivo
+    ? periodoAplicado.inicio && periodoAplicado.fim
+      ? `${formatDate(periodoAplicado.inicio)} até ${formatDate(periodoAplicado.fim)}`
+      : periodoAplicado.inicio
+        ? `A partir de ${formatDate(periodoAplicado.inicio)}`
+        : `Até ${formatDate(periodoAplicado.fim)}`
+    : 'Todas as movimentações';
 
   return (
     <div className="space-y-6">
@@ -172,8 +205,8 @@ export const FluxoCaixaView: React.FC = () => {
               <label className="block text-[10px] font-semibold text-gray-600 mb-1">Data inicial</label>
               <input
                 type="date"
-                value={dataInicio}
-                onChange={(event) => setDataInicio(event.target.value)}
+                value={dataInicioInput}
+                onChange={(event) => setDataInicioInput(event.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
               />
             </div>
@@ -181,17 +214,26 @@ export const FluxoCaixaView: React.FC = () => {
               <label className="block text-[10px] font-semibold text-gray-600 mb-1">Data final</label>
               <input
                 type="date"
-                value={dataFim}
-                onChange={(event) => setDataFim(event.target.value)}
+                value={dataFimInput}
+                onChange={(event) => setDataFimInput(event.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
               />
             </div>
-            {(dataInicio || dataFim) && (
+            <button
+              type="button"
+              onClick={() => setPeriodoAplicado({ inicio: dataInicioInput, fim: dataFimInput })}
+              disabled={periodoPersonalizadoInvalido || (!dataInicioInput && !dataFimInput)}
+              className="px-4 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold hover:bg-[#0b1c30] disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              Aplicar período
+            </button>
+            {(dataInicioInput || dataFimInput || periodoAplicadoAtivo) && (
               <button
                 type="button"
                 onClick={() => {
-                  setDataInicio('');
-                  setDataFim('');
+                  setDataInicioInput('');
+                  setDataFimInput('');
+                  setPeriodoAplicado({ inicio: '', fim: '' });
                 }}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50"
               >
@@ -203,13 +245,16 @@ export const FluxoCaixaView: React.FC = () => {
         {periodoPersonalizadoInvalido && (
           <p className="text-[11px] font-semibold text-rose-600 mt-2">A data inicial não pode ser posterior à data final.</p>
         )}
+        {!periodoPersonalizadoInvalido && (
+          <p className="text-[11px] font-semibold text-[#775a19] mt-2">Período exibido: {periodoAplicadoLabel}</p>
+        )}
       </div>
 
       <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-[#0b1c30]">Curva de Saldo Acumulado e Entradas/Saídas</h3>
           <span className="text-xs font-bold text-[#775a19] bg-[#ffdea5] px-2.5 py-1 rounded">
-            Visão {periodoLabel}
+            Visão por {periodoLabel} · {periodoAplicadoLabel}
           </span>
         </div>
 

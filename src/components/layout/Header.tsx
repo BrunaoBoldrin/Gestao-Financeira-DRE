@@ -10,6 +10,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpenUploadModal }) => {
   const {
     currentUser,
+    currentView,
     setCurrentUser,
     selectedUnit,
     setSelectedUnit,
@@ -30,7 +31,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
     <header className="sticky top-0 z-30 bg-white border-b border-[#e5eeff] px-4 lg:px-6 py-3 flex items-center justify-between shadow-xs">
       {/* Left: Unit Selector & Search */}
       <div className="flex items-center gap-3 lg:gap-6">
-        <div className="relative">
+        {currentView !== 'overview' && <div className="relative">
           <label className="block text-[10px] font-semibold text-[#45464d] uppercase tracking-wider mb-0.5">
             Unidade / Filial
           </label>
@@ -57,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
               ))}
             </select>
           </div>
-        </div>
+        </div>}
 
       </div>
 

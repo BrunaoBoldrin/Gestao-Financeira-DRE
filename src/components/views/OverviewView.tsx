@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { CompetenciaSelect } from '../common/CompetenciaSelect';
+import { CompetenciaSelect, formatCompetencia } from '../common/CompetenciaSelect';
 import {
   BarChart,
   Bar,
@@ -20,45 +20,83 @@ export const OverviewView: React.FC = () => {
     documentosOCR,
     sessaoCaixa,
     fechamentoMensal,
+    currentUser,
+    selectedUnit,
+    setSelectedUnit,
+    units,
+    isFinance,
     setCurrentView,
     setSelectedDocumentForReviewId,
     canExecuteFinancialActions
   } = useApp();
 
   const [competencia, setCompetencia] = useState(fechamentoMensal.mesAno);
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+  const periodoPersonalizadoAtivo = Boolean(dataInicio || dataFim);
+  const periodoPersonalizadoInvalido = Boolean(dataInicio && dataFim && dataInicio > dataFim);
 
-  const lancamentosCompetencia = filteredLancamentos.filter((lancamento) =>
-    lancamento.status !== 'CANCELADO' && lancamento.dataVencimento.startsWith(competencia)
+  const lancamentosValidos = useMemo(
+    () => filteredLancamentos.filter((lancamento) => lancamento.status !== 'CANCELADO'),
+    [filteredLancamentos]
   );
 
-  const totalReceitas = lancamentosCompetencia
+  const lancamentosCards = useMemo(() => {
+    if (periodoPersonalizadoInvalido) return [];
+
+    return lancamentosValidos.filter((lancamento) => {
+      if (periodoPersonalizadoAtivo) {
+        if (dataInicio && lancamento.dataVencimento < dataInicio) return false;
+        if (dataFim && lancamento.dataVencimento > dataFim) return false;
+        return true;
+      }
+
+      return competencia === 'TODOS' || lancamento.dataVencimento.startsWith(competencia);
+    });
+  }, [competencia, dataFim, dataInicio, lancamentosValidos, periodoPersonalizadoAtivo, periodoPersonalizadoInvalido]);
+
+  const totalReceitas = lancamentosCards
     .filter((l) => l.tipo === 'RECEITA')
     .reduce((acc, curr) => acc + curr.valor, 0);
 
-  const totalDespesas = lancamentosCompetencia
+  const totalDespesas = lancamentosCards
     .filter((l) => l.tipo === 'DESPESA')
     .reduce((acc, curr) => acc + curr.valor, 0);
 
   const resultadoOperacional = totalReceitas - totalDespesas;
   const margemOperacional = totalReceitas > 0 ? (resultadoOperacional / totalReceitas) * 100 : 0;
-  const [competenciaYear, competenciaMonth] = competencia.split('-').map(Number);
-  const previousDate = new Date(competenciaYear, competenciaMonth - 2, 1);
-  const previousCompetencia = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
-  const previousRevenue = filteredLancamentos
-    .filter((item) => item.tipo === 'RECEITA' && item.status !== 'CANCELADO' && item.dataVencimento.startsWith(previousCompetencia))
-    .reduce((total, item) => total + item.valor, 0);
-  const revenueVariation = previousRevenue > 0 ? ((totalReceitas - previousRevenue) / previousRevenue) * 100 : null;
+  const revenueVariation = useMemo(() => {
+    if (periodoPersonalizadoAtivo || competencia === 'TODOS') return null;
+
+    const [competenciaYear, competenciaMonth] = competencia.split('-').map(Number);
+    const previousDate = new Date(competenciaYear, competenciaMonth - 2, 1);
+    const previousCompetencia = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+    const previousRevenue = lancamentosValidos
+      .filter((item) => item.tipo === 'RECEITA' && item.dataVencimento.startsWith(previousCompetencia))
+      .reduce((total, item) => total + item.valor, 0);
+
+    return previousRevenue > 0 ? ((totalReceitas - previousRevenue) / previousRevenue) * 100 : null;
+  }, [competencia, lancamentosValidos, periodoPersonalizadoAtivo, totalReceitas]);
+
+  const formatDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR');
+  const periodoCardsLabel = periodoPersonalizadoAtivo
+    ? dataInicio && dataFim
+      ? `${formatDate(dataInicio)} até ${formatDate(dataFim)}`
+      : dataInicio
+        ? `A partir de ${formatDate(dataInicio)}`
+        : `Até ${formatDate(dataFim)}`
+    : competencia === 'TODOS'
+      ? 'Todos os meses'
+      : formatCompetencia(competencia);
 
   const pendingOCRDocs = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO');
 
   const chartData = useMemo(() => {
-    const [year, month] = competencia.split('-').map(Number);
-    return Array.from({ length: 5 }, (_, index) => {
-      const date = new Date(year, month - 5 + index, 1);
+    const year = Number(fechamentoMensal.mesAno.substring(0, 4));
+    return Array.from({ length: 12 }, (_, index) => {
+      const date = new Date(year, index, 1);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const items = filteredLancamentos.filter((item) =>
-        item.status !== 'CANCELADO' && item.dataVencimento.startsWith(monthKey)
-      );
+      const items = lancamentosValidos.filter((item) => item.dataVencimento.startsWith(monthKey));
       const label = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
       return {
         mes: label.charAt(0).toUpperCase() + label.slice(1),
@@ -66,19 +104,30 @@ export const OverviewView: React.FC = () => {
         Despesas: items.filter((item) => item.tipo === 'DESPESA').reduce((total, item) => total + item.valor, 0)
       };
     });
-  }, [competencia, filteredLancamentos]);
+  }, [fechamentoMensal.mesAno, lancamentosValidos]);
+
+  const chartYear = fechamentoMensal.mesAno.substring(0, 4);
+  const lancamentosAnoGrafico = useMemo(
+    () => lancamentosValidos.filter((item) => item.dataVencimento.startsWith(chartYear)),
+    [chartYear, lancamentosValidos]
+  );
 
   const categoryPieData = useMemo(() => {
     const colors = ['#131b2e', '#C5A059', '#003366', '#64748b', '#94a3b8', '#cbd5e1'];
     const totals = new Map<string, number>();
-    lancamentosCompetencia
+    lancamentosAnoGrafico
       .filter((item) => item.tipo === 'DESPESA')
       .forEach((item) => totals.set(item.categoria, (totals.get(item.categoria) || 0) + item.valor));
 
     return Array.from(totals.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([name, value], index) => ({ name, value, color: colors[index % colors.length] }));
-  }, [lancamentosCompetencia]);
+  }, [lancamentosAnoGrafico]);
+
+  const ultimosLancamentos = useMemo(
+    () => [...lancamentosValidos].sort((a, b) => b.dataVencimento.localeCompare(a.dataVencimento)).slice(0, 5),
+    [lancamentosValidos]
+  );
 
   return (
     <div className="space-y-6">
@@ -98,17 +147,74 @@ export const OverviewView: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2 md:justify-end">
             <div>
-              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Competência do painel</label>
+              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Unidade / Filial</label>
+              <select
+                value={selectedUnit}
+                onChange={(event) => setSelectedUnit(event.target.value)}
+                disabled={isFinance}
+                title={isFinance ? 'Perfil Financeiro limitado à unidade cadastrada' : undefined}
+                className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#C5A059] disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed max-w-[230px]"
+              >
+                {!isFinance && <option value="Todas as Unidades">Todas as Unidades (Consolidado)</option>}
+                {units.filter((unit) =>
+                  unit.ativa !== false && unit.id !== 'all' && (!isFinance || unit.nome === currentUser?.unit)
+                ).map((unit) => (
+                  <option key={unit.id} value={unit.nome}>{unit.nome} ({unit.cidade})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Competência dos cards</label>
               <CompetenciaSelect
                 value={competencia}
-                onChange={setCompetencia}
+                onChange={(value) => {
+                  setCompetencia(value);
+                  setDataInicio('');
+                  setDataFim('');
+                }}
                 lancamentos={filteredLancamentos}
                 referenceMonth={fechamentoMensal.mesAno}
-                allowAll={false}
+                allowAll
               />
             </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Data inicial</label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(event) => {
+                  setDataInicio(event.target.value);
+                  setCompetencia('TODOS');
+                }}
+                className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#C5A059]"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Data final</label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(event) => {
+                  setDataFim(event.target.value);
+                  setCompetencia('TODOS');
+                }}
+                className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#C5A059]"
+              />
+            </div>
+            {periodoPersonalizadoAtivo && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDataInicio('');
+                  setDataFim('');
+                }}
+                className="px-3 py-2 border border-white/40 text-white rounded-lg text-xs font-bold hover:bg-white/10"
+              >
+                Limpar período
+              </button>
+            )}
             {canExecuteFinancialActions && <button
               onClick={() => setCurrentView('pending_review')}
               className="px-4 py-2 bg-[#C5A059] text-white rounded-lg text-xs font-bold hover:bg-[#b08d46] transition flex items-center gap-1.5 shadow-md"
@@ -118,6 +224,11 @@ export const OverviewView: React.FC = () => {
             </button>}
           </div>
         </div>
+        {periodoPersonalizadoInvalido && (
+          <p className="relative z-10 mt-3 text-[11px] font-semibold text-rose-200 text-right">
+            A data inicial não pode ser posterior à data final.
+          </p>
+        )}
       </div>
 
       {/* KPI Cards Grid */}
@@ -138,7 +249,7 @@ export const OverviewView: React.FC = () => {
           <div className="mt-2 flex items-center text-[11px] text-emerald-700 font-semibold">
             <span className="material-symbols-outlined text-sm mr-0.5">arrow_upward</span>
             {revenueVariation === null
-              ? 'Sem base no mês anterior'
+              ? periodoCardsLabel
               : `${revenueVariation >= 0 ? '+' : ''}${revenueVariation.toFixed(1)}% vs mês anterior`}
           </div>
         </div>
@@ -158,7 +269,7 @@ export const OverviewView: React.FC = () => {
           </p>
           <div className="mt-2 flex items-center text-[11px] text-rose-700 font-semibold">
             <span className="material-symbols-outlined text-sm mr-0.5">arrow_downward</span>
-            Total da competência selecionada
+            {periodoCardsLabel}
           </div>
         </div>
 
@@ -276,7 +387,7 @@ export const OverviewView: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-bold text-[#0b1c30]">Evolução Mensal de Receitas vs Despesas</h3>
-              <p className="text-xs text-gray-500">Cinco competências até o mês selecionado</p>
+              <p className="text-xs text-gray-500">Janeiro a dezembro de {chartYear}, independente do filtro dos cards</p>
             </div>
             <span className="text-xs font-bold text-[#775a19] bg-[#ffdea5] px-2.5 py-1 rounded">
               Visão Competência
@@ -304,7 +415,7 @@ export const OverviewView: React.FC = () => {
         <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-[#0b1c30]">Distribuição de Custos por Categoria</h3>
-            <p className="text-xs text-gray-500 mb-2">Despesas da competência selecionada</p>
+            <p className="text-xs text-gray-500 mb-2">Despesas de {chartYear} na unidade selecionada</p>
 
             <div className="h-44 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -349,7 +460,7 @@ export const OverviewView: React.FC = () => {
         <div className="p-4 border-b border-[#e5eeff] flex items-center justify-between bg-[#f8f9ff]">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#131b2e]">receipt</span>
-            <h3 className="text-sm font-bold text-[#0b1c30]">Últimos Lançamentos da Competência</h3>
+            <h3 className="text-sm font-bold text-[#0b1c30]">Últimos Lançamentos da Unidade</h3>
           </div>
           <button
             onClick={() => setCurrentView('receitas')}
@@ -373,7 +484,7 @@ export const OverviewView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {lancamentosCompetencia.slice(0, 5).map((l) => (
+              {ultimosLancamentos.map((l) => (
                 <tr key={l.id} className="hover:bg-gray-50 transition">
                   <td className="p-3 font-semibold text-gray-600">{l.dataVencimento}</td>
                   <td className="p-3 font-bold text-[#0b1c30] max-w-xs truncate">{l.descricao}</td>
