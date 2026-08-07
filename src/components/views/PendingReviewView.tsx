@@ -12,6 +12,7 @@ export const PendingReviewView: React.FC = () => {
     rejeitarDocumentoOCR,
     addLancamentoComDDL,
     condicoesPagamento,
+    bancos,
     setCurrentView,
     showToast,
     selectedUnit
@@ -32,6 +33,7 @@ export const PendingReviewView: React.FC = () => {
   const [categoria, setCategoria] = useState('');
   const [centroCusto, setCentroCusto] = useState('');
   const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 dias default
+  const [bancoId, setBancoId] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const itensSort = useSortableData(currentDoc?.dadosExtraidos.itens || []);
 
@@ -47,6 +49,17 @@ export const PendingReviewView: React.FC = () => {
       setObservacoes(currentDoc.dadosExtraidos.observacoes || '');
     }
   }, [currentDoc?.id]);
+
+  const unidadeLancamento = selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit;
+  const availableBanks = bancos.filter(
+    (banco) => banco.ativo && banco.unidade === unidadeLancamento
+  );
+
+  useEffect(() => {
+    if (!availableBanks.some((banco) => banco.id === bancoId)) {
+      setBancoId(availableBanks[0]?.id || '');
+    }
+  }, [unidadeLancamento, bancos, bancoId]);
 
   if (!currentDoc || currentDoc.status !== 'PENDENTE_REVISAO') {
     return (
@@ -92,6 +105,11 @@ export const PendingReviewView: React.FC = () => {
   };
 
   const handleAprovar = () => {
+    const banco = availableBanks.find((item) => item.id === bancoId);
+    if (!banco) {
+      showToast(`Cadastre ou selecione uma conta bancária para "${unidadeLancamento}".`, 'error');
+      return;
+    }
     aprovarDocumentoOCR(currentDoc.id, {
       fornecedor,
       cnpj,
@@ -114,9 +132,13 @@ export const PendingReviewView: React.FC = () => {
         dataVencimento: dataVencimento || dataEmissao,
         status: 'PENDENTE',
         fornecedorCliente: fornecedor || 'Fornecedor Diverso',
-        contaBancaria: 'Itaú Uniclass - C/C 45892-1',
+        bancoId: banco.id,
+        contaBancaria: banco.banco,
         formaPagamento: 'BOLETO',
-        unidade: selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit
+        unidade: unidadeLancamento,
+        observacoes: observacoes || `Processado via OCR (${currentDoc.confiancaOCR}% confiança)`,
+        comprovanteUrl: currentDoc.previewUrl,
+        documentoRef: currentDoc.id
       },
       dataEmissao || new Date().toISOString().substring(0, 10),
       prazos
@@ -231,6 +253,25 @@ export const PendingReviewView: React.FC = () => {
               >
                 {currentDoc.status}
               </span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                Conta para pagamento <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={bancoId}
+                onChange={(e) => setBancoId(e.target.value)}
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] bg-white font-semibold"
+              >
+                <option value="" disabled>Selecione a conta...</option>
+                {availableBanks.map((banco) => (
+                  <option key={banco.id} value={banco.id}>{banco.banco} — {banco.unidade}</option>
+                ))}
+              </select>
+              {availableBanks.length === 0 && (
+                <p className="text-[10px] text-rose-600 mt-1">Nenhuma conta ativa cadastrada para esta unidade.</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

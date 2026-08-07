@@ -45,6 +45,7 @@ export interface Lancamento {
   status: StatusLancamento;
   fornecedorCliente: string;
   contaBancaria: string;
+  bancoId?: string;
   comprovanteUrl?: string;
   documentoRef?: string;
   parcelamentoId?: string;
@@ -58,6 +59,8 @@ export interface Lancamento {
 export interface Parcelamento {
   id: string;
   unidade: string;
+  bancoId?: string;
+  contaBancaria?: string;
   titulo: string;
   fornecedor: string;
   categoria: string;
@@ -213,6 +216,7 @@ export interface BancoMaster {
   banco: string;
   agencia: string;
   conta: string;
+  unidade: string;
   saldo: number;
   ativo: boolean;
 }

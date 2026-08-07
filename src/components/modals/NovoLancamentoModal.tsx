@@ -38,11 +38,11 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   const [dataVencimento, setDataVencimento] = useState(new Date().toISOString().substring(0, 10));
   const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 Dias default
   const [fornecedorCliente, setFornecedorCliente] = useState('');
-  const [contaBancaria, setContaBancaria] = useState('');
+  const [bancoId, setBancoId] = useState('');
   const [unidade, setUnidade] = useState(selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
   const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'BOLETO' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'DINHEIRO' | 'TRANSFERENCIA'>('BOLETO');
   const [status, setStatus] = useState<StatusLancamento>('PENDENTE');
-  const [contaDestinoTransferencia, setContaDestinoTransferencia] = useState('');
+  const [contaDestinoBancoId, setContaDestinoBancoId] = useState('');
   const [anexo, setAnexo] = useState<File | null>(null);
 
   const handleClose = () => {
@@ -59,9 +59,6 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     if (centrosCusto.length > 0 && !centroCusto) {
       setCentroCusto(centrosCusto[0].nome);
     }
-    if (bancos.length > 0 && !contaBancaria) {
-      setContaBancaria(bancos[0].banco);
-    }
   }, [categorias, centrosCusto, bancos, tipo]);
 
   React.useEffect(() => {
@@ -72,6 +69,23 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     }
     setUnidade(selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
   }, [isOpen, isFinance, currentUser?.unit, selectedUnit]);
+
+  const targetUnit = isFinance && currentUser ? currentUser.unit : unidade;
+  const availableBanks = bancos.filter((banco) => banco.ativo && banco.unidade === targetUnit);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const sourceIsValid = availableBanks.some((banco) => banco.id === bancoId);
+    const nextSourceId = sourceIsValid ? bancoId : availableBanks[0]?.id || '';
+    if (nextSourceId !== bancoId) setBancoId(nextSourceId);
+
+    const destinationIsValid = availableBanks.some(
+      (banco) => banco.id === contaDestinoBancoId && banco.id !== nextSourceId
+    );
+    if (!destinationIsValid) {
+      setContaDestinoBancoId(availableBanks.find((banco) => banco.id !== nextSourceId)?.id || '');
+    }
+  }, [isOpen, targetUnit, bancos, bancoId, contaDestinoBancoId]);
 
   if (!isOpen) return null;
 
@@ -112,7 +126,11 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     e.preventDefault();
     if (!descricao || numVal <= 0 || !unidade) return;
 
-    const targetUnit = isFinance && currentUser ? currentUser.unit : unidade;
+    const selectedBanco = availableBanks.find((banco) => banco.id === bancoId);
+    if (!selectedBanco) {
+      showToast(`Cadastre ou selecione uma conta bancária para a unidade "${targetUnit}".`, 'error');
+      return;
+    }
     let comprovanteUrl: string | undefined;
 
     if (anexo) {
@@ -124,10 +142,14 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       }
     }
 
-    if (formaPagamento === 'TRANSFERENCIA' && contaDestinoTransferencia) {
+    if (formaPagamento === 'TRANSFERENCIA') {
+      if (!contaDestinoBancoId) {
+        showToast('Selecione uma conta de destino diferente da origem.', 'error');
+        return;
+      }
       addTransferencia({
-        origem: contaBancaria,
-        destino: contaDestinoTransferencia,
+        origemBancoId: bancoId,
+        destinoBancoId: contaDestinoBancoId,
         valor: numVal,
         data: dataEmissao,
         descricao,
@@ -146,10 +168,11 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       centroCusto: centroCusto || 'Clínica / Atendimento',
       valor: numVal,
       dataVencimento: dataVencimento || dataEmissao,
-      dataPagamento: status === 'PAGO' ? new Date().toISOString().substring(0, 10) : undefined,
+      dataPagamento: status === 'PAGO' ? dataEmissao : undefined,
       status,
       fornecedorCliente: fornecedorCliente || (tipo === 'RECEITA' ? 'Cliente Diverso' : 'Fornecedor Diverso'),
-      contaBancaria: contaBancaria || 'Itaú Uniclass - C/C 45892-1',
+      bancoId: selectedBanco.id,
+      contaBancaria: selectedBanco.banco,
       formaPagamento,
       unidade: targetUnit,
       comprovanteUrl,
@@ -356,6 +379,69 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               )}
             </div>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Forma de Pagamento</label>
+              <select
+                value={formaPagamento}
+                onChange={(e) => setFormaPagamento(e.target.value as typeof formaPagamento)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] bg-white"
+              >
+                <option value="PIX">PIX</option>
+                <option value="BOLETO">Boleto</option>
+                <option value="CARTAO_CREDITO">Cartão de crédito</option>
+                <option value="CARTAO_DEBITO">Cartão de débito</option>
+                <option value="DINHEIRO">Dinheiro</option>
+                <option value="TRANSFERENCIA">Transferência entre contas</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                {formaPagamento === 'TRANSFERENCIA' ? 'Conta de origem' : 'Conta bancária / Caixa'}{' '}
+                <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={bancoId}
+                onChange={(e) => setBancoId(e.target.value)}
+                required
+                disabled={!targetUnit || availableBanks.length === 0}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] bg-white disabled:bg-gray-100"
+              >
+                <option value="" disabled>
+                  {targetUnit ? 'Selecione a conta...' : 'Selecione primeiro a unidade'}
+                </option>
+                {availableBanks.map((banco) => (
+                  <option key={banco.id} value={banco.id}>
+                    {banco.banco} — saldo {banco.saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </option>
+                ))}
+              </select>
+              {targetUnit && availableBanks.length === 0 && (
+                <p className="text-[10px] text-rose-600 mt-1">Nenhuma conta ativa cadastrada para esta unidade.</p>
+              )}
+            </div>
+          </div>
+
+          {formaPagamento === 'TRANSFERENCIA' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Conta de destino <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={contaDestinoBancoId}
+                onChange={(e) => setContaDestinoBancoId(e.target.value)}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] bg-white"
+              >
+                <option value="" disabled>Selecione a conta de destino...</option>
+                {availableBanks.filter((banco) => banco.id !== bancoId).map((banco) => (
+                  <option key={banco.id} value={banco.id}>{banco.banco}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Anexo financeiro (opcional)</label>

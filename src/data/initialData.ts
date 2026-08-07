@@ -87,9 +87,9 @@ export const INITIAL_FORNECEDORES: FornecedorMaster[] = [
 ];
 
 export const INITIAL_BANCOS: BancoMaster[] = [
-  { id: 'banc-1', banco: 'Itaú Uniclass - C/C 45892-1', agencia: '0892', conta: '45892-1', saldo: 84520.00, ativo: true },
-  { id: 'banc-2', banco: 'Bradesco - C/C 12904-8', agencia: '1209', conta: '12904-8', saldo: 28100.00, ativo: true },
-  { id: 'banc-3', banco: 'Caixa Físico Recepção', agencia: '0000', conta: 'CX-REC-01', saldo: 1060.00, ativo: true }
+  { id: 'banc-1', banco: 'Itaú Uniclass - C/C 45892-1', agencia: '0892', conta: '45892-1', unidade: 'Royal Face - Matriz', saldo: 84520.00, ativo: true },
+  { id: 'banc-2', banco: 'Bradesco - C/C 12904-8', agencia: '1209', conta: '12904-8', unidade: 'Royal Face - Matriz', saldo: 28100.00, ativo: true },
+  { id: 'banc-3', banco: 'Caixa Físico Recepção', agencia: '0000', conta: 'CX-REC-01', unidade: 'Royal Face - Matriz', saldo: 1060.00, ativo: true }
 ];
 
 export const INITIAL_CONDICOES_PAGAMENTO: CondicaoPagamento[] = [
@@ -285,6 +285,8 @@ export const INITIAL_PARCELAMENTOS: Parcelamento[] = [
   {
     id: 'parc-1',
     unidade: 'Royal Face - Matriz',
+    bancoId: 'banc-1',
+    contaBancaria: 'Itaú Uniclass - C/C 45892-1',
     titulo: 'Aparelho Lavieen Laser Thulium 1927nm',
     fornecedor: 'KLD Biosistemas Equipamentos',
     categoria: 'Investimento em Equipamentos (Capex)',
