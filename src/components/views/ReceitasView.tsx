@@ -6,7 +6,7 @@ interface ReceitasViewProps {
 }
 
 export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamentoModal }) => {
-  const { filteredLancamentos, marcarLancamentoComoPago, deleteLancamento, isAuditor, currentUser, showToast } = useApp();
+  const { filteredLancamentos, marcarLancamentoComoPago, deleteLancamento, isAuditor, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
 
@@ -25,19 +25,6 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
 
   return (
     <div className="space-y-6">
-      {/* Auditor Banner */}
-      {isAuditor && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3 text-blue-900 text-xs font-medium">
-          <span className="material-symbols-outlined text-blue-600 text-lg">visibility</span>
-          <div>
-            <p className="font-bold text-blue-900">Perfil de Auditoria Ativo (Apenas Leitura)</p>
-            <p className="mt-0.5 text-blue-800">
-              Ações de inclusão, alteração, liquidação ou exclusão de receitas são restritas aos perfis <strong>Financeiro</strong> e <strong>Administrador</strong>.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Header & KPI cards */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs">
         <div>
@@ -136,9 +123,10 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
                 <th className="p-3">Descrição do Procedimento</th>
                 <th className="p-3">Forma Pgto</th>
                 <th className="p-3">Conta Destino</th>
+                <th className="p-3">Anexo</th>
                 <th className="p-3 text-right">Valor (R$)</th>
                 <th className="p-3 text-center">Status</th>
-                  {!isAuditor && <th className="p-3 text-center">Ações</th>}
+                {!isAuditor && <th className="p-3 text-center">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -149,10 +137,26 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
                   <td className="p-3 font-medium text-gray-800">{r.descricao}</td>
                   <td className="p-3 text-gray-600">{r.formaPagamento}</td>
                   <td className="p-3 text-gray-600">{r.contaBancaria}</td>
+                  <td className="p-3 text-gray-600">
+                    {r.comprovanteUrl ? (
+                      <a
+                        href={r.comprovanteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={r.documentoRef || 'Abrir anexo'}
+                        className="text-blue-600 hover:underline flex items-center gap-1 text-[11px]"
+                      >
+                        <span className="material-symbols-outlined text-sm">attach_file</span>
+                        Abrir
+                      </a>
+                    ) : (
+                      <span className="text-gray-400 text-[10px] italic">Sem anexo</span>
+                    )}
+                  </td>
                   <td className="p-3 text-right font-black text-emerald-700">
                     R$ {r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </td>
-                  {!isAuditor && <td className="p-3 text-center">
+                  <td className="p-3 text-center">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         r.status === 'PAGO' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -160,8 +164,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
                     >
                       {r.status}
                     </span>
-                  </td>}
-                  <td className="p-3 text-center">
+                  </td>
+                  {!isAuditor && <td className="p-3 text-center">
                     <div className="flex items-center justify-center gap-1">
                       {r.status === 'PENDENTE' && (
                         <button
@@ -200,7 +204,7 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
                         <span className="material-symbols-outlined text-base">delete</span>
                       </button>
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>

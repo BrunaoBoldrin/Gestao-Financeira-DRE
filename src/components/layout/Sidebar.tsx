@@ -160,17 +160,6 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer Info */}
-      <div className="p-3 border-t border-[#1a2e46] bg-[#071322] text-[11px] text-gray-400 text-center">
-        {!collapsed ? (
-          <div>
-            <p className="font-semibold text-gray-300">Enterprise v2.4</p>
-            <p className="text-[10px] text-gray-500">Conformidade NBC TG 26</p>
-          </div>
-        ) : (
-          <span className="material-symbols-outlined text-gray-500">verified</span>
-        )}
-      </div>
     </aside>
   );
 };

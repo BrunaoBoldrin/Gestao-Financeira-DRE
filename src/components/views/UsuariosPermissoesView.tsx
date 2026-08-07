@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
 
 export const UsuariosPermissoesView: React.FC = () => {
-  const { users, addUser, toggleUserActive, isAdmin, currentUser } = useApp();
+  const { users, addUser, toggleUserActive, isAdmin } = useApp();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -30,25 +30,12 @@ export const UsuariosPermissoesView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Permission Warning Banner if not Admin */}
-      {!isAdmin && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 text-amber-900 text-xs font-medium">
-          <span className="material-symbols-outlined text-amber-600 text-lg">shield_lock</span>
-          <div>
-            <p className="font-bold text-amber-900">Modo de Visualização (Perfil: {currentUser?.role || 'AUDITOR'})</p>
-            <p className="mt-0.5 text-amber-800">
-              Apenas usuários com perfil <strong>ADMINISTRADOR</strong> podem cadastrar novos usuários ou alterar permissões e status de acesso no sistema.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs">
         <div>
           <h2 className="text-lg font-bold text-[#0b1c30] flex items-center gap-2">
             <span className="material-symbols-outlined text-[#131b2e]">manage_accounts</span>
-            Usuários e Controle de Acesso por Perfil (RBAC)
+            Usuários e Controle de Acesso
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
             Gestão de usuários, atribuição de perfis (Administrador, Financeiro, Auditoria) e filiais.

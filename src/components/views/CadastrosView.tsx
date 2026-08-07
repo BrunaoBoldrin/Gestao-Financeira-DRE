@@ -24,7 +24,6 @@ export const CadastrosView: React.FC = () => {
     updateCondicaoPagamento,
     toggleCondicaoPagamentoActive,
     isAdmin,
-    currentUser,
     showToast
   } = useApp();
 
@@ -112,19 +111,6 @@ export const CadastrosView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Permission Banner if not Admin */}
-      {!isAdmin && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 text-amber-900 text-xs font-medium">
-          <span className="material-symbols-outlined text-amber-600 text-lg">shield_lock</span>
-          <div>
-            <p className="font-bold text-amber-900">Modo Somente Leitura (Perfil: {currentUser?.role || 'AUDITOR'})</p>
-            <p className="mt-0.5 text-amber-800">
-              Apenas usuários com perfil <strong>ADMINISTRADOR</strong> podem cadastrar, alterar ou excluir dados do Plano de Contas, Centros de Custo, Bancos, Fornecedores e DDL.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs">
         <div>

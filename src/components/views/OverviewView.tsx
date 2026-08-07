@@ -64,9 +64,6 @@ export const OverviewView: React.FC = () => {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="bg-[#C5A059] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">
-                Enterprise v2.4
-              </span>
               <span className="text-gray-300 text-xs">Royal Face Estética Facial</span>
             </div>
             <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">

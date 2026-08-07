@@ -7,7 +7,7 @@ interface DespesasViewProps {
 }
 
 export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamentoModal, onOpenUploadModal }) => {
-  const { filteredLancamentos, marcarLancamentoComoPago, deleteLancamento, setCurrentView, isAuditor, currentUser, showToast } = useApp();
+  const { filteredLancamentos, marcarLancamentoComoPago, deleteLancamento, setCurrentView, isAuditor, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
 
@@ -26,19 +26,6 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
 
   return (
     <div className="space-y-6">
-      {/* Auditor Banner */}
-      {isAuditor && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3 text-blue-900 text-xs font-medium">
-          <span className="material-symbols-outlined text-blue-600 text-lg">visibility</span>
-          <div>
-            <p className="font-bold text-blue-900">Perfil de Auditoria Ativo (Apenas Leitura)</p>
-            <p className="mt-0.5 text-blue-800">
-              Ações de inclusão, alteração, pagamento ou exclusão de lançamentos financeiros são restritas aos perfis <strong>Financeiro</strong> e <strong>Administrador</strong>.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs">
         <div>
@@ -184,7 +171,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                 <th className="p-3">Comprovante</th>
                 <th className="p-3 text-right">Valor (R$)</th>
                 <th className="p-3 text-center">Status</th>
-                  {!isAuditor && <th className="p-3 text-center">Ações</th>}
+                {!isAuditor && <th className="p-3 text-center">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -204,10 +191,11 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                         href={d.comprovanteUrl}
                         target="_blank"
                         rel="noreferrer"
+                        title={d.documentoRef || 'Abrir anexo'}
                         className="text-blue-600 hover:underline flex items-center gap-1 text-[11px]"
                       >
                         <span className="material-symbols-outlined text-sm">attach_file</span>
-                        Ver Anexo
+                        Abrir
                       </a>
                     ) : (
                       <span className="text-gray-400 text-[10px] italic">Sem anexo</span>
@@ -216,7 +204,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                   <td className="p-3 text-right font-black text-rose-700">
                     R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </td>
-                  {!isAuditor && <td className="p-3 text-center">
+                  <td className="p-3 text-center">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         d.status === 'PAGO' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
@@ -224,8 +212,8 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                     >
                       {d.status}
                     </span>
-                  </td>}
-                  <td className="p-3 text-center">
+                  </td>
+                  {!isAuditor && <td className="p-3 text-center">
                     <div className="flex items-center justify-center gap-1">
                       {d.status === 'PENDENTE' && (
                         <button
@@ -264,7 +252,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                         <span className="material-symbols-outlined text-base">delete</span>
                       </button>
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
