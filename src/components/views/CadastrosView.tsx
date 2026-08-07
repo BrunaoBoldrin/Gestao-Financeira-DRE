@@ -21,6 +21,8 @@ export const CadastrosView: React.FC = () => {
     addBanco,
     updateBanco,
     toggleBancoActive,
+    units,
+    selectedUnit,
     condicoesPagamento,
     addCondicaoPagamento,
     updateCondicaoPagamento,
@@ -47,6 +49,7 @@ export const CadastrosView: React.FC = () => {
   const [agencia, setAgencia] = useState('');
   const [conta, setConta] = useState('');
   const [saldo, setSaldo] = useState('');
+  const [bancoUnidade, setBancoUnidade] = useState('');
   const [prazosDiasStr, setPrazosDiasStr] = useState('30, 60, 90');
   const categoriasSort = useSortableData(categorias);
   const fornecedoresSort = useSortableData(fornecedores);
@@ -63,6 +66,11 @@ export const CadastrosView: React.FC = () => {
     setAgencia('');
     setConta('');
     setSaldo('');
+    setBancoUnidade(
+      selectedUnit === 'Todas as Unidades'
+        ? units.find((unit) => unit.ativa && unit.id !== 'all')?.nome || ''
+        : selectedUnit
+    );
     setShowFormModal(true);
   };
 
@@ -91,11 +99,11 @@ export const CadastrosView: React.FC = () => {
         addFornecedor({ nome, cnpj, cidade, ativo: true });
       }
     } else if (activeTab === 'BANCOS') {
-      if (!nome) return;
+      if (!nome || !bancoUnidade) return;
       if (editingId) {
-        updateBanco(editingId, { banco: nome, agencia, conta, saldo: parseFloat(saldo) || 0 });
+        updateBanco(editingId, { banco: nome, agencia, conta, unidade: bancoUnidade, saldo: parseFloat(saldo) || 0 });
       } else {
-        addBanco({ banco: nome, agencia, conta, saldo: parseFloat(saldo) || 0, ativo: true });
+        addBanco({ banco: nome, agencia, conta, unidade: bancoUnidade, saldo: parseFloat(saldo) || 0, ativo: true });
       }
     } else if (activeTab === 'CONDICOES_PAGAMENTO') {
       if (!nome) return;
@@ -418,25 +426,36 @@ export const CadastrosView: React.FC = () => {
               Contas Bancárias & Caixas
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {bancos.map((b) => (
+              {bancos
+                .filter((banco) => selectedUnit === 'Todas as Unidades' || banco.unidade === selectedUnit)
+                .map((b) => (
                 <div key={b.id} className="p-4 bg-[#eff4ff] border border-[#d3e4fe] rounded-xl flex justify-between items-start">
                   <div>
                     <h4 className="text-xs font-bold text-[#0b1c30]">{b.banco}</h4>
                     <p className="text-[11px] text-gray-600 font-mono mt-0.5">Ag: {b.agencia} • C/C: {b.conta}</p>
+                    <p className="text-[10px] font-bold text-blue-700 mt-1">{b.unidade}</p>
+                    <p className="text-[10px] text-gray-500 mt-2">Saldo atual</p>
                     <p className="text-sm font-black text-emerald-800 mt-2">
                       R$ {b.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
                   <button
                     onClick={() => {
+                      if (!isAdmin) {
+                        showToast('Ação restrita a Administradores.', 'error');
+                        return;
+                      }
                       setEditingId(b.id);
                       setNome(b.banco);
                       setAgencia(b.agencia);
                       setConta(b.conta);
                       setSaldo(b.saldo.toString());
+                      setBancoUnidade(b.unidade);
                       setShowFormModal(true);
                     }}
-                    className="p-1 text-blue-600 hover:bg-white rounded"
+                    disabled={!isAdmin}
+                    className={`p-1 rounded ${!isAdmin ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:bg-white'}`}
+                    title={!isAdmin ? 'Restrito a Administradores' : 'Editar conta e ajustar saldo'}
                   >
                     <span className="material-symbols-outlined text-base">edit</span>
                   </button>
@@ -620,6 +639,22 @@ export const CadastrosView: React.FC = () => {
               {activeTab === 'BANCOS' && (
                 <>
                   <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Unidade / Filial <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={bancoUnidade}
+                      onChange={(e) => setBancoUnidade(e.target.value)}
+                      className="w-full px-3 py-2 border rounded text-xs focus:ring-2 focus:ring-[#131b2e] bg-white"
+                    >
+                      <option value="" disabled>Selecione a unidade...</option>
+                      {units.filter((unit) => unit.ativa && unit.id !== 'all').map((unit) => (
+                        <option key={unit.id} value={unit.nome}>{unit.nome} ({unit.cidade})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Nome do Banco / Caixa</label>
                     <input
                       type="text"
@@ -650,7 +685,9 @@ export const CadastrosView: React.FC = () => {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Saldo Inicial (R$)</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      {editingId ? 'Saldo atual / ajuste manual (R$)' : 'Saldo inicial (R$)'}
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -658,6 +695,9 @@ export const CadastrosView: React.FC = () => {
                       onChange={(e) => setSaldo(e.target.value)}
                       className="w-full px-3 py-2 border rounded text-xs font-bold focus:ring-2 focus:ring-[#131b2e]"
                     />
+                    <span className="text-[10px] text-gray-500 mt-1 block">
+                      Entradas pagas somam e saídas pagas subtraem automaticamente. Ajustes manuais ficam no histórico de auditoria.
+                    </span>
                   </div>
                 </>
               )}

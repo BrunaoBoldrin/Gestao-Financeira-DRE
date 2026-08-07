@@ -118,8 +118,8 @@ interface AppContextType {
   addLancamentoComDDL: (dadosBase: Omit<Lancamento, 'id' | 'criadoEm'>, dataEmissao: string, prazosDias: number[]) => void;
   addLancamentoComParcelamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>, numeroParcelas: number) => void;
   addTransferencia: (dados: {
-    origem: string;
-    destino: string;
+    origemBancoId: string;
+    destinoBancoId: string;
     valor: number;
     data: string;
     descricao: string;
@@ -131,7 +131,7 @@ interface AppContextType {
   deleteLancamento: (id: string) => void;
   marcarLancamentoComoPago: (id: string) => void;
   
-  addParcelamento: (p: Omit<Parcelamento, 'id' | 'unidade' | 'parcelasPagas' | 'status' | 'cronograma'>) => void;
+  addParcelamento: (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => void;
   pagarParcela: (parcelamentoId: string, numeroParcela: number) => void;
   
   uploadDocumentoOCR: (file: File) => void;
@@ -299,6 +299,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuditLogs((prev) => [newLog, ...prev]);
   };
 
+  const formatCurrency = (value: number) =>
+    value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const resolveBancoForLancamento = (
+    lancamento: Pick<Lancamento, 'bancoId' | 'contaBancaria' | 'unidade'>
+  ): BancoMaster | undefined => {
+    const normalizedName = lancamento.contaBancaria?.trim().toLocaleLowerCase('pt-BR');
+    const byId = lancamento.bancoId
+      ? bancos.find((banco) => banco.id === lancamento.bancoId && banco.unidade === lancamento.unidade)
+      : undefined;
+    if (byId) return byId;
+
+    const byName = normalizedName
+      ? bancos.find(
+          (banco) =>
+            banco.unidade === lancamento.unidade &&
+            banco.banco.trim().toLocaleLowerCase('pt-BR') === normalizedName
+        )
+      : undefined;
+    if (byName) return byName;
+
+    const unitAccounts = bancos.filter((banco) => banco.unidade === lancamento.unidade && banco.ativo);
+    return unitAccounts.length === 1 ? unitAccounts[0] : undefined;
+  };
+
+  const bindLancamentoToBanco = <T extends Pick<Lancamento, 'bancoId' | 'contaBancaria' | 'unidade'>>(
+    lancamento: T
+  ): T => {
+    const banco = resolveBancoForLancamento(lancamento);
+    return {
+      ...lancamento,
+      bancoId: banco?.id,
+      contaBancaria: banco?.banco || lancamento.contaBancaria
+    };
+  };
+
+  const adjustBancoBalance = (bancoId: string, delta: number, reason: string) => {
+    const banco = bancos.find((item) => item.id === bancoId);
+    if (!banco || delta === 0) return;
+
+    setBancos((prev) =>
+      prev.map((item) => (item.id === bancoId ? { ...item, saldo: item.saldo + delta } : item))
+    );
+    addAuditLog(
+      'Contas Bancárias',
+      'CONCILIACAO',
+      `${reason}: ${delta >= 0 ? 'crédito' : 'débito'} de ${formatCurrency(Math.abs(delta))} em "${banco.banco}" (${banco.unidade})`
+    );
+  };
+
+  const balanceDeltaForLancamento = (lancamento: Pick<Lancamento, 'tipo' | 'valor'>) =>
+    lancamento.tipo === 'RECEITA' ? lancamento.valor : -lancamento.valor;
+
+  const ensurePaidLancamentoHasBanco = (
+    lancamento: Pick<Lancamento, 'bancoId' | 'contaBancaria' | 'unidade' | 'status'>
+  ) => {
+    if (lancamento.status !== 'PAGO') return true;
+    if (resolveBancoForLancamento(lancamento)?.ativo) return true;
+    showToast(
+      `Selecione uma conta bancária ativa da unidade "${lancamento.unidade}" antes de registrar o pagamento.`,
+      'error'
+    );
+    return false;
+  };
+
   // --- Master CRUDs ---
   const addUnit = (u: Omit<UnitConfig, 'id'>) => {
     if (!checkAdminPermission('Cadastrar Filial')) return;
@@ -397,10 +462,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newB: BancoMaster = { ...b, id: 'banc-' + Date.now() };
     setBancos((prev) => [...prev, newB]);
     showToast(`Conta bancária "${b.banco}" cadastrada!`, 'success');
+    addAuditLog(
+      'Contas Bancárias',
+      'CRIACAO',
+      `Cadastrou a conta "${b.banco}" para ${b.unidade} com saldo inicial de ${formatCurrency(b.saldo)}`
+    );
   };
   const updateBanco = (id: string, b: Partial<BancoMaster>) => {
     if (!checkAdminPermission('Editar Conta Bancária')) return;
+    const existing = bancos.find((item) => item.id === id);
+    if (!existing) return;
+    const updated = { ...existing, ...b };
     setBancos((prev) => prev.map((item) => (item.id === id ? { ...item, ...b } : item)));
+    showToast('Conta bancária atualizada!', 'success');
+    addAuditLog(
+      'Contas Bancárias',
+      'EDICAO',
+      `Atualizou manualmente a conta "${existing.banco}"`,
+      `${existing.unidade} • saldo ${formatCurrency(existing.saldo)}`,
+      `${updated.unidade} • saldo ${formatCurrency(updated.saldo)}`
+    );
   };
   const toggleBancoActive = (id: string) => {
     if (!checkAdminPermission('Alterar Status de Conta Bancária')) return;
@@ -440,7 +521,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     prazosDias: number[]
   ) => {
     if (!checkFinancialPermission('Lançamento DDL')) return;
-    dadosBase = { ...dadosBase, unidade: resolveAllowedUnit(dadosBase.unidade) };
+    dadosBase = bindLancamentoToBanco({
+      ...dadosBase,
+      unidade: resolveAllowedUnit(dadosBase.unidade)
+    });
+    if (!ensurePaidLancamentoHasBanco(dadosBase)) return;
     if (!prazosDias || prazosDias.length === 0) {
       prazosDias = [0];
     }
@@ -503,10 +588,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setLancamentos((prev) => [...novosLancamentos, ...prev]);
 
+    const paidBalanceDelta = novosLancamentos
+      .filter((item) => item.status === 'PAGO')
+      .reduce((total, item) => total + balanceDeltaForLancamento(item), 0);
+    if (paidBalanceDelta !== 0 && dadosBase.bancoId) {
+      adjustBancoBalance(dadosBase.bancoId, paidBalanceDelta, `Lançamento "${dadosBase.descricao}"`);
+    }
+
     if (totalParcelas > 1 && parcelamentoId) {
       const newParcelamento: Parcelamento = {
         id: parcelamentoId,
         unidade: dadosBase.unidade,
+        bancoId: dadosBase.bancoId,
+        contaBancaria: dadosBase.contaBancaria,
         titulo: dadosBase.descricao,
         fornecedor: dadosBase.fornecedorCliente,
         categoria: dadosBase.categoria,
@@ -540,7 +634,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     numeroParcelas: number
   ) => {
     if (!checkFinancialPermission('Lançamento Parcelado')) return;
-    baseData = { ...baseData, unidade: resolveAllowedUnit(baseData.unidade) };
+    baseData = bindLancamentoToBanco({
+      ...baseData,
+      unidade: resolveAllowedUnit(baseData.unidade)
+    });
+    if (!ensurePaidLancamentoHasBanco(baseData)) return;
     if (numeroParcelas <= 1) {
       addLancamento(baseData);
       return;
@@ -567,7 +665,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         vencimento: vencimentoStr,
         valor: valorParcela,
         status: isPaid ? 'PAGO' : 'PENDENTE',
-        dataPagamento: isPaid ? new Date().toISOString().substring(0, 10) : undefined,
+        dataPagamento: isPaid ? baseData.dataPagamento || dataInicio : undefined,
         lancamentoId: lancId
       });
 
@@ -580,7 +678,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         parcelamentoId,
         numeroParcela: `${i}/${numeroParcelas}`,
         status: isPaid ? 'PAGO' : 'PENDENTE',
-        dataPagamento: isPaid ? new Date().toISOString().substring(0, 10) : undefined,
+        dataPagamento: isPaid ? baseData.dataPagamento || dataInicio : undefined,
         criadoEm: new Date().toISOString().substring(0, 10)
       });
     }
@@ -588,6 +686,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const novoParcelamento: Parcelamento = {
       id: parcelamentoId,
       unidade: baseData.unidade,
+      bancoId: baseData.bancoId,
+      contaBancaria: baseData.contaBancaria,
       titulo: baseData.descricao,
       fornecedor: baseData.fornecedorCliente,
       categoria: baseData.categoria,
@@ -603,6 +703,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setParcelamentos((prev) => [novoParcelamento, ...prev]);
     setLancamentos((prev) => [...novosLancamentos, ...prev]);
+    const paidLancamento = novosLancamentos.find((item) => item.status === 'PAGO');
+    if (paidLancamento?.bancoId) {
+      adjustBancoBalance(
+        paidLancamento.bancoId,
+        balanceDeltaForLancamento(paidLancamento),
+        `Primeira parcela de "${baseData.descricao}"`
+      );
+    }
 
     showToast(
       `Gerado parcelamento em ${numeroParcelas}x de R$ ${valorParcela.toFixed(2)} e lançado no financeiro!`,
@@ -612,8 +720,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addTransferencia = (dados: {
-    origem: string;
-    destino: string;
+    origemBancoId: string;
+    destinoBancoId: string;
     valor: number;
     data: string;
     descricao: string;
@@ -623,19 +731,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }) => {
     if (!checkFinancialPermission('Transferência de Contas')) return;
     dados = { ...dados, unidade: resolveAllowedUnit(dados.unidade) };
-    if (dados.origem.toLowerCase().includes('caixa')) {
+    const origem = bancos.find((banco) => banco.id === dados.origemBancoId);
+    const destino = bancos.find((banco) => banco.id === dados.destinoBancoId);
+    if (!origem || !destino) {
+      showToast('Selecione as contas de origem e destino da transferência.', 'error');
+      return;
+    }
+    if (origem.id === destino.id) {
+      showToast('A conta de destino deve ser diferente da conta de origem.', 'error');
+      return;
+    }
+    if (origem.unidade !== dados.unidade || destino.unidade !== dados.unidade) {
+      showToast('A transferência só pode ocorrer entre contas da unidade selecionada.', 'error');
+      return;
+    }
+
+    setBancos((prev) =>
+      prev.map((banco) => {
+        if (banco.id === origem.id) return { ...banco, saldo: banco.saldo - dados.valor };
+        if (banco.id === destino.id) return { ...banco, saldo: banco.saldo + dados.valor };
+        return banco;
+      })
+    );
+
+    if (origem.banco.toLowerCase().includes('caixa')) {
       registrarMovimentacaoCaixa(
         'SANGRIA',
-        `Transferência para ${dados.destino}: ${dados.descricao}`,
+        `Transferência para ${destino.banco}: ${dados.descricao}`,
         dados.valor,
-        dados.documentoRef
+        dados.documentoRef,
+        true,
+        dados.unidade
       );
     }
 
     addAuditLog(
       'Transferência de Contas',
       'CRIACAO',
-      `Transferência de R$ ${dados.valor.toFixed(2)} de [${dados.origem}] para [${dados.destino}]${dados.documentoRef ? ` — anexo: ${dados.documentoRef}` : ''}`
+      `Transferência de R$ ${dados.valor.toFixed(2)} de [${origem.banco}] para [${destino.banco}] (${dados.unidade})${dados.documentoRef ? ` — anexo: ${dados.documentoRef}` : ''}`
     );
 
     showToast(
@@ -669,7 +802,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Lancamentos CRUD ---
   const addLancamento = (l: Omit<Lancamento, 'id' | 'criadoEm'>) => {
     if (!checkFinancialPermission('Criar Lançamento')) return;
-    l = { ...l, unidade: resolveAllowedUnit(l.unidade) };
+    l = bindLancamentoToBanco({ ...l, unidade: resolveAllowedUnit(l.unidade) });
+    if (!ensurePaidLancamentoHasBanco(l)) return;
     const id = (l.tipo === 'RECEITA' ? 'rec-' : 'desp-') + Date.now().toString().slice(-4);
     const newL: Lancamento = {
       ...l,
@@ -677,6 +811,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       criadoEm: new Date().toISOString().substring(0, 10)
     };
     setLancamentos((prev) => [newL, ...prev]);
+    if (newL.status === 'PAGO' && newL.bancoId) {
+      adjustBancoBalance(newL.bancoId, balanceDeltaForLancamento(newL), `Lançamento "${newL.descricao}"`);
+    }
     showToast(`${l.tipo === 'RECEITA' ? 'Receita' : 'Despesa'} lançada com sucesso!`, 'success');
     addAuditLog('Lançamentos', 'CRIACAO', `Criou ${l.tipo.toLowerCase()} "${l.descricao}" no valor de R$ ${l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, `Status: ${l.status}`);
   };
@@ -684,9 +821,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateLancamento = (id: string, l: Partial<Lancamento>) => {
     if (!checkFinancialPermission('Editar Lançamento')) return;
     const existing = lancamentos.find((item) => item.id === id);
+    if (!existing) return;
     if (existing && !canManageUnit(existing.unidade, 'Editar Lançamento')) return;
     if (isFinance && currentUser) l = { ...l, unidade: currentUser.unit };
-    setLancamentos((prev) => prev.map((item) => (item.id === id ? { ...item, ...l } : item)));
+    const updated = bindLancamentoToBanco({ ...existing, ...l });
+    if (!ensurePaidLancamentoHasBanco(updated)) return;
+    if (existing.status === 'PAGO') {
+      const oldBank = resolveBancoForLancamento(existing);
+      if (!oldBank) {
+        showToast('Não foi possível estornar o saldo da conta anterior. Vincule uma conta válida.', 'error');
+        return;
+      }
+      adjustBancoBalance(oldBank.id, -balanceDeltaForLancamento(existing), `Estorno da edição de "${existing.descricao}"`);
+    }
+    if (updated.status === 'PAGO' && updated.bancoId) {
+      adjustBancoBalance(updated.bancoId, balanceDeltaForLancamento(updated), `Edição de "${updated.descricao}"`);
+    }
+    setLancamentos((prev) => prev.map((item) => (item.id === id ? updated : item)));
     showToast('Lançamento atualizado!', 'info');
     addAuditLog('Lançamentos', 'EDICAO', `Atualizou lançamento ID ${id}`);
   };
@@ -694,7 +845,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteLancamento = (id: string) => {
     if (!checkFinancialPermission('Excluir Lançamento')) return;
     const existing = lancamentos.find((item) => item.id === id);
+    if (!existing) return;
     if (existing && !canManageUnit(existing.unidade, 'Excluir Lançamento')) return;
+    if (existing.status === 'PAGO') {
+      const banco = resolveBancoForLancamento(existing);
+      if (!banco) {
+        showToast('Não foi possível estornar o saldo: o lançamento não possui uma conta válida.', 'error');
+        return;
+      }
+      adjustBancoBalance(banco.id, -balanceDeltaForLancamento(existing), `Exclusão de "${existing.descricao}"`);
+    }
     setLancamentos((prev) => prev.filter((item) => item.id !== id));
     showToast('Lançamento removido.', 'info');
     addAuditLog('Lançamentos', 'EXCLUSAO', `Excluiu lançamento ID ${id}`);
@@ -703,24 +863,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const marcarLancamentoComoPago = (id: string) => {
     if (!checkFinancialPermission('Liquidar Lançamento')) return;
     const existing = lancamentos.find((item) => item.id === id);
+    if (!existing) return;
     if (existing && !canManageUnit(existing.unidade, 'Liquidar Lançamento')) return;
+    if (existing.status === 'PAGO') {
+      showToast('Este lançamento já está pago.', 'info');
+      return;
+    }
+    const paidLancamento = bindLancamentoToBanco({
+      ...existing,
+      status: 'PAGO' as const,
+      dataPagamento: new Date().toISOString().substring(0, 10)
+    });
+    if (!ensurePaidLancamentoHasBanco(paidLancamento)) return;
     setLancamentos((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: 'PAGO',
-              dataPagamento: new Date().toISOString().substring(0, 10)
-            }
-          : item
-      )
+      prev.map((item) => (item.id === id ? paidLancamento : item))
     );
+    if (paidLancamento.bancoId) {
+      adjustBancoBalance(
+        paidLancamento.bancoId,
+        balanceDeltaForLancamento(paidLancamento),
+        `Liquidação de "${paidLancamento.descricao}"`
+      );
+    }
     showToast('Lançamento marcado como PAGO!', 'success');
     addAuditLog('Lançamentos', 'EDICAO', `Liquidou lançamento ID ${id}`, 'Status: PENDENTE', 'Status: PAGO');
   };
 
   // --- Parcelamentos ---
-  const addParcelamento = (p: Omit<Parcelamento, 'id' | 'unidade' | 'parcelasPagas' | 'status' | 'cronograma'>) => {
+  const addParcelamento = (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => {
     if (!checkFinancialPermission('Criar Parcelamento')) return;
     const id = 'parc-' + Date.now().toString().slice(-4);
     const valorParcela = p.valorTotal / p.numeroParcelas;
@@ -735,10 +905,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
 
+    const unidade = resolveAllowedUnit(p.unidade);
+    const banco = resolveBancoForLancamento({
+      bancoId: p.bancoId,
+      contaBancaria: p.contaBancaria || '',
+      unidade
+    });
+    if (!banco) {
+      showToast(`Selecione uma conta bancária ativa da unidade "${unidade}".`, 'error');
+      return;
+    }
+
     const newP: Parcelamento = {
       ...p,
       id,
-      unidade: selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit,
+      unidade,
+      bancoId: banco.id,
+      contaBancaria: banco.banco,
       parcelasPagas: 0,
       valorParcela,
       status: 'EM_ANDAMENTO',
@@ -753,7 +936,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const pagarParcela = (parcelamentoId: string, numeroParcela: number) => {
     if (!checkFinancialPermission('Pagar Parcela')) return;
     const parcelamento = parcelamentos.find((item) => item.id === parcelamentoId);
+    if (!parcelamento) return;
     if (parcelamento && !canManageUnit(parcelamento.unidade, 'Pagar Parcela')) return;
+    const parcela = parcelamento.cronograma.find((item) => item.numero === numeroParcela);
+    if (!parcela || parcela.status === 'PAGO') {
+      showToast('Esta parcela já está paga ou não foi localizada.', 'info');
+      return;
+    }
+    const linkedLancamento = parcela.lancamentoId
+      ? lancamentos.find((item) => item.id === parcela.lancamentoId)
+      : undefined;
+    const banco = linkedLancamento
+      ? resolveBancoForLancamento(linkedLancamento)
+      : resolveBancoForLancamento({
+          bancoId: parcelamento.bancoId,
+          contaBancaria: parcelamento.contaBancaria || '',
+          unidade: parcelamento.unidade
+        });
+    if (!banco) {
+      showToast(
+        `Cadastre ou vincule uma conta bancária para ${parcelamento.unidade} antes de pagar a parcela.`,
+        'error'
+      );
+      return;
+    }
+
+    if (linkedLancamento) {
+      marcarLancamentoComoPago(linkedLancamento.id);
+    } else {
+      addLancamento({
+        descricao: `Parcela ${numeroParcela}/${parcelamento.numeroParcelas} - ${parcelamento.titulo}`,
+        tipo: 'DESPESA',
+        categoria: parcelamento.categoria,
+        centroCusto: parcelamento.centroCusto,
+        valor: parcela.valor,
+        dataVencimento: parcela.vencimento,
+        dataPagamento: new Date().toISOString().substring(0, 10),
+        status: 'PAGO',
+        fornecedorCliente: parcelamento.fornecedor,
+        bancoId: banco.id,
+        contaBancaria: banco.banco,
+        formaPagamento: 'BOLETO',
+        unidade: parcelamento.unidade,
+        parcelamentoId: parcelamento.id,
+        numeroParcela: `${numeroParcela}/${parcelamento.numeroParcelas}`
+      });
+    }
+
     setParcelamentos((prev) =>
       prev.map((p) => {
         if (p.id !== parcelamentoId) return p;
@@ -765,25 +994,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const pagasCount = updatedCronograma.filter((c) => c.status === 'PAGO').length;
         const status = pagasCount === p.numeroParcelas ? 'CONCLUIDO' : 'EM_ANDAMENTO';
 
-        // Also auto-create a paid expense entry in Lancamentos
-        const lancamentoDesc = `Parcela ${numeroParcela}/${p.numeroParcelas} - ${p.titulo}`;
-        addLancamento({
-          descricao: lancamentoDesc,
-          tipo: 'DESPESA',
-          categoria: p.categoria,
-          centroCusto: p.centroCusto,
-          valor: p.valorParcela,
-          dataVencimento: new Date().toISOString().substring(0, 10),
-          dataPagamento: new Date().toISOString().substring(0, 10),
-          status: 'PAGO',
-          fornecedorCliente: p.fornecedor,
-          contaBancaria: 'Itaú Uniclass - C/C 45892-1',
-          formaPagamento: 'BOLETO',
-          unidade: p.unidade,
-          parcelamentoId: p.id,
-          numeroParcela: `${numeroParcela}/${p.numeroParcelas}`
-        });
-
         return {
           ...p,
           parcelasPagas: pagasCount,
@@ -792,7 +1002,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       })
     );
-    showToast(`Parcela ${numeroParcela} paga com sucesso! Lançamento financeiro gerado.`, 'success');
+    showToast(`Parcela ${numeroParcela} paga com sucesso! Saldo bancário atualizado.`, 'success');
   };
 
   // --- OCR / Documentos ---
@@ -945,34 +1155,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const doc = documentosOCR.find((d) => d.id === docId);
     if (!doc) return;
 
-    // 1. Generate expense or revenue entry
-    const newLancamentoId = 'desp-ocr-' + Date.now().toString().slice(-4);
-    addLancamento({
-      descricao: `[OCR Aprovado] ${dadosFinal.fornecedor} - ${doc.nomeArquivo}`,
-      tipo: 'DESPESA',
-      categoria: dadosFinal.categoria,
-      centroCusto: dadosFinal.centroCusto,
-      valor: dadosFinal.valorTotal,
-      dataVencimento: dadosFinal.dataVencimento,
-      status: 'PENDENTE',
-      fornecedorCliente: dadosFinal.fornecedor,
-      contaBancaria: 'Itaú Uniclass - C/C 45892-1',
-      formaPagamento: 'BOLETO',
-      unidade: selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit,
-      observacoes: dadosFinal.observacoes || `Processado e auditado via Motor OCR (${doc.confiancaOCR}% confiança)`,
-      comprovanteUrl: doc.previewUrl,
-      documentoRef: doc.id
-    });
-
-    // 2. Update doc status
+    // O lançamento financeiro é gerado pela revisão DDL, já com conta e cronograma selecionados.
     setDocumentosOCR((prev) =>
       prev.map((d) =>
         d.id === docId
           ? {
               ...d,
               status: 'APROVADO',
-              dadosExtraidos: dadosFinal,
-              lancamentoGeradoId: newLancamentoId
+              dadosExtraidos: dadosFinal
             }
           : d
       )
@@ -1022,9 +1212,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     tipo: 'SUPRIMENTO' | 'SANGRIA' | 'VENDA' | 'DESPESA',
     descricao: string,
     valor: number,
-    comprovanteRef?: string
+    comprovanteRef?: string,
+    skipBankBalance = false,
+    unidadeOverride?: string
   ) => {
     if (!checkFinancialPermission('Movimentação de Caixa')) return;
+    const unidade = resolveAllowedUnit(
+      unidadeOverride || (selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit)
+    );
+    const caixaBanco = bancos.find(
+      (banco) =>
+        banco.unidade === unidade &&
+        banco.ativo &&
+        banco.banco.toLocaleLowerCase('pt-BR').includes('caixa')
+    );
+    if (!caixaBanco && !skipBankBalance) {
+      showToast(`Cadastre uma conta do tipo Caixa Físico para a unidade "${unidade}".`, 'error');
+      return;
+    }
     const novaMov = {
       id: 'mov-' + Date.now(),
       tipo,
@@ -1061,10 +1266,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dataPagamento: new Date().toISOString().substring(0, 10),
         status: 'PAGO',
         fornecedorCliente: 'Cliente Balcão',
-        contaBancaria: 'Caixa Físico Recepção',
+        bancoId: caixaBanco?.id,
+        contaBancaria: caixaBanco?.banco || 'Caixa Físico Recepção',
         formaPagamento: 'DINHEIRO',
-        unidade: selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit
+        unidade
       });
+    } else if (!skipBankBalance && caixaBanco) {
+      const delta = tipo === 'SUPRIMENTO' ? valor : -valor;
+      adjustBancoBalance(caixaBanco.id, delta, `${tipo} no caixa físico: "${descricao}"`);
     }
 
     showToast(`Movimentação de ${tipo} de R$ ${valor.toFixed(2)} registrada no Caixa Físico!`, 'success');

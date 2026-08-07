@@ -7,7 +7,7 @@ interface NovoParcelamentoModalProps {
 }
 
 export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ isOpen, onClose }) => {
-  const { addParcelamento } = useApp();
+  const { addParcelamento, bancos, units, selectedUnit, currentUser, isFinance, showToast } = useApp();
 
   const [titulo, setTitulo] = useState('');
   const [fornecedor, setFornecedor] = useState('');
@@ -16,18 +16,42 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
   const [valorTotal, setValorTotal] = useState('');
   const [numeroParcelas, setNumeroParcelas] = useState(12);
   const [dataInicio, setDataInicio] = useState(new Date().toISOString().substring(0, 10));
+  const [unidade, setUnidade] = useState(selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
+  const [bancoId, setBancoId] = useState('');
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setUnidade(isFinance && currentUser ? currentUser.unit : selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
+  }, [isOpen, isFinance, currentUser?.unit, selectedUnit]);
+
+  const availableBanks = bancos.filter((banco) => banco.ativo && banco.unidade === unidade);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    if (!availableBanks.some((banco) => banco.id === bancoId)) {
+      setBancoId(availableBanks[0]?.id || '');
+    }
+  }, [isOpen, unidade, bancos, bancoId]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!titulo || !valorTotal) return;
+    if (!titulo || !valorTotal || !unidade) return;
+    const banco = availableBanks.find((item) => item.id === bancoId);
+    if (!banco) {
+      showToast(`Cadastre ou selecione uma conta bancária para "${unidade}".`, 'error');
+      return;
+    }
 
     addParcelamento({
       titulo,
       fornecedor,
       categoria,
       centroCusto,
+      unidade,
+      bancoId: banco.id,
+      contaBancaria: banco.banco,
       valorTotal: parseFloat(valorTotal),
       numeroParcelas,
       dataInicio,
@@ -86,6 +110,42 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
                 onChange={(e) => setDataInicio(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Unidade / Filial <span className="text-red-500">*</span>
+              </label>
+              <select
+                required
+                value={unidade}
+                onChange={(e) => setUnidade(e.target.value)}
+                disabled={isFinance}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs bg-white disabled:bg-gray-100"
+              >
+                <option value="" disabled>Selecione a unidade...</option>
+                {units.filter((unit) => unit.ativa && unit.id !== 'all').map((unit) => (
+                  <option key={unit.id} value={unit.nome}>{unit.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Conta para pagamento <span className="text-red-500">*</span>
+              </label>
+              <select
+                required
+                value={bancoId}
+                onChange={(e) => setBancoId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs bg-white"
+              >
+                <option value="" disabled>Selecione a conta...</option>
+                {availableBanks.map((banco) => (
+                  <option key={banco.id} value={banco.id}>{banco.banco}</option>
+                ))}
+              </select>
             </div>
           </div>
 
