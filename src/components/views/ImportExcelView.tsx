@@ -15,7 +15,33 @@ interface ColumnMapping {
   formaPagamento: string;
   unidade: string;
   condicaoDDL: string;
+  status: string;
+  dataPagamento: string;
 }
+
+const toDateValue = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const parseImportDate = (rawDate: unknown, fallback = '') => {
+  if (rawDate instanceof Date && !Number.isNaN(rawDate.getTime())) return toDateValue(rawDate);
+
+  if (typeof rawDate === 'string' && rawDate.trim()) {
+    const value = rawDate.trim();
+    if (value.includes('/')) {
+      const parts = value.split('/');
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+        return `${year}-${month}-${day}`;
+      }
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.substring(0, 10);
+  }
+
+  return fallback;
+};
 
 export const ImportExcelView: React.FC = () => {
   const {
@@ -51,7 +77,9 @@ export const ImportExcelView: React.FC = () => {
     contaBancaria: '',
     formaPagamento: '',
     unidade: '',
-    condicaoDDL: ''
+    condicaoDDL: '',
+    status: '',
+    dataPagamento: ''
   });
 
   // Sample Excel Download Generator
@@ -68,7 +96,9 @@ export const ImportExcelView: React.FC = () => {
         'Conta Bancária': 'Itaú Uniclass - C/C 45892-1',
         'Forma de Pagamento': 'BOLETO',
         'Unidade / Filial': 'Royal Face - Matriz',
-        'Condição DDL (Ex: 30/60/90 Dias)': '30/60/90 Dias (3x)'
+        'Condição DDL (Ex: 30/60/90 Dias)': '30/60/90 Dias (3x)',
+        'Status (PAGO ou PENDENTE)': 'PENDENTE',
+        'Data Pagamento (AAAA-MM-DD)': ''
       },
       {
         'Descrição': 'Pacote Harmonização Facial - Paciente Carla S.',
@@ -81,7 +111,9 @@ export const ImportExcelView: React.FC = () => {
         'Conta Bancária': 'Bradesco - C/C 12904-8',
         'Forma de Pagamento': 'CARTAO_CREDITO',
         'Unidade / Filial': 'Royal Face - Matriz',
-        'Condição DDL (Ex: 30/60/90 Dias)': 'À Vista / PAGO (0 dias)'
+        'Condição DDL (Ex: 30/60/90 Dias)': 'À Vista / PAGO (0 dias)',
+        'Status (PAGO ou PENDENTE)': 'PAGO',
+        'Data Pagamento (AAAA-MM-DD)': '2024-05-12'
       },
       {
         'Descrição': 'Aluguel Imóvel Clínica Maio/2024',
@@ -94,7 +126,9 @@ export const ImportExcelView: React.FC = () => {
         'Conta Bancária': 'Itaú Uniclass - C/C 45892-1',
         'Forma de Pagamento': 'TRANSFERENCIA',
         'Unidade / Filial': 'Royal Face - Matriz',
-        'Condição DDL (Ex: 30/60/90 Dias)': '30 Dias (1x)'
+        'Condição DDL (Ex: 30/60/90 Dias)': '30 Dias (1x)',
+        'Status (PAGO ou PENDENTE)': 'PAGO',
+        'Data Pagamento (AAAA-MM-DD)': '2024-05-31'
       }
     ];
 
@@ -143,7 +177,9 @@ export const ImportExcelView: React.FC = () => {
           contaBancaria: detectedHeaders.find(h => /banco|conta/i.test(h)) || '',
           formaPagamento: detectedHeaders.find(h => /forma|pagam/i.test(h)) || '',
           unidade: detectedHeaders.find(h => /unid|filial/i.test(h)) || '',
-          condicaoDDL: detectedHeaders.find(h => /ddl|condi/i.test(h)) || ''
+          condicaoDDL: detectedHeaders.find(h => /ddl|condi/i.test(h)) || '',
+          status: detectedHeaders.find(h => /status|situa/i.test(h)) || '',
+          dataPagamento: detectedHeaders.find(h => /data.*pag|pag.*data|liquida/i.test(h)) || ''
         };
 
         setMapping(newMap);
@@ -173,25 +209,10 @@ export const ImportExcelView: React.FC = () => {
         numValor = Math.abs(parseFloat(cleaned)) || 0;
       }
 
-      // Date parsing
-      let dtEmissao = new Date().toISOString().substring(0, 10);
-      const rawDate = row[mapping.dataEmissao];
-      if (rawDate instanceof Date) {
-        dtEmissao = rawDate.toISOString().substring(0, 10);
-      } else if (typeof rawDate === 'string' && rawDate.length >= 8) {
-        if (rawDate.includes('/')) {
-          const parts = rawDate.split('/');
-          if (parts.length === 3) {
-            const day = parts[0].padStart(2, '0');
-            const month = parts[1].padStart(2, '0');
-            let year = parts[2].trim();
-            if (year.length === 2) year = '20' + year;
-            dtEmissao = `${year}-${month}-${day}`;
-          }
-        } else if (rawDate.includes('-')) {
-          dtEmissao = rawDate.substring(0, 10);
-        }
-      }
+      const dtEmissao = parseImportDate(
+        row[mapping.dataEmissao],
+        new Date().toISOString().substring(0, 10)
+      );
 
       const catStr = String(row[mapping.categoria] || '').trim() || (tipo === 'RECEITA' ? 'Procedimentos Estéticos' : 'Insumos Médicos & Estéticos');
       const ccStr = String(row[mapping.centroCusto] || '').trim() || 'Clínica / Atendimento';
@@ -210,6 +231,16 @@ export const ImportExcelView: React.FC = () => {
         ? currentUser.unit
         : String(row[mapping.unidade] || '').trim() || 'Royal Face - Matriz';
       const condStr = String(row[mapping.condicaoDDL] || '').trim();
+      const statusRaw = String(row[mapping.status] || '').trim().toUpperCase();
+      let status: StatusLancamento = 'PENDENTE';
+      if (statusRaw.includes('PAGO') || statusRaw.includes('RECEB') || statusRaw.includes('LIQUID')) status = 'PAGO';
+      else if (statusRaw.includes('ATRAS')) status = 'ATRASADO';
+      else if (statusRaw.includes('CANCEL')) status = 'CANCELADO';
+      else if (!statusRaw && /PAGO|À\s*VISTA/i.test(condStr)) status = 'PAGO';
+
+      const dataPagamento = status === 'PAGO'
+        ? parseImportDate(row[mapping.dataPagamento], dtEmissao)
+        : undefined;
 
       // Find matching DDL prazos
       let prazosDias: number[] = [0];
@@ -232,16 +263,21 @@ export const ImportExcelView: React.FC = () => {
         contaBancaria: bancoStr,
         formaPagamento: formaFinal,
         unidade: unidStr,
-        prazosDias
+        prazosDias,
+        status,
+        dataPagamento
       };
     });
   };
 
   const mappedItems = step === 'preview' ? getMappedItems() : [];
 
-  const totalImportValor = mappedItems.reduce((acc, curr) => acc + curr.valor, 0);
   const totalReceitasImport = mappedItems.filter(i => i.tipo === 'RECEITA').reduce((acc, curr) => acc + curr.valor, 0);
   const totalDespesasImport = mappedItems.filter(i => i.tipo === 'DESPESA').reduce((acc, curr) => acc + curr.valor, 0);
+  const totalLancamentosGerados = mappedItems.reduce(
+    (total, item) => total + Math.max(item.prazosDias.length, 1),
+    0
+  );
 
   // Execute Batch Import
   const handleConfirmImport = () => {
@@ -257,21 +293,25 @@ export const ImportExcelView: React.FC = () => {
           centroCusto: item.centroCusto,
           valor: item.valor,
           dataVencimento: item.dataEmissao,
-          status: 'PENDENTE' as StatusLancamento,
+          status: item.status,
+          dataPagamento: item.dataPagamento,
           fornecedorCliente: item.fornecedorCliente,
           contaBancaria: item.contaBancaria,
           formaPagamento: item.formaPagamento,
           unidade: item.unidade
         };
 
-        if (item.tipo === 'DESPESA' && item.prazosDias.length >= 1) {
+        if (item.prazosDias.length >= 1) {
           addLancamentoComDDL(payload, item.dataEmissao, item.prazosDias);
         } else {
           addLancamento(payload);
         }
       });
 
-      showToast(`Sucesso! ${mappedItems.length} lançamentos importados da planilha "${fileName}".`, 'success');
+      showToast(
+        `Sucesso! ${mappedItems.length} registros processados e ${totalLancamentosGerados} lançamentos gerados da planilha "${fileName}".`,
+        'success'
+      );
       setCurrentView('despesas');
     } catch (err) {
       showToast('Ocorreu um erro durante a importação em lote.', 'error');
@@ -494,6 +534,34 @@ export const ImportExcelView: React.FC = () => {
                 ))}
               </select>
             </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Status do Lançamento</label>
+              <select
+                value={mapping.status}
+                onChange={(e) => setMapping({ ...mapping, status: e.target.value })}
+                className="w-full px-3 py-2 border rounded-md text-xs font-semibold text-[#0b1c30] bg-white"
+              >
+                <option value="">Selecione a coluna (opcional)...</option>
+                {headers.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Data de Pagamento</label>
+              <select
+                value={mapping.dataPagamento}
+                onChange={(e) => setMapping({ ...mapping, dataPagamento: e.target.value })}
+                className="w-full px-3 py-2 border rounded-md text-xs font-semibold text-[#0b1c30] bg-white"
+              >
+                <option value="">Selecione a coluna (opcional)...</option>
+                {headers.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="pt-4 border-t flex justify-end gap-3">
@@ -515,7 +583,7 @@ export const ImportExcelView: React.FC = () => {
             <div>
               <h3 className="text-sm font-bold text-[#0b1c30]">Pré-visualização da Importação</h3>
               <p className="text-xs text-gray-500">
-                Total de <strong>{mappedItems.length}</strong> lançamentos prontos para alimentar a base de dados.
+                <strong>{mappedItems.length}</strong> registros de origem gerarão <strong>{totalLancamentosGerados}</strong> lançamentos, considerando as parcelas DDL.
               </p>
             </div>
 
@@ -532,7 +600,7 @@ export const ImportExcelView: React.FC = () => {
                 className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition shadow-md flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base">check_circle</span>
-                <span>Confirmar e Importar {mappedItems.length} Lançamentos</span>
+                <span>Confirmar e Gerar {totalLancamentosGerados} Lançamentos</span>
               </button>
             </div>
           </div>
@@ -549,7 +617,7 @@ export const ImportExcelView: React.FC = () => {
             </div>
             <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
               <span className="text-[11px] font-semibold text-blue-800 uppercase block">Volume de Lançamentos</span>
-              <span className="text-lg font-black text-blue-950">{mappedItems.length} Registros</span>
+              <span className="text-lg font-black text-blue-950">{totalLancamentosGerados} Lançamentos</span>
             </div>
           </div>
 
@@ -560,7 +628,9 @@ export const ImportExcelView: React.FC = () => {
                 <tr>
                   <th className="p-3">#</th>
                   <th className="p-3">Data Emissão</th>
+                  <th className="p-3">Data Pagamento</th>
                   <th className="p-3">Tipo</th>
+                  <th className="p-3">Status</th>
                   <th className="p-3">Descrição</th>
                   <th className="p-3">Fornecedor / Cliente</th>
                   <th className="p-3">Categoria</th>
@@ -574,9 +644,23 @@ export const ImportExcelView: React.FC = () => {
                   <tr key={idx} className="hover:bg-gray-50">
                     <td className="p-3 text-gray-400 font-mono text-[11px]">{idx + 1}</td>
                     <td className="p-3 font-semibold text-gray-700">{item.dataEmissao}</td>
+                    <td className="p-3 font-semibold text-gray-700">{item.dataPagamento || '—'}</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.tipo === 'RECEITA' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
                         {item.tipo}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        item.status === 'PAGO'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : item.status === 'ATRASADO'
+                            ? 'bg-red-100 text-red-800'
+                            : item.status === 'CANCELADO'
+                              ? 'bg-gray-100 text-gray-700'
+                              : 'bg-amber-100 text-amber-900'
+                      }`}>
+                        {item.status}
                       </span>
                     </td>
                     <td className="p-3 font-bold text-[#0b1c30] max-w-xs truncate">{item.descricao}</td>
