@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CompetenciaSelect, formatCompetencia } from '../common/CompetenciaSelect';
+import { SortableTableHeader } from '../common/SortableTableHeader';
 import { getDateRangeBounds, isDateInRange, normalizeDateValue } from '../../utils/dateRange';
+import { useSortableData } from '../../hooks/useSortableData';
 import {
   BarChart,
   Bar,
@@ -134,6 +136,7 @@ export const OverviewView: React.FC = () => {
       .slice(0, 5),
     [lancamentosValidos]
   );
+  const { sortedItems: sortedUltimosLancamentos, sortConfig, requestSort } = useSortableData(ultimosLancamentos);
 
   return (
     <div className="space-y-6">
@@ -513,16 +516,16 @@ export const OverviewView: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <th className="p-3">Data Venc.</th>
-                <th className="p-3">Descrição</th>
-                <th className="p-3">Tipo</th>
-                <th className="p-3">Categoria</th>
-                <th className="p-3 text-right">Valor</th>
-                <th className="p-3 text-center">Status</th>
+                <SortableTableHeader label="Data Venc." sortKey="data" accessor={(item) => normalizeDateValue(item.dataVencimento)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Descrição" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Categoria" sortKey="categoria" accessor={(item) => item.categoria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Valor" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
+                <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-center" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {ultimosLancamentos.map((l) => (
+              {sortedUltimosLancamentos.map((l) => (
                 <tr key={l.id} className="hover:bg-gray-50 transition">
                   <td className="p-3 font-semibold text-gray-600">{l.dataVencimento}</td>
                   <td className="p-3 font-bold text-[#0b1c30] max-w-xs truncate">{l.descricao}</td>
