@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { LancamentosPeriodFilter } from '../common/LancamentosPeriodFilter';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
+import { isDateInRange, normalizeDateValue } from '../../utils/dateRange';
+import { normalizeText } from '../../utils/text';
 
 interface DespesasViewProps {
   onOpenNovoLancamentoModal: () => void;
@@ -7,22 +12,50 @@ interface DespesasViewProps {
 }
 
 export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamentoModal, onOpenUploadModal }) => {
-  const { filteredLancamentos, marcarLancamentoComoPago, deleteLancamento, setCurrentView, isAuditor, showToast } = useApp();
+  const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, setCurrentView, isAuditor, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
+  const [competencia, setCompetencia] = useState('TODOS');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+  const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
 
   const despesas = filteredLancamentos.filter((l) => l.tipo === 'DESPESA');
 
-  const filteredDespesas = despesas.filter((d) => {
+  const availableMonths = useMemo(() => Array.from(new Set<string>(
+    filteredLancamentos
+      .filter((l) => l.tipo === 'DESPESA')
+      .map((l) => normalizeDateValue(l.dataVencimento).substring(0, 7))
+      .filter(Boolean)
+  )).sort((a, b) => b.localeCompare(a)), [filteredLancamentos]);
+
+  const availableCategories = useMemo(() => Array.from(new Set<string>([
+    ...categorias.filter((categoria) => categoria.tipo === 'DESPESA').map((categoria) => categoria.nome),
+    ...filteredLancamentos.filter((l) => l.tipo === 'DESPESA').map((l) => l.categoria)
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')), [categorias, filteredLancamentos]);
+
+  const despesasNoPeriodo = despesas.filter((d) => {
+    if (competencia === 'TODOS') return true;
+    if (competencia === 'PERSONALIZADO') {
+      if (!periodoAplicado.inicio || !periodoAplicado.fim) return true;
+      return isDateInRange(d.dataVencimento, periodoAplicado);
+    }
+    return normalizeDateValue(d.dataVencimento).startsWith(competencia);
+  });
+
+  const filteredDespesas = despesasNoPeriodo.filter((d) => {
+    const normalizedSearch = normalizeText(searchTerm);
     const matchesSearch =
-      d.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.fornecedorCliente.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'TODAS' || d.categoria === categoryFilter;
+      normalizeText(d.descricao).includes(normalizedSearch) ||
+      normalizeText(d.fornecedorCliente).includes(normalizedSearch);
+    const matchesCategory = categoryFilter === 'TODAS' || normalizeText(d.categoria) === normalizeText(categoryFilter);
     return matchesSearch && matchesCategory;
   });
 
-  const totalPago = despesas.filter((d) => d.status === 'PAGO').reduce((a, b) => a + b.valor, 0);
-  const totalPendente = despesas.filter((d) => d.status === 'PENDENTE').reduce((a, b) => a + b.valor, 0);
+  const { sortedItems: sortedDespesas, sortConfig, requestSort } = useSortableData(filteredDespesas);
+
+  const totalPago = despesasNoPeriodo.filter((d) => d.status === 'PAGO').reduce((a, b) => a + b.valor, 0);
+  const totalPendente = despesasNoPeriodo.filter((d) => d.status === 'PENDENTE').reduce((a, b) => a + b.valor, 0);
 
   return (
     <div className="space-y-6">
@@ -151,31 +184,57 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
               className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-semibold text-[#0b1c30]"
             >
               <option value="TODAS">Todas as Categorias</option>
-              <option value="Insumos Médicos & Estéticos">Insumos Médicos & Estéticos</option>
-              <option value="Ocupação & Infraestrutura">Ocupação & Infraestrutura</option>
-              <option value="Marketing & Publicidade">Marketing & Publicidade</option>
-              <option value="Pessoal & Encargos">Pessoal & Encargos</option>
-              <option value="Serviços Públicos & Concessionárias">Serviços Públicos & Concessionárias</option>
+              {availableCategories.map((categoria) => (
+                <option key={categoria} value={categoria}>{categoria}</option>
+              ))}
             </select>
           </div>
         </div>
+
+        <LancamentosPeriodFilter
+          competencia={competencia}
+          availableMonths={availableMonths}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          periodoAplicado={periodoAplicado}
+          resultCount={filteredDespesas.length}
+          onCompetenciaChange={(value) => {
+            setCompetencia(value);
+            if (value !== 'PERSONALIZADO') {
+              setDataInicio('');
+              setDataFim('');
+              setPeriodoAplicado({ inicio: '', fim: '' });
+            }
+          }}
+          onDataInicioChange={setDataInicio}
+          onDataFimChange={setDataFim}
+          onApplyPeriod={() => setPeriodoAplicado({
+            inicio: normalizeDateValue(dataInicio),
+            fim: normalizeDateValue(dataFim)
+          })}
+          onClearPeriod={() => {
+            setDataInicio('');
+            setDataFim('');
+            setPeriodoAplicado({ inicio: '', fim: '' });
+          }}
+        />
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <th className="p-3">Vencimento</th>
-                <th className="p-3">Fornecedor</th>
-                <th className="p-3">Descrição</th>
-                <th className="p-3">Categoria</th>
-                <th className="p-3">Comprovante</th>
-                <th className="p-3 text-right">Valor (R$)</th>
-                <th className="p-3 text-center">Status</th>
+                <SortableTableHeader label="Vencimento" sortKey="vencimento" accessor={(item) => normalizeDateValue(item.dataVencimento)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Fornecedor" sortKey="fornecedor" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Descrição" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Categoria" sortKey="categoria" accessor={(item) => item.categoria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Comprovante" sortKey="comprovante" accessor={(item) => Boolean(item.comprovanteUrl)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Valor (R$)" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
+                <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-center" />
                 {!isAuditor && <th className="p-3 text-center">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredDespesas.map((d) => (
+              {sortedDespesas.map((d) => (
                 <tr key={d.id} className="hover:bg-gray-50 transition">
                   <td className="p-3 font-semibold text-gray-600">{d.dataVencimento}</td>
                   <td className="p-3 font-bold text-[#0b1c30] max-w-[180px] truncate">{d.fornecedorCliente}</td>
@@ -255,6 +314,13 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                   </td>}
                 </tr>
               ))}
+              {sortedDespesas.length === 0 && (
+                <tr>
+                  <td colSpan={isAuditor ? 7 : 8} className="p-8 text-center text-gray-500">
+                    Nenhuma despesa encontrada para os filtros selecionados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import * as XLSX from 'xlsx';
 import { Lancamento, TipoLancamento, StatusLancamento } from '../../types';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
 
 interface ColumnMapping {
   descricao: string;
@@ -253,6 +255,7 @@ export const ImportExcelView: React.FC = () => {
       }
 
       return {
+        sourceIndex: idx + 1,
         descricao: descVal,
         tipo,
         valor: numValor,
@@ -271,6 +274,7 @@ export const ImportExcelView: React.FC = () => {
   };
 
   const mappedItems = step === 'preview' ? getMappedItems() : [];
+  const { sortedItems: sortedMappedItems, sortConfig, requestSort } = useSortableData(mappedItems);
 
   const totalReceitasImport = mappedItems.filter(i => i.tipo === 'RECEITA').reduce((acc, curr) => acc + curr.valor, 0);
   const totalDespesasImport = mappedItems.filter(i => i.tipo === 'DESPESA').reduce((acc, curr) => acc + curr.valor, 0);
@@ -626,23 +630,23 @@ export const ImportExcelView: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px] sticky top-0 border-b">
                 <tr>
-                  <th className="p-3">#</th>
-                  <th className="p-3">Data Emissão</th>
-                  <th className="p-3">Data Pagamento</th>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Descrição</th>
-                  <th className="p-3">Fornecedor / Cliente</th>
-                  <th className="p-3">Categoria</th>
-                  <th className="p-3">Valor (R$)</th>
-                  <th className="p-3">Unidade</th>
-                  <th className="p-3">Condição DDL</th>
+                  <SortableTableHeader label="#" sortKey="indice" accessor={(item) => item.sourceIndex} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Data Emissão" sortKey="emissao" accessor={(item) => item.dataEmissao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Data Pagamento" sortKey="pagamento" accessor={(item) => item.dataPagamento} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Descrição" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Fornecedor / Cliente" sortKey="fornecedor" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Categoria" sortKey="categoria" accessor={(item) => item.categoria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Valor (R$)" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Unidade" sortKey="unidade" accessor={(item) => item.unidade} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Condição DDL" sortKey="ddl" accessor={(item) => item.prazosDias.join('/')} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {mappedItems.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="p-3 text-gray-400 font-mono text-[11px]">{idx + 1}</td>
+                {sortedMappedItems.map((item) => (
+                  <tr key={item.sourceIndex} className="hover:bg-gray-50">
+                    <td className="p-3 text-gray-400 font-mono text-[11px]">{item.sourceIndex}</td>
                     <td className="p-3 font-semibold text-gray-700">{item.dataEmissao}</td>
                     <td className="p-3 font-semibold text-gray-700">{item.dataPagamento || '—'}</td>
                     <td className="p-3">

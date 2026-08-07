@@ -1,8 +1,12 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
+import { normalizeDateValue } from '../../utils/dateRange';
 
 export const HistoricoAuditoriaView: React.FC = () => {
   const { auditLogs } = useApp();
+  const { sortedItems: sortedAuditLogs, sortConfig, requestSort } = useSortableData(auditLogs);
 
   return (
     <div className="space-y-6">
@@ -35,16 +39,16 @@ export const HistoricoAuditoriaView: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <th className="p-3">Data / Hora</th>
-                <th className="p-3">Usuário</th>
-                <th className="p-3">Módulo</th>
-                <th className="p-3">Ação</th>
-                <th className="p-3">Descrição da Operação</th>
-                <th className="p-3 font-mono">Endereço IP</th>
+                <SortableTableHeader label="Data / Hora" sortKey="data" accessor={(item) => normalizeDateValue(item.dataHora) || item.dataHora} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Usuário" sortKey="usuario" accessor={(item) => item.usuario} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Módulo" sortKey="modulo" accessor={(item) => item.modulo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Ação" sortKey="acao" accessor={(item) => item.acao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Descrição da Operação" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Endereço IP" sortKey="ip" accessor={(item) => item.ip} sortConfig={sortConfig} onSort={requestSort} className="p-3 font-mono" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {auditLogs.map((log) => (
+              {sortedAuditLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50 transition">
                   <td className="p-3 font-mono text-gray-500">{log.dataHora}</td>
                   <td className="p-3 font-bold text-[#0b1c30]">{log.usuario}</td>

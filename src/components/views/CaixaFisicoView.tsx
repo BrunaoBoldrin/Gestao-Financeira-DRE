@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
+import { normalizeDateValue } from '../../utils/dateRange';
 
 export const CaixaFisicoView: React.FC = () => {
   const { sessaoCaixa, abrirCaixa, registrarMovimentacaoCaixa, fecharCaixa, canExecuteFinancialActions } = useApp();
@@ -8,6 +11,7 @@ export const CaixaFisicoView: React.FC = () => {
   const [valorInput, setValorInput] = useState('');
   const [descricaoInput, setDescricaoInput] = useState('');
   const [observacaoFechamento, setObservacaoFechamento] = useState('');
+  const { sortedItems: sortedMovimentacoes, sortConfig, requestSort } = useSortableData(sessaoCaixa.movimentacoes);
 
   const handleActionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,15 +184,15 @@ export const CaixaFisicoView: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <th className="p-3">Data / Hora</th>
-                <th className="p-3">Operação</th>
-                <th className="p-3">Descrição / Histórico</th>
-                <th className="p-3">Operador</th>
-                <th className="p-3 text-right">Valor (R$)</th>
+                <SortableTableHeader label="Data / Hora" sortKey="data" accessor={(item) => normalizeDateValue(item.dataHora) || item.dataHora} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Operação" sortKey="operacao" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Descrição / Histórico" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Operador" sortKey="operador" accessor={(item) => item.usuario} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Valor (R$)" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sessaoCaixa.movimentacoes.map((mov) => {
+              {sortedMovimentacoes.map((mov) => {
                 const isEntrada = mov.tipo === 'SUPRIMENTO' || mov.tipo === 'VENDA';
                 return (
                   <tr key={mov.id} className="hover:bg-gray-50 transition">

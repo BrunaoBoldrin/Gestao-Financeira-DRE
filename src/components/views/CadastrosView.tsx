@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
 
 export const CadastrosView: React.FC = () => {
   const {
@@ -46,6 +48,9 @@ export const CadastrosView: React.FC = () => {
   const [conta, setConta] = useState('');
   const [saldo, setSaldo] = useState('');
   const [prazosDiasStr, setPrazosDiasStr] = useState('30, 60, 90');
+  const categoriasSort = useSortableData(categorias);
+  const fornecedoresSort = useSortableData(fornecedores);
+  const condicoesSort = useSortableData(condicoesPagamento);
 
   const openAddModal = () => {
     setEditingId(null);
@@ -201,15 +206,15 @@ export const CadastrosView: React.FC = () => {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
                   <tr>
-                    <th className="p-3">Código</th>
-                    <th className="p-3">Nome da Conta</th>
-                    <th className="p-3">Tipo</th>
-                    <th className="p-3 text-center">Status</th>
+                    <SortableTableHeader label="Código" sortKey="codigo" accessor={(item) => item.codigo} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="Nome da Conta" sortKey="nome" accessor={(item) => item.nome} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.ativa} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3 text-center" />
                     <th className="p-3 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {categorias.map((item) => (
+                  {categoriasSort.sortedItems.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="p-3 font-mono font-bold text-[#0b1c30]">{item.codigo}</td>
                       <td className="p-3 font-semibold text-gray-800">{item.nome}</td>
@@ -345,15 +350,15 @@ export const CadastrosView: React.FC = () => {
               <table className="w-full text-left">
                 <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
                   <tr>
-                    <th className="p-3">Razão Social / Nome</th>
-                    <th className="p-3">CNPJ / CPF</th>
-                    <th className="p-3">Cidade / UF</th>
-                    <th className="p-3 text-center">Status</th>
+                    <SortableTableHeader label="Razão Social / Nome" sortKey="nome" accessor={(item) => item.nome} sortConfig={fornecedoresSort.sortConfig} onSort={fornecedoresSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="CNPJ / CPF" sortKey="cnpj" accessor={(item) => item.cnpj} sortConfig={fornecedoresSort.sortConfig} onSort={fornecedoresSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="Cidade / UF" sortKey="cidade" accessor={(item) => item.cidade} sortConfig={fornecedoresSort.sortConfig} onSort={fornecedoresSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.ativo} sortConfig={fornecedoresSort.sortConfig} onSort={fornecedoresSort.requestSort} className="p-3 text-center" />
                     <th className="p-3 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {fornecedores.map((f) => (
+                  {fornecedoresSort.sortedItems.map((f) => (
                     <tr key={f.id} className="hover:bg-gray-50">
                       <td className="p-3 font-bold text-[#0b1c30]">{f.nome}</td>
                       <td className="p-3 font-mono text-gray-600">{f.cnpj || '-'}</td>
@@ -450,15 +455,15 @@ export const CadastrosView: React.FC = () => {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
                   <tr>
-                    <th className="p-3">Nome / Descrição DDL</th>
-                    <th className="p-3">Prazos em Dias (DDL)</th>
-                    <th className="p-3 text-center">Nº Parcelas</th>
-                    <th className="p-3 text-center">Status</th>
+                    <SortableTableHeader label="Nome / Descrição DDL" sortKey="nome" accessor={(item) => item.nome} sortConfig={condicoesSort.sortConfig} onSort={condicoesSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="Prazos em Dias (DDL)" sortKey="prazo" accessor={(item) => item.prazosDias[0] ?? 0} sortConfig={condicoesSort.sortConfig} onSort={condicoesSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="Nº Parcelas" sortKey="parcelas" accessor={(item) => item.prazosDias.length} sortConfig={condicoesSort.sortConfig} onSort={condicoesSort.requestSort} className="p-3 text-center" />
+                    <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.ativa} sortConfig={condicoesSort.sortConfig} onSort={condicoesSort.requestSort} className="p-3 text-center" />
                     <th className="p-3 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {condicoesPagamento.map((item) => (
+                  {condicoesSort.sortedItems.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="p-3 font-bold text-[#0b1c30]">{item.nome}</td>
                       <td className="p-3 font-mono font-bold text-blue-800">

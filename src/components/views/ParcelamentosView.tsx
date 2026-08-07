@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
+import { normalizeDateValue } from '../../utils/dateRange';
 
 interface ParcelamentosViewProps {
   onOpenNovoParcelamentoModal: () => void;
@@ -10,6 +13,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
   const [selectedParcelamentoId, setSelectedParcelamentoId] = useState<string>('');
 
   const activeContract = filteredParcelamentos.find((p) => p.id === selectedParcelamentoId) || filteredParcelamentos[0];
+  const { sortedItems: sortedCronograma, sortConfig, requestSort } = useSortableData(activeContract?.cronograma || []);
 
   return (
     <div className="space-y-6">
@@ -120,15 +124,15 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
-                      <th className="p-3">Nº Parcela</th>
-                      <th className="p-3">Data Vencimento</th>
-                      <th className="p-3 text-right">Valor Parcela</th>
-                      <th className="p-3 text-center">Status</th>
+                      <SortableTableHeader label="Nº Parcela" sortKey="parcela" accessor={(item) => item.numero} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                      <SortableTableHeader label="Data Vencimento" sortKey="vencimento" accessor={(item) => normalizeDateValue(item.vencimento)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                      <SortableTableHeader label="Valor Parcela" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
+                      <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-center" />
                       {canExecuteFinancialActions && <th className="p-3 text-center">Ação</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {activeContract.cronograma.map((item) => (
+                    {sortedCronograma.map((item) => (
                       <tr
                         key={item.numero}
                         className={item.status === 'PAGO' ? 'bg-emerald-50/40' : 'hover:bg-gray-50'}
@@ -140,7 +144,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                         <td className="p-3 text-right font-black text-[#0b1c30]">
                           R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
-                        {canExecuteFinancialActions && <td className="p-3 text-center">
+                        <td className="p-3 text-center">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               item.status === 'PAGO'
@@ -150,8 +154,8 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                           >
                             {item.status}
                           </span>
-                        </td>}
-                        <td className="p-3 text-center">
+                        </td>
+                        {canExecuteFinancialActions && <td className="p-3 text-center">
                           {item.status === 'PENDENTE' ? (
                             <button
                               onClick={() => pagarParcela(activeContract.id, item.numero)}
@@ -165,7 +169,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                               {item.dataPagamento}
                             </span>
                           )}
-                        </td>
+                        </td>}
                       </tr>
                     ))}
                   </tbody>

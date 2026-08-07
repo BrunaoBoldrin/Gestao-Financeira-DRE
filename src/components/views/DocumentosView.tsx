@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
+import { normalizeDateValue } from '../../utils/dateRange';
 
 export const DocumentosView: React.FC = () => {
   const { documentosOCR, showToast } = useApp();
@@ -10,6 +13,7 @@ export const DocumentosView: React.FC = () => {
       d.nomeArquivo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       d.dadosExtraidos.fornecedor.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const { sortedItems: sortedDocs, sortConfig, requestSort } = useSortableData(filteredDocs);
 
   return (
     <div className="space-y-6">
@@ -51,17 +55,17 @@ export const DocumentosView: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <th className="p-3">Nome do Arquivo</th>
-                <th className="p-3">Tipo</th>
-                <th className="p-3">Fornecedor</th>
-                <th className="p-3">Data Upload</th>
-                <th className="p-3">Hash MD5 Integridade</th>
-                <th className="p-3 text-right">Valor Extraído</th>
+                <SortableTableHeader label="Nome do Arquivo" sortKey="arquivo" accessor={(item) => item.nomeArquivo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Fornecedor" sortKey="fornecedor" accessor={(item) => item.dadosExtraidos.fornecedor} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Data Upload" sortKey="data" accessor={(item) => normalizeDateValue(item.dataUpload)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Hash MD5 Integridade" sortKey="hash" accessor={(item) => item.id} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Valor Extraído" sortKey="valor" accessor={(item) => item.dadosExtraidos.valorTotal} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
                 <th className="p-3 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredDocs.map((doc) => (
+              {sortedDocs.map((doc) => (
                 <tr key={doc.id} className="hover:bg-gray-50 transition">
                   <td className="p-3 font-bold text-[#0b1c30] flex items-center gap-2">
                     <span className="material-symbols-outlined text-gray-400">description</span>

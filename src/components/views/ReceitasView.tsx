@@ -1,27 +1,62 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { LancamentosPeriodFilter } from '../common/LancamentosPeriodFilter';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
+import { isDateInRange, normalizeDateValue } from '../../utils/dateRange';
+import { normalizeText } from '../../utils/text';
 
 interface ReceitasViewProps {
   onOpenNovoLancamentoModal: () => void;
 }
 
 export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamentoModal }) => {
-  const { filteredLancamentos, marcarLancamentoComoPago, deleteLancamento, isAuditor, showToast } = useApp();
+  const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, isAuditor, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
+  const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
+  const [competencia, setCompetencia] = useState('TODOS');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+  const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
 
   const receitas = filteredLancamentos.filter((l) => l.tipo === 'RECEITA');
 
-  const filteredReceitas = receitas.filter((r) => {
-    const matchesSearch =
-      r.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.fornecedorCliente.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'TODOS' || r.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const availableMonths = useMemo(() => Array.from(new Set<string>(
+    filteredLancamentos
+      .filter((l) => l.tipo === 'RECEITA')
+      .map((l) => normalizeDateValue(l.dataVencimento).substring(0, 7))
+      .filter(Boolean)
+  )).sort((a, b) => b.localeCompare(a)), [filteredLancamentos]);
+
+  const availableCategories = useMemo(() => Array.from(new Set<string>([
+    ...categorias.filter((categoria) => categoria.tipo === 'RECEITA').map((categoria) => categoria.nome),
+    ...filteredLancamentos.filter((l) => l.tipo === 'RECEITA').map((l) => l.categoria)
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')), [categorias, filteredLancamentos]);
+
+  const receitasNoPeriodo = receitas.filter((r) => {
+    if (competencia === 'TODOS') return true;
+    if (competencia === 'PERSONALIZADO') {
+      if (!periodoAplicado.inicio || !periodoAplicado.fim) return true;
+      return isDateInRange(r.dataVencimento, periodoAplicado);
+    }
+    return normalizeDateValue(r.dataVencimento).startsWith(competencia);
   });
 
-  const totalPago = receitas.filter((r) => r.status === 'PAGO').reduce((a, b) => a + b.valor, 0);
-  const totalPendente = receitas.filter((r) => r.status === 'PENDENTE').reduce((a, b) => a + b.valor, 0);
+  const filteredReceitas = receitasNoPeriodo.filter((r) => {
+    const normalizedSearch = normalizeText(searchTerm);
+    const matchesSearch =
+      normalizeText(r.descricao).includes(normalizedSearch) ||
+      normalizeText(r.fornecedorCliente).includes(normalizedSearch);
+    const matchesStatus = statusFilter === 'TODOS' || r.status === statusFilter;
+    const matchesCategory = categoryFilter === 'TODAS' || normalizeText(r.categoria) === normalizeText(categoryFilter);
+    return matchesSearch && matchesStatus && matchesCategory;
+  });
+
+  const { sortedItems: sortedReceitas, sortConfig, requestSort } = useSortableData(filteredReceitas);
+
+  const totalPago = receitasNoPeriodo.filter((r) => r.status === 'PAGO').reduce((a, b) => a + b.valor, 0);
+  const totalPendente = receitasNoPeriodo.filter((r) => r.status === 'PENDENTE').reduce((a, b) => a + b.valor, 0);
 
   return (
     <div className="space-y-6">
@@ -100,8 +135,19 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 font-semibold">Status:</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500 font-semibold">Categoria:</span>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-semibold text-[#0b1c30] max-w-[220px]"
+            >
+              <option value="TODAS">Todas as Categorias</option>
+              {availableCategories.map((categoria) => (
+                <option key={categoria} value={categoria}>{categoria}</option>
+              ))}
+            </select>
+            <span className="text-xs text-gray-500 font-semibold ml-1">Status:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -114,23 +160,51 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           </div>
         </div>
 
+        <LancamentosPeriodFilter
+          competencia={competencia}
+          availableMonths={availableMonths}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          periodoAplicado={periodoAplicado}
+          resultCount={filteredReceitas.length}
+          onCompetenciaChange={(value) => {
+            setCompetencia(value);
+            if (value !== 'PERSONALIZADO') {
+              setDataInicio('');
+              setDataFim('');
+              setPeriodoAplicado({ inicio: '', fim: '' });
+            }
+          }}
+          onDataInicioChange={setDataInicio}
+          onDataFimChange={setDataFim}
+          onApplyPeriod={() => setPeriodoAplicado({
+            inicio: normalizeDateValue(dataInicio),
+            fim: normalizeDateValue(dataFim)
+          })}
+          onClearPeriod={() => {
+            setDataInicio('');
+            setDataFim('');
+            setPeriodoAplicado({ inicio: '', fim: '' });
+          }}
+        />
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <th className="p-3">Data Venc.</th>
-                <th className="p-3">Paciente / Cliente</th>
-                <th className="p-3">Descrição do Procedimento</th>
-                <th className="p-3">Forma Pgto</th>
-                <th className="p-3">Conta Destino</th>
-                <th className="p-3">Anexo</th>
-                <th className="p-3 text-right">Valor (R$)</th>
-                <th className="p-3 text-center">Status</th>
+                <SortableTableHeader label="Data Venc." sortKey="vencimento" accessor={(item) => normalizeDateValue(item.dataVencimento)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Paciente / Cliente" sortKey="cliente" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Descrição do Procedimento" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Forma Pgto" sortKey="forma" accessor={(item) => item.formaPagamento} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Conta Destino" sortKey="conta" accessor={(item) => item.contaBancaria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Anexo" sortKey="anexo" accessor={(item) => Boolean(item.comprovanteUrl)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Valor (R$)" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
+                <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-center" />
                 {!isAuditor && <th className="p-3 text-center">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredReceitas.map((r) => (
+              {sortedReceitas.map((r) => (
                 <tr key={r.id} className="hover:bg-gray-50 transition">
                   <td className="p-3 font-semibold text-gray-600">{r.dataVencimento}</td>
                   <td className="p-3 font-bold text-[#0b1c30]">{r.fornecedorCliente}</td>
@@ -207,6 +281,13 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
                   </td>}
                 </tr>
               ))}
+              {sortedReceitas.length === 0 && (
+                <tr>
+                  <td colSpan={isAuditor ? 8 : 9} className="p-8 text-center text-gray-500">
+                    Nenhuma receita encontrada para os filtros selecionados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
