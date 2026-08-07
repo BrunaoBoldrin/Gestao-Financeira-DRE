@@ -4,11 +4,8 @@ import {
   Lancamento,
   StatusLancamento,
   Parcelamento,
-  BoletoDDA,
   DocumentoOCR,
   SessaoCaixaFisico,
-  ExtratoItem,
-  RecebivelMaquininha,
   FechamentoMensal,
   AuditLog,
   RegraAutomacao,
@@ -25,11 +22,8 @@ import {
   INITIAL_UNITS,
   INITIAL_LANCAMENTOS,
   INITIAL_PARCELAMENTOS,
-  INITIAL_DDA,
   INITIAL_DOCUMENTS_OCR,
   INITIAL_SESSAO_CAIXA,
-  INITIAL_EXTRATO_BANCO,
-  INITIAL_RECEBIVEIS_MAQUININHA,
   INITIAL_FECHAMENTO,
   INITIAL_AUDIT_LOGS,
   INITIAL_AUTOMATIONS,
@@ -89,8 +83,6 @@ interface AppContextType {
   filteredLancamentos: Lancamento[];
   parcelamentos: Parcelamento[];
   filteredParcelamentos: Parcelamento[];
-  boletosDDA: BoletoDDA[];
-  extratoBanco: ExtratoItem[];
   documentosOCR: DocumentoOCR[];
   sessaoCaixa: SessaoCaixaFisico;
   fechamentoMensal: FechamentoMensal;
@@ -152,9 +144,6 @@ interface AppContextType {
   addParcelamento: (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => void;
   pagarParcela: (parcelamentoId: string, numeroParcela: number) => void;
   
-  marcarDDAPago: (ddaId: string) => void;
-  conciliarExtrato: (extratoId: string, lancamentoId?: string) => void;
-  
   uploadDocumentoOCR: (file: File) => void;
   aprovarDocumentoOCR: (docId: string, dadosFinal: DocumentoOCR['dadosExtraidos']) => void;
   rejeitarDocumentoOCR: (docId: string) => void;
@@ -203,8 +192,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [regrasAutomacao, setRegrasAutomacao] = useState<RegraAutomacao[]>(INITIAL_AUTOMATIONS);
   const [dreData] = useState<DREItem[]>(INITIAL_DRE);
   
-  const [boletosDDA, setBoletosDDA] = useState<BoletoDDA[]>(INITIAL_DDA);
-  const [extratoBanco, setExtratoBanco] = useState<ExtratoItem[]>(INITIAL_EXTRATO_BANCO);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Filtering Logic
@@ -742,50 +729,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Parcela ${numeroParcela} paga com sucesso! Lançamento financeiro gerado.`, 'success');
   };
 
-  // --- DDA ---
-  const vincularDDAParaDespesa = (ddaId: string, despesaId: string) => {
-    if (!checkFinancialPermission('Vincular DDA')) return;
-    setBoletosDDA((prev) =>
-      prev.map((b) => (b.id === ddaId ? { ...b, status: 'VINCULADO', despesaVinculadaId: despesaId } : b))
-    );
-    showToast('Boleto DDA vinculado com sucesso à despesa!', 'success');
-    addAuditLog('DDA', 'EDICAO', `Viculou boleto DDA ${ddaId} à despesa ${despesaId}`);
-  };
-
-  const marcarDDAPago = (ddaId: string) => {
-    if (!checkFinancialPermission('Pagar DDA')) return;
-    const boleto = boletosDDA.find((b) => b.id === ddaId);
-    if (!boleto) return;
-
-    setBoletosDDA((prev) =>
-      prev.map((b) => (b.id === ddaId ? { ...b, status: 'PAGO' } : b))
-    );
-
-    // If it has a linked expense, mark it paid
-    if (boleto.despesaVinculadaId) {
-      marcarLancamentoComoPago(boleto.despesaVinculadaId);
-    } else {
-      // Create new expense
-      addLancamento({
-        descricao: `Pagamento DDA - ${boleto.cedente}`,
-        tipo: 'DESPESA',
-        categoria: boleto.categoriaSugerida,
-        centroCusto: boleto.centroCustoSugerido,
-        valor: boleto.valor,
-        dataVencimento: boleto.dataVencimento,
-        dataPagamento: new Date().toISOString().substring(0, 10),
-        status: 'PAGO',
-        fornecedorCliente: boleto.cedente,
-        contaBancaria: 'Itaú Uniclass - C/C 45892-1',
-        formaPagamento: 'BOLETO',
-        unidade: selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit
-      });
-    }
-
-    showToast('Boleto DDA pago e registrado nas despesas!', 'success');
-    addAuditLog('DDA', 'EDICAO', `Liquidou boleto DDA ${ddaId} no valor de R$ ${boleto.valor.toFixed(2)}`);
-  };
-
   // --- OCR / Documentos ---
   const uploadDocumentoOCR = async (file: File) => {
     if (!checkFinancialPermission('Upload Documento OCR')) return;
@@ -1079,21 +1022,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog('Caixa Físico', 'FECHAMENTO', `Fechou o caixa do dia com saldo contado de R$ ${saldoContado.toFixed(2)}`);
   };
 
-  // --- Conciliacao ---
-  const conciliarExtrato = (extratoId: string, lancamentoId?: string) => {
-    if (!checkFinancialPermission('Conciliar Extrato')) return;
-    setExtratoBanco((prev) =>
-      prev.map((e) =>
-        e.id === extratoId ? { ...e, conciliado: true, lancamentoId: lancamentoId || e.sugestaoMatchId } : e
-      )
-    );
-    if (lancamentoId) {
-      marcarLancamentoComoPago(lancamentoId);
-    }
-    showToast('Item do extrato conciliado com sucesso!', 'success');
-    addAuditLog('Conciliação Bancária', 'CONCILIACAO', `Conciliou extrato bancário ${extratoId} com lançamento ${lancamentoId || 'automático'}`);
-  };
-
   // --- Fechamento Mensal ---
   const toggleChecklistItemFechamento = (chkId: string) => {
     if (!checkFinancialPermission('Alterar Checklist de Fechamento')) return;
@@ -1189,8 +1117,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         filteredLancamentos,
         parcelamentos,
         filteredParcelamentos,
-        boletosDDA,
-        extratoBanco,
         documentosOCR,
         sessaoCaixa,
         fechamentoMensal,
@@ -1233,8 +1159,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         marcarLancamentoComoPago,
         addParcelamento,
         pagarParcela,
-        marcarDDAPago,
-        conciliarExtrato,
         uploadDocumentoOCR,
         aprovarDocumentoOCR,
         rejeitarDocumentoOCR,

@@ -2,11 +2,8 @@ import {
   User, 
   Lancamento, 
   Parcelamento, 
-  BoletoDDA, 
   DocumentoOCR, 
   SessaoCaixaFisico, 
-  ExtratoItem, 
-  RecebivelMaquininha, 
   FechamentoMensal, 
   AuditLog, 
   RegraAutomacao, 
@@ -335,46 +332,6 @@ export const INITIAL_PARCELAMENTOS: Parcelamento[] = [
   }
 ];
 
-export const INITIAL_DDA: BoletoDDA[] = [
-  {
-    id: 'dda-1',
-    cedente: 'ALLERGAN PRODUTOS FARMACEUTICOS LTDA',
-    cnpjCedente: '43.214.567/0001-88',
-    codigoBarras: '34191.09008 01234.567891 00012.345678 9 93450000540000',
-    valor: 5400.00,
-    dataVencimento: '2024-05-22',
-    dataEmissao: '2024-05-08',
-    status: 'DISPONIVEL',
-    categoriaSugerida: 'Insumos Médicos & Estéticos',
-    centroCustoSugerido: 'Estoque Central'
-  },
-  {
-    id: 'dda-2',
-    cedente: 'GALDERMA BRASIL LTDA',
-    cnpjCedente: '02.345.678/0001-12',
-    codigoBarras: '23791.22308 09876.543219 00034.112233 1 93500000320000',
-    valor: 3200.00,
-    dataVencimento: '2024-05-28',
-    dataEmissao: '2024-05-12',
-    status: 'DISPONIVEL',
-    categoriaSugerida: 'Insumos Médicos & Estéticos',
-    centroCustoSugerido: 'Estoque Central'
-  },
-  {
-    id: 'dda-3',
-    cedente: 'ENEL DISTRIBUICAO SAO PAULO',
-    cnpjCedente: '61.695.227/0001-93',
-    codigoBarras: '83660.00002 15080.016202 40520.240520 8 00002150800000',
-    valor: 2150.80,
-    dataVencimento: '2024-05-20',
-    dataEmissao: '2024-05-02',
-    status: 'VINCULADO',
-    despesaVinculadaId: 'desp-104',
-    categoriaSugerida: 'Serviços Públicos & Concessionárias',
-    centroCustoSugerido: 'Administrativo'
-  }
-];
-
 export const INITIAL_DOCUMENTS_OCR: DocumentoOCR[] = [
   {
     id: 'ocr-101',
@@ -457,106 +414,6 @@ export const INITIAL_SESSAO_CAIXA: SessaoCaixaFisico = {
     }
   ]
 };
-
-export const INITIAL_EXTRATO_BANCO: ExtratoItem[] = [
-  {
-    id: 'ext-1',
-    data: '2024-05-02',
-    descricao: 'PIX RECEBIDO - JULIANA MENDES ESTETICA',
-    valor: 2450.00,
-    documento: 'PIX984210',
-    conciliado: true,
-    lancamentoId: 'rec-001'
-  },
-  {
-    id: 'ext-2',
-    data: '2024-05-08',
-    descricao: 'TRANSF ELET ED - ALLERGAN PROD FARM',
-    valor: -5400.00,
-    documento: 'TED00192',
-    conciliado: true,
-    lancamentoId: 'desp-101'
-  },
-  {
-    id: 'ext-3',
-    data: '2024-05-10',
-    descricao: 'PAGTO BOLETO - IMOBILIARIA PAULISTA SA',
-    valor: -12500.00,
-    documento: 'BOL094821',
-    conciliado: true,
-    lancamentoId: 'desp-102'
-  },
-  {
-    id: 'ext-4',
-    data: '2024-05-15',
-    descricao: 'DEPOSITO DINHEIRO CAIXA - RECEPT ROYAL',
-    valor: 680.00,
-    documento: 'DEP99012',
-    conciliado: false,
-    sugestaoMatchId: 'rec-005',
-    scoreMatch: 95
-  },
-  {
-    id: 'ext-5',
-    data: '2024-05-17',
-    descricao: 'PIX RECEBIDO - BEATRIZ LIMA CLINICA',
-    valor: 3200.00,
-    documento: 'PIX120938',
-    conciliado: false,
-    sugestaoMatchId: 'rec-003',
-    scoreMatch: 98
-  },
-  {
-    id: 'ext-6',
-    data: '2024-05-18',
-    descricao: 'TARIFA MANUTENCAO CONTA CORRENTE ITAU',
-    valor: -89.90,
-    documento: 'TAR0019',
-    conciliado: false
-  }
-];
-
-export const INITIAL_RECEBIVEIS_MAQUININHA: RecebivelMaquininha[] = [
-  {
-    id: 'maq-1',
-    adquirente: 'STONE',
-    bandeira: 'VISA',
-    modalidade: 'CREDITO_PARCELADO',
-    dataVenda: '2024-05-10',
-    dataPrevisao: '2024-06-10',
-    valorBruto: 3200.00,
-    taxaContratada: 2.80,
-    taxaAplicada: 2.80,
-    valorLiquido: 3110.40,
-    status: 'A_RECEBER'
-  },
-  {
-    id: 'maq-2',
-    adquirente: 'REDE',
-    bandeira: 'MASTERCARD',
-    modalidade: 'DEBITO',
-    dataVenda: '2024-05-17',
-    dataPrevisao: '2024-05-18',
-    valorBruto: 1800.00,
-    taxaContratada: 1.10,
-    taxaAplicada: 1.10,
-    valorLiquido: 1780.20,
-    status: 'PAGO'
-  },
-  {
-    id: 'maq-3',
-    adquirente: 'CIELO',
-    bandeira: 'ELO',
-    modalidade: 'CREDITO_A_VISTA',
-    dataVenda: '2024-05-16',
-    dataPrevisao: '2024-06-16',
-    valorBruto: 2450.00,
-    taxaContratada: 1.99,
-    taxaAplicada: 2.45, // Divergente
-    valorLiquido: 2389.97,
-    status: 'DIVERGENTE'
-  }
-];
 
 export const INITIAL_FECHAMENTO: FechamentoMensal = {
   mesAno: '2024-05',
