@@ -2,6 +2,9 @@ import React, { useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { User, UserRole } from '../../types';
 import { UserAvatar } from '../common/UserAvatar';
+import { SortableTableHeader } from '../common/SortableTableHeader';
+import { useSortableData } from '../../hooks/useSortableData';
+import { normalizeDateValue } from '../../utils/dateRange';
 
 export const UsuariosPermissoesView: React.FC = () => {
   const { users, units, addUser, updateUser, toggleUserActive, deleteUser, isAdmin, currentUser, showToast } = useApp();
@@ -15,6 +18,7 @@ export const UsuariosPermissoesView: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const userToDelete = users.find((user) => user.id === userToDeleteId);
+  const { sortedItems: sortedUsers, sortConfig, requestSort } = useSortableData(users);
 
   const resetForm = () => {
     setEditingUserId(null);
@@ -108,16 +112,16 @@ export const UsuariosPermissoesView: React.FC = () => {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                  <th className="p-3">Usuário / E-mail</th>
-                  <th className="p-3">Perfil</th>
-                  <th className="p-3">Unidade</th>
-                  <th className="p-3">Último Acesso</th>
-                  <th className="p-3 text-center">Status</th>
+                  <SortableTableHeader label="Usuário / E-mail" sortKey="usuario" accessor={(item) => item.name} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Perfil" sortKey="perfil" accessor={(item) => item.role} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Unidade" sortKey="unidade" accessor={(item) => item.unit} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Último Acesso" sortKey="acesso" accessor={(item) => normalizeDateValue(item.lastAccess) || item.lastAccess} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.active} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-center" />
                   <th className="p-3 text-center">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {users.map((u) => (
+                {sortedUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-gray-50 transition">
                     <td className="p-3">
                       <div className="flex items-center gap-2.5">
