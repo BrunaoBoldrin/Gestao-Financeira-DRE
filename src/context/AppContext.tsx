@@ -19,6 +19,7 @@ import {
   ViewKey
 } from '../types';
 import { ROLE_DEFAULT_VIEW, canAccessAllUnits, canAccessView } from '../config/accessControl';
+import { calculateDueDateSchedule } from '../utils/financialDates';
 import {
   INITIAL_USERS,
   INITIAL_UNITS,
@@ -115,7 +116,12 @@ interface AppContextType {
 
   // Actions
   addLancamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>) => void;
-  addLancamentoComDDL: (dadosBase: Omit<Lancamento, 'id' | 'criadoEm'>, dataEmissao: string, prazosDias: number[]) => void;
+  addLancamentoComDDL: (
+    dadosBase: Omit<Lancamento, 'id' | 'criadoEm'>,
+    dataEmissao: string,
+    prazosDias: number[],
+    primeiroVencimento?: string
+  ) => void;
   addLancamentoComParcelamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>, numeroParcelas: number) => void;
   addTransferencia: (dados: {
     origemBancoId: string;
@@ -518,7 +524,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addLancamentoComDDL = (
     dadosBase: Omit<Lancamento, 'id' | 'criadoEm'>,
     dataEmissao: string,
-    prazosDias: number[]
+    prazosDias: number[],
+    primeiroVencimento?: string
   ) => {
     if (!checkFinancialPermission('Lançamento DDL')) return;
     dadosBase = bindLancamentoToBanco({
@@ -533,14 +540,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const totalParcelas = prazosDias.length;
     const valorUnitario = Math.round((dadosBase.valor / totalParcelas) * 100) / 100;
     const parcelamentoId = totalParcelas > 1 ? 'parc-' + Date.now() : undefined;
+    const vencimentos = calculateDueDateSchedule(dataEmissao, prazosDias, primeiroVencimento);
 
     const novosLancamentos: Lancamento[] = [];
     const cronogramaItems: any[] = [];
 
     prazosDias.forEach((dias, index) => {
-      const dt = new Date((dataEmissao || new Date().toISOString().substring(0, 10)) + 'T12:00:00');
-      dt.setDate(dt.getDate() + dias);
-      const vencimentoStr = dt.toISOString().substring(0, 10);
+      const vencimentoStr = vencimentos[index];
 
       const lancId = 'lanc-' + Date.now() + '-' + index;
       const statusLanc: StatusLancamento = dadosBase.status === 'PAGO'

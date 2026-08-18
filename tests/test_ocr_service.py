@@ -38,6 +38,26 @@ class OCRServiceTests(unittest.TestCase):
         self.assertEqual(len(result["linhaDigitavel"]), 47)
         self.assertIn("multa", result["observacoes"].lower())
 
+    def test_supplier_skips_cnpj_line_after_beneficiary_label(self):
+        text = """
+        BOLETO BANCÁRIO
+        Beneficiador
+        CNPJ: 03.313.366/0001-09
+        Galena Química e Farmacêutica Ltda
+        Vencimento: 16/08/2026
+        Valor do documento: R$ 3.699,00
+        """
+        result = parse_financial_fields(text, "boleto.pdf")
+
+        self.assertEqual(result["fornecedor"], "Galena Química e Farmacêutica Ltda")
+        self.assertEqual(result["cnpj"], "03.313.366/0001-09")
+
+        same_line = parse_financial_fields(
+            "Beneficiador: Galena Química e Farmacêutica Ltda CNPJ: 03.313.366/0001-09",
+            "boleto.pdf",
+        )
+        self.assertEqual(same_line["fornecedor"], "Galena Química e Farmacêutica Ltda")
+
     def test_extracts_nfe_xml(self):
         xml = """<?xml version="1.0" encoding="UTF-8"?>
         <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">

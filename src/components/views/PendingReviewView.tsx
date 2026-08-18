@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
+import { calculateDueDateSchedule } from '../../utils/financialDates';
 
 export const PendingReviewView: React.FC = () => {
   const {
@@ -39,16 +40,22 @@ export const PendingReviewView: React.FC = () => {
 
   useEffect(() => {
     if (currentDoc) {
+      const extractedIssueDate = currentDoc.dadosExtraidos.dataEmissao || new Date().toISOString().substring(0, 10);
+      const initialCondition = condicoesPagamento.find((condition) => condition.id === selectedCondicaoId) || condicoesPagamento[0];
+      const suggestedDueDate = calculateDueDateSchedule(
+        extractedIssueDate,
+        initialCondition?.prazosDias || [0]
+      )[0];
       setFornecedor(currentDoc.dadosExtraidos.fornecedor || '');
       setCnpj(currentDoc.dadosExtraidos.cnpj || '');
-      setDataEmissao(currentDoc.dadosExtraidos.dataEmissao || new Date().toISOString().substring(0, 10));
-      setDataVencimento(currentDoc.dadosExtraidos.dataVencimento || new Date().toISOString().substring(0, 10));
+      setDataEmissao(extractedIssueDate);
+      setDataVencimento(currentDoc.dadosExtraidos.dataVencimento || suggestedDueDate);
       setValorTotal(currentDoc.dadosExtraidos.valorTotal ? currentDoc.dadosExtraidos.valorTotal.toString() : '0');
       setCategoria(currentDoc.dadosExtraidos.categoria || 'Insumos Médicos & Estéticos');
       setCentroCusto(currentDoc.dadosExtraidos.centroCusto || 'Clínica / Atendimento');
       setObservacoes(currentDoc.dadosExtraidos.observacoes || '');
     }
-  }, [currentDoc?.id]);
+  }, [currentDoc?.id, currentDoc?.status]);
 
   const unidadeLancamento = selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit;
   const availableBanks = bancos.filter(
@@ -94,6 +101,8 @@ export const PendingReviewView: React.FC = () => {
   const numVal = parseFloat(valorTotal) || 0;
   const activeCond = condicoesPagamento.find((c) => c.id === selectedCondicaoId) || condicoesPagamento[0];
   const prazos = activeCond ? activeCond.prazosDias : [0];
+  const vencimentos = calculateDueDateSchedule(dataEmissao, prazos, dataVencimento);
+  const vencimentoCalculadoDDL = calculateDueDateSchedule(dataEmissao, prazos)[0];
 
   const advanceToNextDoc = () => {
     const remaining = pendingDocs.filter((d) => d.id !== currentDoc.id);
@@ -105,6 +114,10 @@ export const PendingReviewView: React.FC = () => {
   };
 
   const handleAprovar = () => {
+    if (!dataVencimento) {
+      showToast('Informe a data de vencimento antes de aprovar o documento.', 'error');
+      return;
+    }
     const banco = availableBanks.find((item) => item.id === bancoId);
     if (!banco) {
       showToast(`Cadastre ou selecione uma conta bancária para "${unidadeLancamento}".`, 'error');
@@ -141,7 +154,8 @@ export const PendingReviewView: React.FC = () => {
         documentoRef: currentDoc.id
       },
       dataEmissao || new Date().toISOString().substring(0, 10),
-      prazos
+      prazos,
+      dataVencimento
     );
 
     advanceToNextDoc();
@@ -347,6 +361,32 @@ export const PendingReviewView: React.FC = () => {
                 ))}
               </select>
 
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-600 mb-1">
+                    {prazos.length > 1 ? 'Vencimento da primeira parcela' : 'Data de vencimento'}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={dataVencimento}
+                    onChange={(e) => setDataVencimento(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-[#d3e4fe] rounded-md text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e]"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDataVencimento(vencimentoCalculadoDDL)}
+                  className="px-3 py-1.5 border border-[#C5A059] text-[#775a19] bg-white rounded-md text-[10px] font-bold hover:bg-[#fff8e8] transition whitespace-nowrap"
+                >
+                  Usar cálculo DDL
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500">
+                A data pode ser corrigida manualmente antes da aprovação.
+                {prazos.length > 1 ? ' As demais parcelas manterão o intervalo definido no DDL.' : ''}
+              </p>
+
               {/* Calculated Boletos List */}
               {numVal > 0 && prazos.length > 0 && (
                 <div className="pt-1 space-y-1">
@@ -355,8 +395,7 @@ export const PendingReviewView: React.FC = () => {
                   </span>
                   <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
                     {prazos.map((dias, idx) => {
-                      const dt = new Date((dataEmissao || new Date().toISOString().substring(0, 10)) + 'T12:00:00');
-                      dt.setDate(dt.getDate() + dias);
+                      const dt = new Date(`${vencimentos[idx]}T12:00:00`);
                       const dtFormatted = dt.toLocaleDateString('pt-BR');
                       const valPart = (numVal / prazos.length);
 
