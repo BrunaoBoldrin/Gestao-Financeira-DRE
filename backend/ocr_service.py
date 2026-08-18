@@ -407,21 +407,47 @@ def _extract_digit_line(text: str) -> str:
 
 def _extract_supplier(text: str, file_name: str) -> str:
     lines = [re.sub(r"\s+", " ", line).strip(" :-") for line in text.splitlines() if line.strip()]
-    labels = ("beneficiário", "beneficiario", "cedente", "emitente", "prestador", "razão social", "razao social")
+    label_pattern = re.compile(
+        r"\b(?:benefici[aá]ri[oa]|beneficiador|cedente|emitente|prestador|favorecido|raz[aã]o social)\b",
+        flags=re.IGNORECASE,
+    )
+
     for index, line in enumerate(lines):
-        lowered = line.lower()
-        if not any(label in lowered for label in labels):
+        label_match = label_pattern.search(line)
+        if not label_match:
             continue
-        parts = re.split(r"[:\-]", line, maxsplit=1)
-        candidate = parts[1].strip() if len(parts) > 1 else ""
-        if len(candidate) >= 3 and not re.fullmatch(r"[\d.\-/\s]+", candidate):
-            return candidate[:160]
-        if index + 1 < len(lines):
-            candidate = lines[index + 1].strip()
-            if len(candidate) >= 3 and not re.fullmatch(r"[\d.\-/\s]+", candidate):
+
+        inline_candidate = line[label_match.end():].strip(" :-")
+        candidates = [inline_candidate, *lines[index + 1:index + 4]]
+        for candidate in candidates:
+            candidate = re.split(r"\b(?:CNPJ|CPF)\b\s*: ?", candidate, maxsplit=1, flags=re.IGNORECASE)[0]
+            candidate = re.sub(r"^(?:nome|raz[aã]o social)\s*[:\-]?\s*", "", candidate, flags=re.IGNORECASE)
+            candidate = candidate.strip(" :-")
+            if _is_supplier_candidate(candidate):
                 return candidate[:160]
 
     return Path(file_name).stem.replace("_", " ").replace("-", " ").strip()[:160] or "Fornecedor não identificado"
+
+
+def _is_supplier_candidate(candidate: str) -> bool:
+    if len(candidate) < 3 or len(re.findall(r"[A-Za-zÀ-ÿ]", candidate)) < 3:
+        return False
+    if re.fullmatch(r"[\d.\-/\s]+", candidate):
+        return False
+    rejected_labels = (
+        "cnpj",
+        "cpf",
+        "pagador",
+        "agência",
+        "agencia",
+        "banco",
+        "vencimento",
+        "valor do documento",
+        "linha digitável",
+        "linha digitavel",
+    )
+    lowered = candidate.lower()
+    return not any(lowered.startswith(label) for label in rejected_labels)
 
 
 def _detect_document_type(text: str, file_name: str) -> str:
