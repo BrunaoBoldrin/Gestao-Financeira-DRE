@@ -442,8 +442,18 @@ export const OverviewView: React.FC = () => {
                 <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#64748b' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
                 <Tooltip
-                  formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR')}`, '']}
+                  formatter={(value: any, name: any) => {
+                    const isExpense = String(name) === 'Despesas';
+                    const formattedValue = Number(value).toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    });
+                    return [`${isExpense ? '−' : '+'} R$ ${formattedValue}`, String(name)];
+                  }}
+                  labelFormatter={(label) => `Competência: ${label}`}
                   contentStyle={{ backgroundColor: '#0b1c30', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                  labelStyle={{ color: '#fff', fontWeight: 700 }}
+                  itemStyle={{ fontWeight: 700 }}
                 />
                 <Bar dataKey="Receitas" fill="#0b1c30" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Despesas" fill="#C5A059" radius={[4, 4, 0, 0]} />
