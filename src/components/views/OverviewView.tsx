@@ -59,7 +59,7 @@ export const OverviewView: React.FC = () => {
   const {
     filteredLancamentos,
     documentosOCR,
-    sessaoCaixa,
+    bancos,
     fechamentoMensal,
     currentUser,
     selectedUnit,
@@ -75,6 +75,13 @@ export const OverviewView: React.FC = () => {
   const [periodoRascunho, setPeriodoRascunho] = useState({ inicio: '', fim: '' });
   const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
   const periodoPersonalizadoAtivo = Boolean(periodoAplicado.inicio && periodoAplicado.fim);
+  const caixasFisicosVisiveis = bancos.filter(
+    (banco) =>
+      banco.ativo &&
+      banco.banco.toLocaleLowerCase('pt-BR').includes('caixa') &&
+      (selectedUnit === 'Todas as Unidades' || banco.unidade === selectedUnit)
+  );
+  const saldoCaixaFisico = caixasFisicosVisiveis.reduce((total, banco) => total + banco.saldo, 0);
   const periodoPersonalizadoInvalido = Boolean(
     periodoRascunho.inicio &&
     periodoRascunho.fim &&
@@ -367,21 +374,17 @@ export const OverviewView: React.FC = () => {
             <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
               Caixa Físico Recepção
             </span>
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                sessaoCaixa.status === 'ABERTO'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              {sessaoCaixa.status}
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
+              {selectedUnit === 'Todas as Unidades' ? 'Consolidado' : 'Saldo contínuo'}
             </span>
           </div>
           <p className="text-2xl font-black text-[#0b1c30]">
-            R$ {sessaoCaixa.saldoEsperado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            R$ {saldoCaixaFisico.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[11px] text-gray-500 mt-2">
-            Entradas em Dinheiro: R$ {sessaoCaixa.entradasDinheiro.toFixed(2)}
+            {caixasFisicosVisiveis.length === 0
+              ? 'Nenhuma conta de Caixa Físico nesta seleção'
+              : `${caixasFisicosVisiveis.length} caixa(s) incluído(s) · ${selectedUnit}`}
           </p>
         </div>
       </div>

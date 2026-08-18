@@ -98,6 +98,9 @@ export const DREGerencialView: React.FC = () => {
     dreData,
     lancamentos,
     selectedUnit,
+    units,
+    currentUser,
+    isFinance,
     fechamentoMensal,
     showToast
   } = useApp();
@@ -113,6 +116,9 @@ export const DREGerencialView: React.FC = () => {
 
   const currentReferenceMonth = fechamentoMensal.mesAno;
   const [selectedMonth, setSelectedMonth] = useState(currentReferenceMonth);
+  const [unidadeDre, setUnidadeDre] = useState(
+    isFinance && currentUser ? currentUser.unit : selectedUnit
+  );
   const comparisonMonth = previousMonth(selectedMonth);
 
   const availableMonths = useMemo(() => {
@@ -127,8 +133,8 @@ export const DREGerencialView: React.FC = () => {
   }, [currentReferenceMonth, lancamentos, selectedMonth]);
 
   const calculatedDre = useMemo<DREItem[]>(() => {
-    const current = summarizeMonth(lancamentos, selectedMonth, selectedUnit);
-    const previous = summarizeMonth(lancamentos, comparisonMonth, selectedUnit);
+    const current = summarizeMonth(lancamentos, selectedMonth, unidadeDre);
+    const previous = summarizeMonth(lancamentos, comparisonMonth, unidadeDre);
     const budget = (code: string) => dreData.find((item) => item.codigo === code)?.orcado || 0;
 
     const receitaBruta = sumValues(current.receitas);
@@ -188,7 +194,7 @@ export const DREGerencialView: React.FC = () => {
       },
       { codigo: '10', descricao: '(=) LUCRO LÍQUIDO DO EXERCÍCIO (RESULTADO FINAL)', tipo: 'TOTAL', nivel: 1, mesAtual: resultadoFinal, mesAnterior: resultadoFinalAnterior, orcado: budget('10') }
     ];
-  }, [comparisonMonth, dreData, lancamentos, selectedMonth, selectedUnit]);
+  }, [comparisonMonth, dreData, lancamentos, selectedMonth, unidadeDre]);
 
   const toggleExpand = (code: string) => {
     setExpandedNodes((prev) => ({ ...prev, [code]: !prev[code] }));
@@ -271,6 +277,18 @@ export const DREGerencialView: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2">
           <select
+            value={unidadeDre}
+            onChange={(event) => setUnidadeDre(event.target.value)}
+            disabled={isFinance}
+            aria-label="Unidade analisada no DRE"
+            className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e] disabled:bg-gray-100"
+          >
+            {!isFinance && <option value="Todas as Unidades">Todas as Unidades (Consolidado)</option>}
+            {units
+              .filter((unit) => unit.ativa && (!isFinance || unit.nome === currentUser?.unit))
+              .map((unit) => <option key={unit.id} value={unit.nome}>{unit.nome}</option>)}
+          </select>
+          <select
             value={selectedMonth}
             onChange={(event) => setSelectedMonth(event.target.value)}
             className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e]"
@@ -280,7 +298,7 @@ export const DREGerencialView: React.FC = () => {
             ))}
           </select>
           <button
-            onClick={() => showToast(`Relatório DRE de ${formatCompetencia(selectedMonth)} exportado em PDF!`, 'success')}
+            onClick={() => showToast(`Relatório DRE de ${formatCompetencia(selectedMonth)} — ${unidadeDre} exportado em PDF!`, 'success')}
             className="px-4 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold hover:bg-[#0b1c30] flex items-center gap-1.5 transition shadow-xs"
           >
             <span className="material-symbols-outlined text-base">picture_as_pdf</span>
@@ -297,6 +315,7 @@ export const DREGerencialView: React.FC = () => {
           <div className="flex items-center gap-2 text-xs text-gray-600 font-semibold">
             <span>Base Receita Bruta:</span>
             <span className="font-bold text-[#0b1c30]">R$ {receitaBrutaAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="text-[10px] bg-[#eff4ff] text-[#0b1c30] px-2 py-1 rounded">{unidadeDre}</span>
           </div>
         </div>
 

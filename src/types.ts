@@ -153,7 +153,7 @@ export interface DocumentoOCR {
 }
 
 export type FinalidadeMovimentacaoCaixa =
-  | 'ABERTURA_CAIXA'
+  | 'AJUSTE_SALDO'
   | 'REFORCO_TROCO'
   | 'DEPOSITO_BANCARIO'
   | 'TRANSFERENCIA_COFRE'
@@ -164,11 +164,15 @@ export type FinalidadeMovimentacaoCaixa =
 
 export interface MovimentacaoCaixaFisico {
   id: string;
-  tipo: 'SUPRIMENTO' | 'SANGRIA' | 'VENDA' | 'DESPESA';
+  tipo: 'AJUSTE' | 'SUPRIMENTO' | 'SANGRIA' | 'VENDA' | 'DESPESA';
   descricao: string;
   valor: number;
   dataHora: string;
   usuario: string;
+  unidade: string;
+  sentido: 'ENTRADA' | 'SAIDA';
+  saldoApos?: number;
+  motivoAjuste?: string;
   comprovanteRef?: string;
   finalidade?: FinalidadeMovimentacaoCaixa;
   impactoDRE?: Exclude<ImpactoDRE, 'A_CONFIRMAR'>;
@@ -187,21 +191,11 @@ export interface DetalhesMovimentacaoCaixa {
   bancoDestinoId?: string;
   lancamentoRelacionadoId?: string;
   observacoes?: string;
+  unidade?: string;
 }
 
 export interface SessaoCaixaFisico {
   id: string;
-  data: string;
-  status: 'ABERTO' | 'FECHADO';
-  saldoInicial: number;
-  entradasDinheiro: number;
-  saidasDinheiro: number;
-  saldoEsperado: number;
-  saldoContado?: number;
-  divergencia?: number;
-  observacaoFechamento?: string;
-  operadorAbertura: string;
-  operadorFechamento?: string;
   movimentacoes: MovimentacaoCaixaFisico[];
 }
 
