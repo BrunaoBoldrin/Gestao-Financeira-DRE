@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import { calculateDueDateSchedule } from '../../utils/financialDates';
+import { FinalidadeFinanceira, ImpactoDRE, SentidoFinanceiro } from '../../types';
+import { findDuplicateDocumentByHash, findFinancialMatches } from '../../utils/financialMatching';
 
 export const PendingReviewView: React.FC = () => {
   const {
@@ -11,12 +13,18 @@ export const PendingReviewView: React.FC = () => {
     setSelectedDocumentForReviewId,
     aprovarDocumentoOCR,
     rejeitarDocumentoOCR,
+    conciliarDocumentoOCR,
+    addLancamento,
     addLancamentoComDDL,
     condicoesPagamento,
     bancos,
     setCurrentView,
     showToast,
-    selectedUnit
+    selectedUnit,
+    units,
+    currentUser,
+    isFinance,
+    lancamentos
   } = useApp();
 
   const pendingDocs = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO');
@@ -36,6 +44,13 @@ export const PendingReviewView: React.FC = () => {
   const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 dias default
   const [bancoId, setBancoId] = useState('');
   const [observacoes, setObservacoes] = useState('');
+  const [unidade, setUnidade] = useState('');
+  const [sentido, setSentido] = useState<SentidoFinanceiro>('A_CONFIRMAR');
+  const [impactoDRE, setImpactoDRE] = useState<ImpactoDRE>('A_CONFIRMAR');
+  const [finalidade, setFinalidade] = useState<FinalidadeFinanceira>('A_CONFIRMAR');
+  const [acaoFinanceira, setAcaoFinanceira] = useState<'A_CONFIRMAR' | 'CRIAR_NOVO' | 'VINCULAR_EXISTENTE' | 'SOMENTE_ARQUIVAR'>('CRIAR_NOVO');
+  const [lancamentoSelecionadoId, setLancamentoSelecionadoId] = useState('');
+  const [justificativaNovo, setJustificativaNovo] = useState('');
   const itensSort = useSortableData(currentDoc?.dadosExtraidos.itens || []);
 
   useEffect(() => {
@@ -54,10 +69,21 @@ export const PendingReviewView: React.FC = () => {
       setCategoria(currentDoc.dadosExtraidos.categoria || 'Insumos Médicos & Estéticos');
       setCentroCusto(currentDoc.dadosExtraidos.centroCusto || 'Clínica / Atendimento');
       setObservacoes(currentDoc.dadosExtraidos.observacoes || '');
+      setSentido(currentDoc.dadosExtraidos.sentidoSugerido || 'A_CONFIRMAR');
+      setImpactoDRE(currentDoc.dadosExtraidos.impactoDRESugerido || 'A_CONFIRMAR');
+      setFinalidade(currentDoc.dadosExtraidos.finalidadeSugerida || 'A_CONFIRMAR');
+      setUnidade(isFinance && currentUser
+        ? currentUser.unit
+        : selectedUnit === 'Todas as Unidades'
+          ? ''
+          : selectedUnit);
+      setAcaoFinanceira('CRIAR_NOVO');
+      setLancamentoSelecionadoId('');
+      setJustificativaNovo('');
     }
-  }, [currentDoc?.id, currentDoc?.status]);
+  }, [currentDoc?.id, currentDoc?.status, currentUser?.unit, isFinance, selectedUnit]);
 
-  const unidadeLancamento = selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit;
+  const unidadeLancamento = isFinance && currentUser ? currentUser.unit : unidade;
   const availableBanks = bancos.filter(
     (banco) => banco.ativo && banco.unidade === unidadeLancamento
   );
@@ -67,6 +93,28 @@ export const PendingReviewView: React.FC = () => {
       setBancoId(availableBanks[0]?.id || '');
     }
   }, [unidadeLancamento, bancos, bancoId]);
+
+  const financialMatches = useMemo(
+    () => {
+      if (!currentDoc) return [];
+      const allowedLaunches = isFinance && currentUser
+        ? lancamentos.filter((item) => item.unidade === currentUser.unit)
+        : unidade
+          ? lancamentos.filter((item) => item.unidade === unidade)
+          : lancamentos;
+      return findFinancialMatches(currentDoc, allowedLaunches);
+    },
+    [currentDoc, lancamentos, isFinance, currentUser, unidade]
+  );
+  const duplicateDocument = useMemo(
+    () => currentDoc ? findDuplicateDocumentByHash(currentDoc, documentosOCR) : undefined,
+    [currentDoc, documentosOCR]
+  );
+
+  useEffect(() => {
+    if (!currentDoc) return;
+    setAcaoFinanceira(financialMatches.length > 0 || duplicateDocument ? 'A_CONFIRMAR' : 'CRIAR_NOVO');
+  }, [currentDoc?.id, financialMatches.length, duplicateDocument?.id]);
 
   if (!currentDoc || currentDoc.status !== 'PENDENTE_REVISAO') {
     return (
@@ -118,8 +166,20 @@ export const PendingReviewView: React.FC = () => {
   };
 
   const handleAprovar = () => {
-    if (!dataVencimento) {
-      showToast('Informe a data de vencimento antes de aprovar o documento.', 'error');
+    if (!dataEmissao || !dataVencimento) {
+      showToast('Informe as datas do documento antes de aprovar.', 'error');
+      return;
+    }
+    if (!unidadeLancamento) {
+      showToast('Informe a unidade responsável por esta movimentação.', 'error');
+      return;
+    }
+    if (sentido === 'A_CONFIRMAR' || impactoDRE === 'A_CONFIRMAR' || finalidade === 'A_CONFIRMAR') {
+      showToast('Confirme o sentido, o impacto no DRE e a finalidade financeira.', 'error');
+      return;
+    }
+    if (acaoFinanceira === 'A_CONFIRMAR') {
+      showToast('Confirme se deseja vincular, registrar como novo ou somente arquivar.', 'error');
       return;
     }
     const banco = availableBanks.find((item) => item.id === bancoId);
@@ -127,7 +187,16 @@ export const PendingReviewView: React.FC = () => {
       showToast(`Cadastre ou selecione uma conta bancária para "${unidadeLancamento}".`, 'error');
       return;
     }
-    aprovarDocumentoOCR(currentDoc.id, {
+
+    const requiresJustification = Boolean(
+      duplicateDocument || financialMatches.some((match) => match.nivel !== 'COINCIDENCIA_VALOR')
+    );
+    if (acaoFinanceira === 'CRIAR_NOVO' && requiresJustification && !justificativaNovo.trim()) {
+      showToast('Explique por que este documento deve ser registrado como uma nova movimentação.', 'error');
+      return;
+    }
+
+    const dadosFinais = {
       fornecedor,
       cnpj,
       dataEmissao,
@@ -135,32 +204,84 @@ export const PendingReviewView: React.FC = () => {
       valorTotal: numVal,
       categoria,
       centroCusto,
-      observacoes
-    });
+      observacoes: [observacoes, justificativaNovo].filter(Boolean).join(' | '),
+      pagador: currentDoc.dadosExtraidos.pagador,
+      recebedor: currentDoc.dadosExtraidos.recebedor,
+      documentoNumero: currentDoc.dadosExtraidos.documentoNumero,
+      linhaDigitavel: currentDoc.dadosExtraidos.linhaDigitavel,
+      chaveDocumento: currentDoc.dadosExtraidos.chaveDocumento,
+      identificadorTransacao: currentDoc.dadosExtraidos.identificadorTransacao,
+      sentidoSugerido: sentido,
+      impactoDRESugerido: impactoDRE,
+      finalidadeSugerida: finalidade,
+      parcelaNumero: currentDoc.dadosExtraidos.parcelaNumero,
+      paginaOrigem: currentDoc.dadosExtraidos.paginaOrigem,
+      itens: currentDoc.dadosExtraidos.itens || []
+    };
 
-    // Create DDL expense entries automatically
-    addLancamentoComDDL(
-      {
-        descricao: `${currentDoc.nomeArquivo} - ${fornecedor}`,
-        tipo: 'DESPESA',
-        categoria: categoria || 'Insumos Médicos & Estéticos',
-        centroCusto: centroCusto || 'Clínica / Atendimento',
-        valor: numVal,
-        dataVencimento: dataVencimento || dataEmissao,
-        status: 'PENDENTE',
-        fornecedorCliente: fornecedor || 'Fornecedor Diverso',
-        bancoId: banco.id,
-        contaBancaria: banco.banco,
-        formaPagamento: 'BOLETO',
-        unidade: unidadeLancamento,
-        observacoes: observacoes || `Processado via OCR (${currentDoc.confiancaOCR}% confiança)`,
-        comprovanteUrl: currentDoc.previewUrl,
-        documentoRef: currentDoc.id
-      },
-      dataEmissao || new Date().toISOString().substring(0, 10),
-      prazos,
-      dataVencimento
-    );
+    if (acaoFinanceira === 'VINCULAR_EXISTENTE') {
+      if (!lancamentoSelecionadoId) {
+        showToast('Selecione o lançamento que será vinculado ao documento.', 'error');
+        return;
+      }
+      conciliarDocumentoOCR(
+        currentDoc.id,
+        lancamentoSelecionadoId,
+        dadosFinais,
+        banco.id,
+        justificativaNovo
+      );
+      advanceToNextDoc();
+      return;
+    }
+
+    aprovarDocumentoOCR(currentDoc.id, dadosFinais);
+    if (acaoFinanceira === 'SOMENTE_ARQUIVAR' || impactoDRE === 'NAO_AFETA') {
+      showToast('Documento aprovado sem criar receita ou despesa no DRE.', 'success');
+      advanceToNextDoc();
+      return;
+    }
+
+    const isRealizedDocument = ['COMPROVANTE', 'RECIBO', 'EXTRATO'].includes(currentDoc.tipo);
+    const launchType = impactoDRE === 'RECEITA' ? 'RECEITA' : 'DESPESA';
+    const baseLaunch = {
+      descricao: `${currentDoc.nomeArquivo} - ${fornecedor}`,
+      tipo: launchType as 'RECEITA' | 'DESPESA',
+      categoria: categoria || (launchType === 'RECEITA' ? 'Procedimentos Estéticos' : 'Despesas Operacionais'),
+      centroCusto: centroCusto || 'Administrativo',
+      valor: numVal,
+      dataVencimento: dataVencimento || dataEmissao,
+      dataPagamento: isRealizedDocument ? dataEmissao : undefined,
+      status: isRealizedDocument ? 'PAGO' as const : 'PENDENTE' as const,
+      fornecedorCliente: fornecedor || (launchType === 'RECEITA' ? 'Cliente Diverso' : 'Fornecedor Diverso'),
+      cpfCnpjContraparte: cnpj,
+      bancoId: banco.id,
+      contaBancaria: banco.banco,
+      formaPagamento: currentDoc.tipo === 'BOLETO' ? 'BOLETO' as const : currentDoc.dadosExtraidos.identificadorTransacao ? 'PIX' as const : 'TRANSFERENCIA' as const,
+      unidade: unidadeLancamento,
+      observacoes: dadosFinais.observacoes || `Processado via OCR V2 (${currentDoc.confiancaOCR}% confiança)`,
+      comprovanteUrl: currentDoc.previewUrl,
+      documentoRef: currentDoc.nomeArquivo,
+      linhaDigitavel: currentDoc.dadosExtraidos.linhaDigitavel,
+      chaveDocumento: currentDoc.dadosExtraidos.chaveDocumento,
+      identificadorTransacao: currentDoc.dadosExtraidos.identificadorTransacao,
+      impactoDRE: impactoDRE as 'RECEITA' | 'DESPESA',
+      finalidadeFinanceira: finalidade as Exclude<FinalidadeFinanceira, 'A_CONFIRMAR'>,
+      documentoConciliadoId: currentDoc.id,
+      numeroParcela: currentDoc.totalEntidadesDocumento && currentDoc.entidadeNumero
+        ? `${currentDoc.entidadeNumero}/${currentDoc.totalEntidadesDocumento}`
+        : currentDoc.dadosExtraidos.parcelaNumero
+    };
+
+    if (
+      launchType === 'DESPESA' &&
+      ['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo) &&
+      !currentDoc.totalEntidadesDocumento
+    ) {
+      addLancamentoComDDL(baseLaunch, dataEmissao, prazos, dataVencimento);
+    } else {
+      addLancamento(baseLaunch);
+    }
 
     advanceToNextDoc();
   };
@@ -174,21 +295,23 @@ export const PendingReviewView: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Top Document Selector Bar */}
-      <div className="bg-white p-4 rounded-xl border border-[#e5eeff] shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="bg-white p-4 rounded-xl border border-[#e5eeff] shadow-xs flex flex-col sm:flex-row items-center gap-4 lg:gap-6">
+        <div className="flex items-center gap-3 sm:max-w-[42%] sm:flex-none">
           <span className="material-symbols-outlined text-[#C5A059] text-2xl">rule</span>
           <div>
             <h2 className="text-base font-bold text-[#0b1c30]">
               Auditoria e Conferência OCR Lado a Lado
             </h2>
             <p className="text-xs text-gray-500">
-              Verifique os dados extraídos pelo OCR em paralelo com a imagem/PDF original do documento.
+              {currentDoc.totalEntidadesDocumento
+                ? `${currentDoc.totalEntidadesDocumento} movimentações foram identificadas. Confirme cada uma individualmente.`
+                : 'Confirme os dados, a natureza financeira e possíveis correspondências antes da aprovação.'}
             </p>
           </div>
         </div>
 
         {/* Document Selector Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto max-w-md">
+        <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 sm:flex-1">
           {documentosOCR.map((doc) => (
             <button
               key={doc.id}
@@ -202,7 +325,11 @@ export const PendingReviewView: React.FC = () => {
               <span className="material-symbols-outlined text-sm">
                 {doc.status === 'APROVADO' ? 'check_circle' : 'pending'}
               </span>
-              <span className="truncate max-w-[100px]">{doc.nomeArquivo}</span>
+              <span className="truncate max-w-[160px]">
+                {doc.totalEntidadesDocumento && doc.entidadeNumero
+                  ? `${doc.tipo} ${doc.entidadeNumero}/${doc.totalEntidadesDocumento}`
+                  : doc.nomeArquivo}
+              </span>
             </button>
           ))}
         </div>
@@ -287,29 +414,100 @@ export const PendingReviewView: React.FC = () => {
               </span>
             </div>
 
-            <div>
-              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                Conta para pagamento <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={bancoId}
-                onChange={(e) => setBancoId(e.target.value)}
-                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] bg-white font-semibold"
-              >
-                <option value="" disabled>Selecione a conta...</option>
-                {availableBanks.map((banco) => (
-                  <option key={banco.id} value={banco.id}>{banco.banco} — {banco.unidade}</option>
-                ))}
-              </select>
-              {availableBanks.length === 0 && (
-                <p className="text-[10px] text-rose-600 mt-1">Nenhuma conta ativa cadastrada para esta unidade.</p>
-              )}
+            {currentDoc.totalEntidadesDocumento && currentDoc.entidadeNumero && (
+              <div className="flex items-center justify-between gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900">
+                <div>
+                  <p className="text-xs font-bold">Movimentação {currentDoc.entidadeNumero} de {currentDoc.totalEntidadesDocumento}</p>
+                  <p className="text-[10px] text-blue-700">
+                    Página {currentDoc.dadosExtraidos.paginaOrigem || 'não identificada'} · aprovação individual
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold bg-white border border-blue-200 px-2 py-1 rounded">{currentDoc.tipo}</span>
+              </div>
+            )}
+
+            <div className="bg-[#f8f9ff] border border-[#d3e4fe] p-3 rounded-lg space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#C5A059] text-lg">account_tree</span>
+                <div>
+                  <p className="text-xs font-bold text-[#0b1c30]">Classificação financeira</p>
+                  <p className="text-[10px] text-gray-500">A sugestão do OCR só será aplicada depois da sua confirmação.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-600 mb-1">Movimento</label>
+                  <select value={sentido} onChange={(e) => setSentido(e.target.value as SentidoFinanceiro)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
+                    <option value="A_CONFIRMAR">Confirmar...</option>
+                    <option value="ENTRADA">Entrada</option>
+                    <option value="SAIDA">Saída</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-600 mb-1">Impacto no DRE</label>
+                  <select value={impactoDRE} onChange={(e) => setImpactoDRE(e.target.value as ImpactoDRE)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
+                    <option value="A_CONFIRMAR">Confirmar...</option>
+                    <option value="RECEITA">Receita</option>
+                    <option value="DESPESA">Despesa</option>
+                    <option value="NAO_AFETA">Não afeta o DRE</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-600 mb-1">Finalidade</label>
+                  <select value={finalidade} onChange={(e) => setFinalidade(e.target.value as FinalidadeFinanceira)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
+                    <option value="A_CONFIRMAR">Confirmar...</option>
+                    <option value="RECEBIMENTO_CLIENTE">Recebimento de cliente</option>
+                    <option value="PAGAMENTO_FORNECEDOR">Pagamento de fornecedor</option>
+                    <option value="TRANSFERENCIA_INTERNA">Transferência interna</option>
+                    <option value="EMPRESTIMO">Empréstimo</option>
+                    <option value="APORTE_SOCIO">Aporte de sócio</option>
+                    <option value="RETIRADA_SOCIO">Retirada de sócio</option>
+                    <option value="ESTORNO_DEVOLUCAO">Estorno/devolução</option>
+                    <option value="TARIFA_BANCARIA">Tarifa bancária</option>
+                    <option value="ADIANTAMENTO_CLIENTE">Adiantamento de cliente</option>
+                    <option value="OUTRO">Outro</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Unidade / Filial *</label>
+                <select
+                  value={unidade}
+                  onChange={(e) => setUnidade(e.target.value)}
+                  disabled={isFinance}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs bg-white font-semibold disabled:opacity-70"
+                >
+                  <option value="" disabled>Selecione a unidade...</option>
+                  {units.filter((unit) => unit.ativa && unit.id !== 'all').map((unit) => (
+                    <option key={unit.id} value={unit.nome}>{unit.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Conta bancária relacionada *</label>
+                <select
+                  value={bancoId}
+                  onChange={(e) => setBancoId(e.target.value)}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs bg-white font-semibold"
+                >
+                  <option value="" disabled>Selecione a conta...</option>
+                  {availableBanks.map((banco) => (
+                    <option key={banco.id} value={banco.id}>{banco.banco} — {banco.unidade}</option>
+                  ))}
+                </select>
+                {unidadeLancamento && availableBanks.length === 0 && (
+                  <p className="text-[10px] text-rose-600 mt-1">Nenhuma conta ativa cadastrada para esta unidade.</p>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Razão Social / Fornecedor
+                  Contraparte / Cliente / Fornecedor
                 </label>
                 <input
                   type="text"
@@ -320,7 +518,7 @@ export const PendingReviewView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">CNPJ Fornecedor</label>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">CPF/CNPJ da contraparte</label>
                 <input
                   type="text"
                   value={cnpj}
@@ -329,6 +527,15 @@ export const PendingReviewView: React.FC = () => {
                 />
               </div>
             </div>
+
+            {(currentDoc.dadosExtraidos.pagador || currentDoc.dadosExtraidos.recebedor || currentDoc.dadosExtraidos.identificadorTransacao || currentDoc.dadosExtraidos.linhaDigitavel) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-[10px]">
+                {currentDoc.dadosExtraidos.pagador && <p><strong>Pagador:</strong> {currentDoc.dadosExtraidos.pagador}</p>}
+                {currentDoc.dadosExtraidos.recebedor && <p><strong>Recebedor:</strong> {currentDoc.dadosExtraidos.recebedor}</p>}
+                {currentDoc.dadosExtraidos.identificadorTransacao && <p className="break-all"><strong>ID da transação:</strong> {currentDoc.dadosExtraidos.identificadorTransacao}</p>}
+                {currentDoc.dadosExtraidos.linhaDigitavel && <p className="break-all"><strong>Linha digitável:</strong> {currentDoc.dadosExtraidos.linhaDigitavel}</p>}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -354,6 +561,7 @@ export const PendingReviewView: React.FC = () => {
             </div>
 
             {/* DDL Condition selector and live preview */}
+            {impactoDRE === 'DESPESA' && ['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo) && (
             <div className="bg-[#f8f9ff] border border-[#C5A059]/40 p-3 rounded-lg space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-[#0b1c30] flex items-center gap-1">
@@ -372,7 +580,7 @@ export const PendingReviewView: React.FC = () => {
                 onChange={(e) => setSelectedCondicaoId(e.target.value)}
                 className="w-full px-2.5 py-1.5 border border-[#d3e4fe] rounded-md text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e]"
               >
-                {condicoesPagamento.filter((c) => c.ativa).map((c) => (
+                {condicoesPagamento.filter((c) => c.ativa && (!currentDoc.totalEntidadesDocumento || c.prazosDias.length === 1)).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nome}
                   </option>
@@ -435,6 +643,7 @@ export const PendingReviewView: React.FC = () => {
                 </div>
               )}
             </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -472,6 +681,74 @@ export const PendingReviewView: React.FC = () => {
                 </select>
               </div>
             </div>
+
+            {(duplicateDocument || financialMatches.length > 0) && (
+              <div className="border border-amber-300 bg-amber-50 rounded-lg p-3 space-y-3">
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-amber-700">rule_folder</span>
+                  <div>
+                    <p className="text-xs font-bold text-amber-950">Confirmação de possível correspondência</p>
+                    <p className="text-[10px] text-amber-800">
+                      Nenhuma vinculação será feita automaticamente. Valor igual, sozinho, é apenas coincidência.
+                    </p>
+                  </div>
+                </div>
+
+                {duplicateDocument && (
+                  <div className="bg-white border border-rose-200 rounded p-2 text-[11px]">
+                    <p className="font-bold text-rose-800">Arquivo idêntico já encontrado</p>
+                    <p className="text-gray-600">{duplicateDocument.nomeArquivo} · status {duplicateDocument.status}</p>
+                  </div>
+                )}
+
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {financialMatches.slice(0, 8).map((match) => (
+                    <label key={match.lancamento.id} className="flex items-start gap-2 bg-white border border-amber-200 rounded p-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="financial-match"
+                        checked={lancamentoSelecionadoId === match.lancamento.id}
+                        onChange={() => {
+                          setLancamentoSelecionadoId(match.lancamento.id);
+                          setAcaoFinanceira('VINCULAR_EXISTENTE');
+                        }}
+                        className="mt-0.5"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <strong className="truncate text-[11px] text-[#0b1c30]">{match.lancamento.fornecedorCliente}</strong>
+                          <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            match.nivel === 'DUPLICIDADE_FORTE'
+                              ? 'bg-rose-100 text-rose-800'
+                              : match.nivel === 'CORRESPONDENCIA_PROVAVEL'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {match.nivel === 'COINCIDENCIA_VALOR' ? 'VALOR IGUAL' : match.nivel.replaceAll('_', ' ')}
+                          </span>
+                        </span>
+                        <span className="block text-[10px] text-gray-600">
+                          R$ {match.lancamento.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} · {match.lancamento.dataVencimento} · {match.motivos.join(', ')}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button type="button" onClick={() => setAcaoFinanceira('VINCULAR_EXISTENTE')} disabled={!lancamentoSelecionadoId} className="px-2 py-1.5 rounded border border-emerald-300 bg-white text-emerald-800 text-[10px] font-bold disabled:opacity-40">Vincular selecionado</button>
+                  <button type="button" onClick={() => setAcaoFinanceira('CRIAR_NOVO')} className="px-2 py-1.5 rounded border border-blue-300 bg-white text-blue-800 text-[10px] font-bold">Registrar como novo</button>
+                  <button type="button" onClick={() => setAcaoFinanceira('SOMENTE_ARQUIVAR')} className="px-2 py-1.5 rounded border border-gray-300 bg-white text-gray-700 text-[10px] font-bold">Somente arquivar</button>
+                </div>
+
+                {acaoFinanceira === 'CRIAR_NOVO' && (duplicateDocument || financialMatches.some((match) => match.nivel !== 'COINCIDENCIA_VALOR')) && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-amber-900 mb-1">Justificativa para registrar como novo *</label>
+                    <input value={justificativaNovo} onChange={(e) => setJustificativaNovo(e.target.value)} className="w-full px-2.5 py-1.5 border border-amber-300 rounded text-xs bg-white" placeholder="Ex.: fornecedor diferente; cobrança referente a outro serviço..." />
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center justify-between">
@@ -534,7 +811,13 @@ export const PendingReviewView: React.FC = () => {
               className="px-6 py-2.5 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] transition flex items-center gap-1.5 shadow-md"
             >
               <span className="material-symbols-outlined text-base">task_alt</span>
-              Aprovar & Gerar Lançamento Financeiro
+              {acaoFinanceira === 'A_CONFIRMAR'
+                ? 'Confirme a ação financeira'
+                : acaoFinanceira === 'VINCULAR_EXISTENTE'
+                  ? 'Confirmar vínculo e conciliar'
+                  : acaoFinanceira === 'SOMENTE_ARQUIVAR' || impactoDRE === 'NAO_AFETA'
+                    ? 'Aprovar sem afetar o DRE'
+                    : `Aprovar e registrar ${impactoDRE === 'RECEITA' ? 'receita' : 'despesa'}`}
             </button>
           </div>
         </div>

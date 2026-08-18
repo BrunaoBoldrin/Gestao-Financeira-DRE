@@ -39,9 +39,12 @@ class OCRApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(payload["success"])
+        self.assertEqual(payload["schemaVersion"], 2)
         self.assertEqual(payload["motor"], "python-local")
         self.assertEqual(payload["dadosExtraidos"]["fornecedor"], "Galderma Brasil Ltda")
         self.assertEqual(payload["dadosExtraidos"]["valorTotal"], 12850.75)
+        self.assertEqual(len(payload["metadados"]["hashArquivo"]), 64)
+        self.assertIn("entidadesFinanceiras", payload)
 
     def test_rejects_missing_content(self):
         response = self.client.post(

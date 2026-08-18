@@ -119,6 +119,94 @@ class OCRServiceTests(unittest.TestCase):
         self.assertEqual(result["tipo"], "BOLETO")
         self.assertEqual(result["valorTotal"], 1250.00)
 
+    def test_splits_two_boletos_for_individual_confirmation(self):
+        text = """
+        BOLETO BANCÁRIO
+        Beneficiário: Fornecedor Alfa Ltda
+        CNPJ: 11.111.111/0001-11
+        Vencimento: 20/08/2026
+        Valor do documento: R$ 1.250,00
+        00190.00009 01234.567890 12345.678901 1 12340000125000
+
+        BOLETO BANCÁRIO
+        Beneficiário: Fornecedor Beta Ltda
+        CNPJ: 22.222.222/0001-22
+        Vencimento: 05/09/2026
+        Valor do documento: R$ 980,50
+        03399.00005 09876.543210 98765.432109 2 23450000098050
+        """
+        result = analyze_document(
+            content=text.encode(),
+            mime_type="text/plain",
+            file_name="dois_boletos.txt",
+            max_pages=5,
+        )
+
+        entities = result["entidadesFinanceiras"]
+        self.assertEqual(len(entities), 2)
+        self.assertEqual([item["valorTotal"] for item in entities], [1250.0, 980.5])
+        self.assertEqual([item["dataVencimento"] for item in entities], ["2026-08-20", "2026-09-05"])
+
+    def test_splits_nfe_installments(self):
+        xml = """<nfeProc><NFe><infNFe Id="NFe35123456789012345678901234567890123456789012">
+        <ide><dhEmi>2026-08-05T10:00:00-03:00</dhEmi></ide>
+        <emit><CNPJ>02345678000112</CNPJ><xNome>Galderma Brasil Ltda</xNome></emit>
+        <total><ICMSTot><vNF>3000.00</vNF></ICMSTot></total><cobr>
+        <dup><nDup>001</nDup><dVenc>2026-09-05</dVenc><vDup>1000.00</vDup></dup>
+        <dup><nDup>002</nDup><dVenc>2026-10-05</dVenc><vDup>2000.00</vDup></dup>
+        </cobr></infNFe></NFe></nfeProc>"""
+        result = analyze_document(
+            content=xml.encode(),
+            mime_type="application/xml",
+            file_name="nfe_parcelada.xml",
+            max_pages=5,
+        )
+
+        entities = result["entidadesFinanceiras"]
+        self.assertEqual(len(entities), 2)
+        self.assertEqual(entities[0]["parcelaNumero"], "001")
+        self.assertEqual(entities[1]["dataVencimento"], "2026-10-05")
+        self.assertEqual(sum(item["valorTotal"] for item in entities), 3000.0)
+
+    def test_splits_statement_income_expense_and_transfer(self):
+        text = """
+        EXTRATO BANCÁRIO Agência 0001 Conta 12345-6 Saldo 10.000,00
+        01/08/2026 PIX RECEBIDO CLIENTE MARIA 1.500,00 C
+        02/08/2026 TARIFA BANCARIA 25,00 D
+        03/08/2026 TRANSFERENCIA ENTRE CONTAS 500,00 D
+        """
+        result = analyze_document(
+            content=text.encode(),
+            mime_type="text/plain",
+            file_name="extrato_agosto.txt",
+            max_pages=5,
+        )
+
+        entities = result["entidadesFinanceiras"]
+        self.assertEqual(len(entities), 3)
+        self.assertEqual(entities[0]["sentidoSugerido"], "ENTRADA")
+        self.assertEqual(entities[0]["impactoDRESugerido"], "RECEITA")
+        self.assertEqual(entities[1]["finalidadeSugerida"], "TARIFA_BANCARIA")
+        self.assertEqual(entities[2]["impactoDRESugerido"], "NAO_AFETA")
+
+    def test_classifies_client_pix_receipt_as_revenue_suggestion(self):
+        text = """
+        COMPROVANTE DE PIX
+        Você recebeu um Pix
+        Pagador: Cliente Maria da Silva
+        Recebedor: Royal Face Matriz
+        Valor total: R$ 350,00
+        Data: 18/08/2026
+        EndToEndId: E12345678202608181234ABCDEF
+        """
+        result = parse_financial_fields(text, "pix_recebido.pdf")
+
+        self.assertEqual(result["tipo"], "COMPROVANTE")
+        self.assertEqual(result["sentidoSugerido"], "ENTRADA")
+        self.assertEqual(result["impactoDRESugerido"], "RECEITA")
+        self.assertEqual(result["finalidadeSugerida"], "RECEBIMENTO_CLIENTE")
+        self.assertEqual(result["identificadorTransacao"], "E12345678202608181234ABCDEF")
+
     @unittest.skipUnless(shutil.which("tesseract"), "Tesseract não instalado")
     def test_extracts_image_with_tesseract(self):
         image = Image.new("RGB", (1800, 650), "white")

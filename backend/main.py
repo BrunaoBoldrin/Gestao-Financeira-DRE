@@ -25,6 +25,31 @@ app = FastAPI(
     redoc_url=None,
 )
 
+
+def serialize_financial_data(data: dict) -> dict:
+    return {
+        "fornecedor": data.get("fornecedor", ""),
+        "cnpj": data.get("cnpj", ""),
+        "dataEmissao": data.get("dataEmissao", ""),
+        "dataVencimento": data.get("dataVencimento", ""),
+        "valorTotal": data.get("valorTotal", 0),
+        "categoria": data.get("categoria", "Despesas Operacionais"),
+        "centroCusto": data.get("centroCusto", "Administrativo"),
+        "linhaDigitavel": data.get("linhaDigitavel", ""),
+        "chaveDocumento": data.get("chaveDocumento", ""),
+        "identificadorTransacao": data.get("identificadorTransacao", ""),
+        "documentoNumero": data.get("documentoNumero", ""),
+        "pagador": data.get("pagador", ""),
+        "recebedor": data.get("recebedor", ""),
+        "sentidoSugerido": data.get("sentidoSugerido", "A_CONFIRMAR"),
+        "impactoDRESugerido": data.get("impactoDRESugerido", "A_CONFIRMAR"),
+        "finalidadeSugerida": data.get("finalidadeSugerida", "A_CONFIRMAR"),
+        "parcelaNumero": data.get("parcelaNumero", ""),
+        "paginaOrigem": data.get("paginaOrigem"),
+        "observacoes": data.get("observacoes", ""),
+        "itens": data.get("itens", []),
+    }
+
 allowed_origins = [
     origin.strip()
     for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
@@ -74,24 +99,22 @@ def run_ocr(request: OCRRequest) -> dict:
 
     return {
         "success": True,
-        "dadosExtraidos": {
-            "fornecedor": result["fornecedor"],
-            "cnpj": result["cnpj"],
-            "dataEmissao": result["dataEmissao"],
-            "dataVencimento": result["dataVencimento"],
-            "valorTotal": result["valorTotal"],
-            "categoria": result["categoria"],
-            "centroCusto": result["centroCusto"],
-            "linhaDigitavel": result["linhaDigitavel"],
-            "observacoes": result["observacoes"],
-            "itens": result["itens"],
-        },
+        "schemaVersion": 2,
+        "dadosExtraidos": serialize_financial_data(result),
+        "entidadesFinanceiras": [
+            {
+                "tipo": entity.get("tipo", result["tipo"]),
+                "dadosExtraidos": serialize_financial_data(entity),
+            }
+            for entity in result.get("entidadesFinanceiras", [])
+        ],
         "tipo": result["tipo"],
         "confiancaOCR": result["confiancaOCR"],
         "motor": result["motor"],
         "metadados": {
             "fonteExtracao": result["fonteExtracao"],
             "paginasProcessadas": result["paginasProcessadas"],
+            "hashArquivo": result["hashArquivo"],
         },
     }
 

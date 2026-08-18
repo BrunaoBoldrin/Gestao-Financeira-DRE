@@ -3,26 +3,140 @@ import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import { normalizeDateValue } from '../../utils/dateRange';
+import { FinalidadeMovimentacaoCaixa } from '../../types';
 
 export const CaixaFisicoView: React.FC = () => {
-  const { sessaoCaixa, abrirCaixa, registrarMovimentacaoCaixa, fecharCaixa, canExecuteFinancialActions } = useApp();
+  const {
+    sessaoCaixa,
+    abrirCaixa,
+    registrarMovimentacaoCaixa,
+    fecharCaixa,
+    addTransferencia,
+    canExecuteFinancialActions,
+    bancos,
+    lancamentos,
+    selectedUnit,
+    currentUser,
+    isFinance,
+    showToast
+  } = useApp();
 
   const [modalType, setModalType] = useState<'ABERTURA' | 'SANGRIA' | 'SUPRIMENTO' | 'VENDA' | 'FECHAMENTO' | null>(null);
   const [valorInput, setValorInput] = useState('');
   const [descricaoInput, setDescricaoInput] = useState('');
   const [observacaoFechamento, setObservacaoFechamento] = useState('');
+  const [finalidade, setFinalidade] = useState<FinalidadeMovimentacaoCaixa>('OUTRO');
+  const [bancoTransferenciaId, setBancoTransferenciaId] = useState('');
+  const [lancamentoRelacionadoId, setLancamentoRelacionadoId] = useState('');
+  const [anexo, setAnexo] = useState<File | null>(null);
   const { sortedItems: sortedMovimentacoes, sortConfig, requestSort } = useSortableData(sessaoCaixa.movimentacoes);
 
-  const handleActionSubmit = (e: React.FormEvent) => {
+  const unidadeAtual = isFinance && currentUser
+    ? currentUser.unit
+    : selectedUnit === 'Todas as Unidades'
+      ? 'Royal Face - Matriz'
+      : selectedUnit;
+  const contasUnidade = bancos.filter((banco) => banco.ativo && banco.unidade === unidadeAtual);
+  const contaCaixa = contasUnidade.find((banco) => banco.banco.toLowerCase().includes('caixa'));
+  const contasBancarias = contasUnidade.filter((banco) => banco.id !== contaCaixa?.id);
+  const despesasPendentes = lancamentos.filter(
+    (item) => item.unidade === unidadeAtual && item.tipo === 'DESPESA' && item.status !== 'PAGO' && item.status !== 'CANCELADO'
+  );
+
+  const readAttachment = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Falha ao ler o anexo.'));
+    reader.readAsDataURL(file);
+  });
+
+  const handleActionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!modalType) return;
 
     const val = parseFloat(valorInput);
+    if (!Number.isFinite(val) || val <= 0) {
+      showToast('Informe um valor maior que zero.', 'error');
+      return;
+    }
+    if (modalType === 'SANGRIA' && val > sessaoCaixa.saldoEsperado) {
+      showToast('A sangria não pode superar o saldo esperado em gaveta.', 'error');
+      return;
+    }
+
+    let comprovanteUrl: string | undefined;
+    if (anexo) {
+      try {
+        comprovanteUrl = await readAttachment(anexo);
+      } catch {
+        showToast('Não foi possível ler o comprovante selecionado.', 'error');
+        return;
+      }
+    }
 
     if (modalType === 'ABERTURA') {
       abrirCaixa(val);
     } else if (modalType === 'SANGRIA' || modalType === 'SUPRIMENTO' || modalType === 'VENDA') {
-      registrarMovimentacaoCaixa(modalType, descricaoInput || modalType, val);
+      if (modalType === 'SANGRIA' && finalidade === 'DEPOSITO_BANCARIO') {
+        if (!contaCaixa || !bancoTransferenciaId) {
+          showToast('Selecione a conta bancária que receberá o depósito da sangria.', 'error');
+          return;
+        }
+        addTransferencia({
+          origemBancoId: contaCaixa.id,
+          destinoBancoId: bancoTransferenciaId,
+          valor: val,
+          data: new Date().toISOString().substring(0, 10),
+          descricao: descricaoInput || 'Sangria para depósito bancário',
+          unidade: unidadeAtual,
+          comprovanteUrl,
+          documentoRef: anexo?.name
+        });
+      } else if (modalType === 'SUPRIMENTO' && bancoTransferenciaId) {
+        if (!contaCaixa) {
+          showToast('Cadastre uma conta do tipo Caixa Físico para esta unidade.', 'error');
+          return;
+        }
+        addTransferencia({
+          origemBancoId: bancoTransferenciaId,
+          destinoBancoId: contaCaixa.id,
+          valor: val,
+          data: new Date().toISOString().substring(0, 10),
+          descricao: descricaoInput || 'Suprimento de caixa',
+          unidade: unidadeAtual,
+          comprovanteUrl,
+          documentoRef: anexo?.name
+        });
+      } else {
+        if (modalType === 'SANGRIA' && finalidade === 'PAGAMENTO_DESPESA' && !lancamentoRelacionadoId) {
+          showToast('Selecione a despesa que será liquidada pela sangria.', 'error');
+          return;
+        }
+        if (modalType === 'SANGRIA' && finalidade === 'PAGAMENTO_DESPESA') {
+          const despesa = despesasPendentes.find((item) => item.id === lancamentoRelacionadoId);
+          if (!despesa || Math.abs(despesa.valor - val) > 0.01) {
+            showToast('O valor deve ser igual ao da despesa selecionada. Pagamentos parciais ainda não são suportados.', 'error');
+            return;
+          }
+        }
+        const impactoDRE = modalType === 'VENDA' ? 'RECEITA' as const : 'NAO_AFETA' as const;
+        const statusConciliacao = finalidade === 'OUTRO' ? 'PENDENTE' as const : 'CONCILIADO' as const;
+        registrarMovimentacaoCaixa(
+          modalType,
+          descricaoInput || modalType,
+          val,
+          comprovanteUrl || anexo?.name,
+          {
+            finalidade: modalType === 'VENDA' ? 'VENDA_DINHEIRO' : finalidade,
+            impactoDRE,
+            statusConciliacao,
+            bancoOrigemId: modalType === 'SANGRIA' ? contaCaixa?.id : bancoTransferenciaId || undefined,
+            bancoDestinoId: modalType === 'SUPRIMENTO' ? contaCaixa?.id : bancoTransferenciaId || undefined,
+            lancamentoRelacionadoId: lancamentoRelacionadoId || undefined,
+            observacoes: descricaoInput
+          }
+        );
+      }
     } else if (modalType === 'FECHAMENTO') {
       fecharCaixa(val, observacaoFechamento);
     }
@@ -31,6 +145,10 @@ export const CaixaFisicoView: React.FC = () => {
     setValorInput('');
     setDescricaoInput('');
     setObservacaoFechamento('');
+    setFinalidade('OUTRO');
+    setBancoTransferenciaId('');
+    setLancamentoRelacionadoId('');
+    setAnexo(null);
   };
 
   return (
@@ -60,6 +178,9 @@ export const CaixaFisicoView: React.FC = () => {
               onClick={() => {
                 setModalType('SANGRIA');
                 setDescricaoInput('Sangria de Caixa / Depósito');
+                setFinalidade('DEPOSITO_BANCARIO');
+                setBancoTransferenciaId('');
+                setLancamentoRelacionadoId('');
               }}
               className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-md text-xs font-bold hover:bg-rose-100 transition"
             >
@@ -69,6 +190,9 @@ export const CaixaFisicoView: React.FC = () => {
               onClick={() => {
                 setModalType('SUPRIMENTO');
                 setDescricaoInput('Reforço de Troco');
+                setFinalidade('REFORCO_TROCO');
+                setBancoTransferenciaId('');
+                setLancamentoRelacionadoId('');
               }}
               className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-xs font-bold hover:bg-emerald-100 transition"
             >
@@ -187,6 +311,8 @@ export const CaixaFisicoView: React.FC = () => {
                 <SortableTableHeader label="Data / Hora" sortKey="data" accessor={(item) => normalizeDateValue(item.dataHora) || item.dataHora} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Operação" sortKey="operacao" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Descrição / Histórico" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Finalidade" sortKey="finalidade" accessor={(item) => item.finalidade || ''} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Conciliação" sortKey="conciliacao" accessor={(item) => item.statusConciliacao || ''} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Operador" sortKey="operador" accessor={(item) => item.usuario} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Valor (R$)" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
               </tr>
@@ -206,7 +332,26 @@ export const CaixaFisicoView: React.FC = () => {
                         {mov.tipo}
                       </span>
                     </td>
-                    <td className="p-3 font-medium text-[#0b1c30]">{mov.descricao}</td>
+                    <td className="p-3 font-medium text-[#0b1c30]">
+                      {mov.descricao}
+                      {mov.comprovanteRef && mov.comprovanteRef.startsWith('data:') && (
+                        <a href={mov.comprovanteRef} target="_blank" rel="noreferrer" className="block mt-1 text-[10px] text-blue-700 hover:underline">
+                          Abrir anexo
+                        </a>
+                      )}
+                    </td>
+                    <td className="p-3 text-[10px] font-semibold text-gray-700">{(mov.finalidade || 'OUTRO').replaceAll('_', ' ')}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                        mov.statusConciliacao === 'CONCILIADO'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : mov.statusConciliacao === 'EM_TRANSITO'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {mov.statusConciliacao || 'PENDENTE'}
+                      </span>
+                    </td>
                     <td className="p-3 text-gray-600">{mov.usuario}</td>
                     <td
                       className={`p-3 text-right font-black ${
@@ -259,16 +404,129 @@ export const CaixaFisicoView: React.FC = () => {
                   </div>
 
                   {modalType !== 'ABERTURA' && (
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">Descrição / Comprovante</label>
-                      <input
-                        type="text"
-                        required
-                        value={descricaoInput}
-                        onChange={(e) => setDescricaoInput(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
-                      />
-                    </div>
+                    <>
+                      {(modalType === 'SANGRIA' || modalType === 'SUPRIMENTO') && (
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Finalidade da movimentação *</label>
+                          <select
+                            required
+                            value={finalidade}
+                            onChange={(e) => {
+                              setFinalidade(e.target.value as FinalidadeMovimentacaoCaixa);
+                              setBancoTransferenciaId('');
+                              setLancamentoRelacionadoId('');
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs bg-white focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
+                          >
+                            {modalType === 'SANGRIA' ? (
+                              <>
+                                <option value="DEPOSITO_BANCARIO">Depósito em conta bancária</option>
+                                <option value="TRANSFERENCIA_COFRE">Transferência para cofre</option>
+                                <option value="PAGAMENTO_DESPESA">Pagamento de despesa em dinheiro</option>
+                                <option value="RETIRADA_SOCIO">Retirada de sócio</option>
+                                <option value="OUTRO">Outra finalidade</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="REFORCO_TROCO">Reforço de troco</option>
+                                <option value="TRANSFERENCIA_COFRE">Retirada do cofre para o caixa</option>
+                                <option value="OUTRO">Outra origem</option>
+                              </>
+                            )}
+                          </select>
+                          <p className="text-[10px] text-gray-500 mt-1">
+                            Sangria e suprimento não alteram o DRE por si só; despesas e receitas são vinculadas ao lançamento correspondente.
+                          </p>
+                        </div>
+                      )}
+
+                      {((modalType === 'SANGRIA' && finalidade === 'DEPOSITO_BANCARIO') || modalType === 'SUPRIMENTO') && (
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                            {modalType === 'SANGRIA' ? 'Conta bancária de destino *' : 'Conta bancária de origem (opcional)'}
+                          </label>
+                          <select
+                            required={modalType === 'SANGRIA'}
+                            value={bancoTransferenciaId}
+                            onChange={(e) => setBancoTransferenciaId(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs bg-white focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
+                          >
+                            <option value="">{modalType === 'SUPRIMENTO' ? 'Origem externa / não bancária' : 'Selecione a conta...'}</option>
+                            {contasBancarias.map((banco) => (
+                              <option key={banco.id} value={banco.id}>{banco.banco}</option>
+                            ))}
+                          </select>
+                          {modalType === 'SANGRIA' && contasBancarias.length === 0 && (
+                            <p className="text-[10px] text-rose-600 mt-1">Cadastre uma conta bancária ativa para esta unidade.</p>
+                          )}
+                        </div>
+                      )}
+
+                      {modalType === 'SANGRIA' && finalidade === 'PAGAMENTO_DESPESA' && (
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Despesa que será paga *</label>
+                          <select
+                            required
+                            value={lancamentoRelacionadoId}
+                            onChange={(e) => {
+                              const id = e.target.value;
+                              setLancamentoRelacionadoId(id);
+                              const despesa = despesasPendentes.find((item) => item.id === id);
+                              if (despesa) {
+                                setValorInput(despesa.valor.toFixed(2));
+                                setDescricaoInput(`Pagamento em dinheiro: ${despesa.descricao}`);
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs bg-white focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
+                          >
+                            <option value="">Selecione a despesa pendente...</option>
+                            {despesasPendentes.map((despesa) => (
+                              <option key={despesa.id} value={despesa.id}>
+                                {despesa.fornecedorCliente} — R$ {despesa.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} — {despesa.dataVencimento}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-gray-500 mt-1">O lançamento será liquidado sem criar uma segunda despesa no DRE.</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Descrição / Histórico</label>
+                        <input
+                          type="text"
+                          required
+                          value={descricaoInput}
+                          onChange={(e) => setDescricaoInput(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Anexo comprobatório (opcional)</label>
+                        <input
+                          type="file"
+                          accept="application/pdf,image/jpeg"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            if (file && !['application/pdf', 'image/jpeg'].includes(file.type)) {
+                              showToast('Envie um arquivo PDF, JPG ou JPEG.', 'error');
+                              e.currentTarget.value = '';
+                              setAnexo(null);
+                              return;
+                            }
+                            if (file && file.size > 10 * 1024 * 1024) {
+                              showToast('O anexo deve ter no máximo 10 MB.', 'error');
+                              e.currentTarget.value = '';
+                              setAnexo(null);
+                              return;
+                            }
+                            setAnexo(file);
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs bg-white file:mr-3 file:border-0 file:bg-[#eff4ff] file:px-2 file:py-1 file:text-[10px] file:font-bold"
+                        />
+                        <p className="text-[10px] text-gray-500 mt-1">Aceita PDF, JPG ou JPEG, até 10 MB.</p>
+                      </div>
+                    </>
                   )}
                 </>
               ) : (

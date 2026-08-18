@@ -32,6 +32,31 @@ export interface User {
 
 export type StatusLancamento = 'PAGO' | 'PENDENTE' | 'ATRASADO' | 'CANCELADO';
 export type TipoLancamento = 'RECEITA' | 'DESPESA';
+export type SentidoFinanceiro = 'ENTRADA' | 'SAIDA' | 'A_CONFIRMAR';
+export type ImpactoDRE = 'RECEITA' | 'DESPESA' | 'NAO_AFETA' | 'A_CONFIRMAR';
+export type FinalidadeFinanceira =
+  | 'RECEBIMENTO_CLIENTE'
+  | 'PAGAMENTO_FORNECEDOR'
+  | 'TRANSFERENCIA_INTERNA'
+  | 'EMPRESTIMO'
+  | 'APORTE_SOCIO'
+  | 'RETIRADA_SOCIO'
+  | 'ESTORNO_DEVOLUCAO'
+  | 'TARIFA_BANCARIA'
+  | 'ADIANTAMENTO_CLIENTE'
+  | 'OUTRO'
+  | 'A_CONFIRMAR';
+export type TipoDocumentoOCR =
+  | 'NFE'
+  | 'NFSE'
+  | 'RECIBO'
+  | 'COMPROVANTE'
+  | 'BOLETO'
+  | 'DDA'
+  | 'FATURA'
+  | 'EXTRATO'
+  | 'PDF_MISTO'
+  | 'OUTRO';
 
 export interface Lancamento {
   id: string;
@@ -48,6 +73,13 @@ export interface Lancamento {
   bancoId?: string;
   comprovanteUrl?: string;
   documentoRef?: string;
+  cpfCnpjContraparte?: string;
+  linhaDigitavel?: string;
+  chaveDocumento?: string;
+  identificadorTransacao?: string;
+  impactoDRE?: Exclude<ImpactoDRE, 'A_CONFIRMAR'>;
+  finalidadeFinanceira?: Exclude<FinalidadeFinanceira, 'A_CONFIRMAR'>;
+  documentoConciliadoId?: string;
   parcelamentoId?: string;
   numeroParcela?: string;
   formaPagamento: 'PIX' | 'BOLETO' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'DINHEIRO' | 'TRANSFERENCIA';
@@ -85,7 +117,7 @@ export interface DocumentoOCR {
   id: string;
   nomeArquivo: string;
   tamanho: string;
-  tipo: 'NFE' | 'RECIBO' | 'BOLETO' | 'FATURA' | 'OUTRO';
+  tipo: TipoDocumentoOCR;
   status: 'PROCESSANDO' | 'PENDENTE_REVISAO' | 'APROVADO' | 'REJEITADO';
   confiancaOCR: number; // 0 a 100
   dataUpload: string;
@@ -98,12 +130,37 @@ export interface DocumentoOCR {
     categoria: string;
     centroCusto: string;
     observacoes?: string;
+    pagador?: string;
+    recebedor?: string;
+    documentoNumero?: string;
+    linhaDigitavel?: string;
+    chaveDocumento?: string;
+    identificadorTransacao?: string;
+    sentidoSugerido?: SentidoFinanceiro;
+    impactoDRESugerido?: ImpactoDRE;
+    finalidadeSugerida?: FinalidadeFinanceira;
+    parcelaNumero?: string;
+    paginaOrigem?: number;
     itens?: { descricao: string; quantidade: number; valorUnitario: number; valorTotal: number }[];
   };
   previewUrl: string;
   previewMimeType?: string;
+  hashArquivo?: string;
+  entidadeNumero?: number;
+  totalEntidadesDocumento?: number;
+  documentoOrigemId?: string;
   lancamentoGeradoId?: string;
 }
+
+export type FinalidadeMovimentacaoCaixa =
+  | 'ABERTURA_CAIXA'
+  | 'REFORCO_TROCO'
+  | 'DEPOSITO_BANCARIO'
+  | 'TRANSFERENCIA_COFRE'
+  | 'PAGAMENTO_DESPESA'
+  | 'RETIRADA_SOCIO'
+  | 'VENDA_DINHEIRO'
+  | 'OUTRO';
 
 export interface MovimentacaoCaixaFisico {
   id: string;
@@ -113,6 +170,23 @@ export interface MovimentacaoCaixaFisico {
   dataHora: string;
   usuario: string;
   comprovanteRef?: string;
+  finalidade?: FinalidadeMovimentacaoCaixa;
+  impactoDRE?: Exclude<ImpactoDRE, 'A_CONFIRMAR'>;
+  statusConciliacao?: 'PENDENTE' | 'EM_TRANSITO' | 'CONCILIADO';
+  bancoOrigemId?: string;
+  bancoDestinoId?: string;
+  lancamentoRelacionadoId?: string;
+  observacoes?: string;
+}
+
+export interface DetalhesMovimentacaoCaixa {
+  finalidade: FinalidadeMovimentacaoCaixa;
+  impactoDRE: Exclude<ImpactoDRE, 'A_CONFIRMAR'>;
+  statusConciliacao: 'PENDENTE' | 'EM_TRANSITO' | 'CONCILIADO';
+  bancoOrigemId?: string;
+  bancoDestinoId?: string;
+  lancamentoRelacionadoId?: string;
+  observacoes?: string;
 }
 
 export interface SessaoCaixaFisico {

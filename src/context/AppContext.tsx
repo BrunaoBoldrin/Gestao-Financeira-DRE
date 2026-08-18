@@ -16,7 +16,8 @@ import {
   FornecedorMaster,
   BancoMaster,
   CondicaoPagamento,
-  ViewKey
+  ViewKey,
+  DetalhesMovimentacaoCaixa
 } from '../types';
 import { ROLE_DEFAULT_VIEW, canAccessAllUnits, canAccessView } from '../config/accessControl';
 import { calculateDueDateSchedule } from '../utils/financialDates';
@@ -142,10 +143,23 @@ interface AppContextType {
   
   uploadDocumentoOCR: (file: File) => void;
   aprovarDocumentoOCR: (docId: string, dadosFinal: DocumentoOCR['dadosExtraidos']) => void;
+  conciliarDocumentoOCR: (
+    docId: string,
+    lancamentoId: string,
+    dadosFinal: DocumentoOCR['dadosExtraidos'],
+    bancoId: string,
+    justificativa?: string
+  ) => void;
   rejeitarDocumentoOCR: (docId: string) => void;
   
   abrirCaixa: (saldoInicial: number) => void;
-  registrarMovimentacaoCaixa: (tipo: 'SUPRIMENTO' | 'SANGRIA' | 'VENDA' | 'DESPESA', descricao: string, valor: number, comprovanteRef?: string) => void;
+  registrarMovimentacaoCaixa: (
+    tipo: 'SUPRIMENTO' | 'SANGRIA' | 'VENDA' | 'DESPESA',
+    descricao: string,
+    valor: number,
+    comprovanteRef?: string,
+    detalhes?: DetalhesMovimentacaoCaixa
+  ) => void;
   fecharCaixa: (saldoContado: number, observacao: string) => void;
   
   toggleChecklistItemFechamento: (chkId: string) => void;
@@ -766,6 +780,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `Transferência para ${destino.banco}: ${dados.descricao}`,
         dados.valor,
         dados.documentoRef,
+        {
+          finalidade: 'DEPOSITO_BANCARIO',
+          impactoDRE: 'NAO_AFETA',
+          statusConciliacao: 'EM_TRANSITO',
+          bancoOrigemId: origem.id,
+          bancoDestinoId: destino.id,
+          observacoes: dados.descricao
+        },
+        true,
+        dados.unidade
+      );
+    } else if (destino.banco.toLowerCase().includes('caixa')) {
+      registrarMovimentacaoCaixa(
+        'SUPRIMENTO',
+        `Transferência de ${origem.banco}: ${dados.descricao}`,
+        dados.valor,
+        dados.documentoRef,
+        {
+          finalidade: 'REFORCO_TROCO',
+          impactoDRE: 'NAO_AFETA',
+          statusConciliacao: 'CONCILIADO',
+          bancoOrigemId: origem.id,
+          bancoDestinoId: destino.id,
+          observacoes: dados.descricao
+        },
         true,
         dados.unidade
       );
@@ -1031,7 +1070,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: docId,
       nomeArquivo: file.name,
       tamanho: (file.size / 1024).toFixed(0) + ' KB',
-      tipo: file.name.toLowerCase().includes('recibo')
+      tipo: file.name.toLowerCase().includes('extrato')
+        ? 'EXTRATO'
+        : file.name.toLowerCase().includes('comprovante') || file.name.toLowerCase().includes('pix')
+        ? 'COMPROVANTE'
+        : file.name.toLowerCase().includes('recibo')
         ? 'RECIBO'
         : file.name.toLowerCase().includes('boleto')
         ? 'BOLETO'
@@ -1094,38 +1137,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (result.success && result.dadosExtraidos) {
-        const extraidos = result.dadosExtraidos;
-        setDocumentosOCR((prev) =>
-          prev.map((doc) =>
-            doc.id === docId
-              ? {
-                  ...doc,
-                  status: 'PENDENTE_REVISAO',
-                  tipo: result.tipo || doc.tipo,
-                  confiancaOCR: result.confiancaOCR ?? 0,
-                  dadosExtraidos: {
-                    fornecedor: extraidos.fornecedor || 'Fornecedor Não Identificado',
-                    cnpj: extraidos.cnpj || '',
-                    dataEmissao: extraidos.dataEmissao || '',
-                    dataVencimento: extraidos.dataVencimento || '',
-                    valorTotal: typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0,
-                    categoria: extraidos.categoria || 'Insumos Médicos & Estéticos',
-                    centroCusto: extraidos.centroCusto || 'Estoque Central',
-                    observacoes: extraidos.observacoes || '',
-                    itens: extraidos.itens || []
-                  }
-                }
-              : doc
-          )
-        );
+        const normalizeExtractedData = (extraidos: any): DocumentoOCR['dadosExtraidos'] => ({
+          fornecedor: (
+            extraidos.sentidoSugerido === 'ENTRADA'
+              ? extraidos.pagador
+              : extraidos.sentidoSugerido === 'SAIDA'
+                ? extraidos.recebedor
+                : ''
+          ) || extraidos.fornecedor || extraidos.recebedor || extraidos.pagador || 'Contraparte Não Identificada',
+          cnpj: extraidos.cnpj || '',
+          dataEmissao: extraidos.dataEmissao || '',
+          dataVencimento: extraidos.dataVencimento || extraidos.dataEmissao || '',
+          valorTotal: typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0,
+          categoria: extraidos.categoria || 'Despesas Operacionais',
+          centroCusto: extraidos.centroCusto || 'Administrativo',
+          observacoes: extraidos.observacoes || '',
+          pagador: extraidos.pagador || '',
+          recebedor: extraidos.recebedor || '',
+          documentoNumero: extraidos.documentoNumero || '',
+          linhaDigitavel: extraidos.linhaDigitavel || '',
+          chaveDocumento: extraidos.chaveDocumento || '',
+          identificadorTransacao: extraidos.identificadorTransacao || '',
+          sentidoSugerido: extraidos.sentidoSugerido || 'A_CONFIRMAR',
+          impactoDRESugerido: extraidos.impactoDRESugerido || 'A_CONFIRMAR',
+          finalidadeSugerida: extraidos.finalidadeSugerida || 'A_CONFIRMAR',
+          parcelaNumero: extraidos.parcelaNumero || '',
+          paginaOrigem: extraidos.paginaOrigem,
+          itens: extraidos.itens || []
+        });
+        const entityResults = Array.isArray(result.entidadesFinanceiras) && result.entidadesFinanceiras.length > 1
+          ? result.entidadesFinanceiras
+          : [{ tipo: result.tipo, dadosExtraidos: result.dadosExtraidos }];
+        const totalEntities = entityResults.length;
+        const extractedDocuments: DocumentoOCR[] = entityResults.map((entity: any, index: number) => ({
+          ...initialDoc,
+          id: totalEntities > 1 ? `${docId}-entidade-${index + 1}` : docId,
+          tipo: entity.tipo || result.tipo || initialDoc.tipo,
+          status: 'PENDENTE_REVISAO',
+          confiancaOCR: result.confiancaOCR ?? 0,
+          dadosExtraidos: normalizeExtractedData(entity.dadosExtraidos || entity),
+          hashArquivo: result.metadados?.hashArquivo,
+          entidadeNumero: totalEntities > 1 ? index + 1 : undefined,
+          totalEntidadesDocumento: totalEntities > 1 ? totalEntities : undefined,
+          documentoOrigemId: totalEntities > 1 ? docId : undefined
+        }));
 
-        const valorExtraido = typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0;
-        showToast(
-          valorExtraido > 0
-            ? `OCR Python concluído! Extraído R$ ${valorExtraido.toFixed(2)} (${extraidos.fornecedor}).`
-            : 'OCR Python concluído. Confira e preencha os campos que não foram identificados.',
-          valorExtraido > 0 ? 'success' : 'info'
-        );
+        setDocumentosOCR((prev) => prev.flatMap((doc) => doc.id === docId ? extractedDocuments : [doc]));
+        setSelectedDocumentForReviewId(extractedDocuments[0].id);
+
+        if (totalEntities > 1) {
+          showToast(
+            `OCR V2 concluiu a leitura e separou ${totalEntities} movimentações para confirmação individual.`,
+            'success'
+          );
+        } else {
+          const extraidos = extractedDocuments[0].dadosExtraidos;
+          showToast(
+            extraidos.valorTotal > 0
+              ? `OCR V2 concluído: R$ ${extraidos.valorTotal.toFixed(2)} (${extraidos.fornecedor}).`
+              : 'OCR V2 concluído. Confira os campos e a classificação financeira.',
+            extraidos.valorTotal > 0 ? 'success' : 'info'
+          );
+        }
       } else {
         throw new Error('Retorno inválido do OCR');
       }
@@ -1175,8 +1248,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    showToast('Documento conferido e aprovado! Lançamento gerado no Contas a Pagar.', 'success');
+    showToast('Documento conferido e aprovado.', 'success');
     addAuditLog('Documentos OCR', 'APROVACAO', `Aprovou e conferiu documento OCR ${docId} (${doc.nomeArquivo})`, 'PENDENTE_REVISAO', 'APROVADO');
+  };
+
+  const conciliarDocumentoOCR = (
+    docId: string,
+    lancamentoId: string,
+    dadosFinal: DocumentoOCR['dadosExtraidos'],
+    bancoId: string,
+    justificativa?: string
+  ) => {
+    if (!checkFinancialPermission('Conciliar Documento OCR')) return;
+    const doc = documentosOCR.find((item) => item.id === docId);
+    const lancamento = lancamentos.find((item) => item.id === lancamentoId);
+    const banco = bancos.find((item) => item.id === bancoId);
+    if (!doc || !lancamento || !banco) {
+      showToast('Não foi possível localizar o documento, lançamento ou conta para conciliação.', 'error');
+      return;
+    }
+    if (!canManageUnit(lancamento.unidade, 'Conciliar Documento OCR')) return;
+    if (banco.unidade !== lancamento.unidade) {
+      showToast('A conta da conciliação deve pertencer à mesma unidade do lançamento.', 'error');
+      return;
+    }
+
+    const wasPaid = lancamento.status === 'PAGO';
+    const dataPagamento = dadosFinal.dataEmissao || new Date().toISOString().substring(0, 10);
+    const reconciled: Lancamento = {
+      ...lancamento,
+      status: 'PAGO',
+      dataPagamento: lancamento.dataPagamento || dataPagamento,
+      bancoId: wasPaid ? lancamento.bancoId : banco.id,
+      contaBancaria: wasPaid ? lancamento.contaBancaria : banco.banco,
+      comprovanteUrl: doc.previewUrl || lancamento.comprovanteUrl,
+      documentoRef: doc.nomeArquivo,
+      cpfCnpjContraparte: dadosFinal.cnpj || lancamento.cpfCnpjContraparte,
+      linhaDigitavel: dadosFinal.linhaDigitavel || lancamento.linhaDigitavel,
+      chaveDocumento: dadosFinal.chaveDocumento || lancamento.chaveDocumento,
+      identificadorTransacao: dadosFinal.identificadorTransacao || lancamento.identificadorTransacao,
+      documentoConciliadoId: doc.id,
+      observacoes: [lancamento.observacoes, justificativa].filter(Boolean).join(' | ')
+    };
+
+    setLancamentos((prev) => prev.map((item) => item.id === lancamentoId ? reconciled : item));
+    if (!wasPaid) {
+      adjustBancoBalance(banco.id, balanceDeltaForLancamento(reconciled), `Conciliação OCR de "${reconciled.descricao}"`);
+    }
+    setDocumentosOCR((prev) => prev.map((item) =>
+      item.id === docId
+        ? { ...item, status: 'APROVADO', dadosExtraidos: dadosFinal, lancamentoGeradoId: lancamentoId }
+        : item
+    ));
+
+    showToast(
+      wasPaid
+        ? 'Documento vinculado ao lançamento já liquidado, sem movimentar o saldo novamente.'
+        : 'Correspondência confirmada: lançamento liquidado e comprovante vinculado.',
+      'success'
+    );
+    addAuditLog(
+      'Conciliação Financeira',
+      'CONCILIACAO',
+      `Vinculou documento OCR ${docId} ao lançamento ${lancamentoId}${justificativa ? ` — ${justificativa}` : ''}`
+    );
   };
 
   const rejeitarDocumentoOCR = (docId: string) => {
@@ -1207,7 +1342,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           descricao: 'Abertura de Caixa - Fundo de Troco',
           valor: saldoInicial,
           dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          usuario: currentUser ? currentUser.name : 'Operador'
+          usuario: currentUser ? currentUser.name : 'Operador',
+          finalidade: 'ABERTURA_CAIXA',
+          impactoDRE: 'NAO_AFETA',
+          statusConciliacao: 'CONCILIADO'
         }
       ]
     });
@@ -1220,10 +1358,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     descricao: string,
     valor: number,
     comprovanteRef?: string,
+    detalhes?: DetalhesMovimentacaoCaixa,
     skipBankBalance = false,
     unidadeOverride?: string
   ) => {
     if (!checkFinancialPermission('Movimentação de Caixa')) return;
+    if (!Number.isFinite(valor) || valor <= 0) {
+      showToast('Informe um valor maior que zero para a movimentação de caixa.', 'error');
+      return;
+    }
     const unidade = resolveAllowedUnit(
       unidadeOverride || (selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit)
     );
@@ -1237,6 +1380,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(`Cadastre uma conta do tipo Caixa Físico para a unidade "${unidade}".`, 'error');
       return;
     }
+    if (tipo === 'SANGRIA' && detalhes?.finalidade === 'PAGAMENTO_DESPESA') {
+      const related = lancamentos.find((item) => item.id === detalhes.lancamentoRelacionadoId);
+      if (!related || related.status === 'PAGO' || related.status === 'CANCELADO') {
+        showToast('Selecione uma despesa pendente válida para liquidar em dinheiro.', 'error');
+        return;
+      }
+      if (Math.abs(related.valor - valor) > 0.01) {
+        showToast('O valor da sangria deve ser igual ao valor da despesa selecionada.', 'error');
+        return;
+      }
+    }
     const novaMov = {
       id: 'mov-' + Date.now(),
       tipo,
@@ -1244,7 +1398,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       valor,
       dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
       usuario: currentUser ? currentUser.name : 'Operador',
-      comprovanteRef
+      comprovanteRef,
+      finalidade: detalhes?.finalidade || (tipo === 'VENDA' ? 'VENDA_DINHEIRO' : tipo === 'SUPRIMENTO' ? 'REFORCO_TROCO' : 'OUTRO'),
+      impactoDRE: detalhes?.impactoDRE || (tipo === 'VENDA' ? 'RECEITA' : 'NAO_AFETA'),
+      statusConciliacao: detalhes?.statusConciliacao || 'CONCILIADO',
+      bancoOrigemId: detalhes?.bancoOrigemId,
+      bancoDestinoId: detalhes?.bancoDestinoId,
+      lancamentoRelacionadoId: detalhes?.lancamentoRelacionadoId,
+      observacoes: detalhes?.observacoes
     };
 
     setSessaoCaixa((prev) => {
@@ -1278,13 +1439,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         formaPagamento: 'DINHEIRO',
         unidade
       });
+    } else if (tipo === 'SANGRIA' && detalhes?.finalidade === 'PAGAMENTO_DESPESA' && detalhes.lancamentoRelacionadoId) {
+      const related = lancamentos.find((item) => item.id === detalhes.lancamentoRelacionadoId);
+      if (related && related.status !== 'PAGO') {
+        setLancamentos((prev) => prev.map((item) =>
+          item.id === related.id
+            ? {
+                ...item,
+                status: 'PAGO',
+                dataPagamento: new Date().toISOString().substring(0, 10),
+                bancoId: caixaBanco?.id,
+                contaBancaria: caixaBanco?.banco || 'Caixa Físico Recepção',
+                formaPagamento: 'DINHEIRO',
+                comprovanteUrl: comprovanteRef || item.comprovanteUrl
+              }
+            : item
+        ));
+      }
+      if (!skipBankBalance && caixaBanco) {
+        adjustBancoBalance(caixaBanco.id, -valor, `Pagamento em dinheiro: "${descricao}"`);
+      }
     } else if (!skipBankBalance && caixaBanco) {
       const delta = tipo === 'SUPRIMENTO' ? valor : -valor;
       adjustBancoBalance(caixaBanco.id, delta, `${tipo} no caixa físico: "${descricao}"`);
     }
 
     showToast(`Movimentação de ${tipo} de R$ ${valor.toFixed(2)} registrada no Caixa Físico!`, 'success');
-    addAuditLog('Caixa Físico', 'CRIACAO', `Registrou ${tipo} "${descricao}" de R$ ${valor.toFixed(2)}`);
+    addAuditLog(
+      'Caixa Físico',
+      'CRIACAO',
+      `Registrou ${tipo} "${descricao}" de R$ ${valor.toFixed(2)} — finalidade ${novaMov.finalidade}`
+    );
   };
 
   const fecharCaixa = (saldoContado: number, observacao: string) => {
@@ -1481,6 +1666,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         pagarParcela,
         uploadDocumentoOCR,
         aprovarDocumentoOCR,
+        conciliarDocumentoOCR,
         rejeitarDocumentoOCR,
         abrirCaixa,
         registrarMovimentacaoCaixa,
