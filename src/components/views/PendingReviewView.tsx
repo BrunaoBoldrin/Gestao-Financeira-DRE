@@ -174,8 +174,8 @@ export const PendingReviewView: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Top Document Selector Bar */}
-      <div className="bg-white p-4 rounded-xl border border-[#e5eeff] shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="bg-white p-4 rounded-xl border border-[#e5eeff] shadow-xs flex flex-col sm:flex-row items-center gap-4 lg:gap-6">
+        <div className="flex items-center gap-3 sm:max-w-[42%] sm:flex-none">
           <span className="material-symbols-outlined text-[#C5A059] text-2xl">rule</span>
           <div>
             <h2 className="text-base font-bold text-[#0b1c30]">
@@ -188,7 +188,7 @@ export const PendingReviewView: React.FC = () => {
         </div>
 
         {/* Document Selector Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto max-w-md">
+        <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 sm:flex-1">
           {documentosOCR.map((doc) => (
             <button
               key={doc.id}
@@ -202,7 +202,7 @@ export const PendingReviewView: React.FC = () => {
               <span className="material-symbols-outlined text-sm">
                 {doc.status === 'APROVADO' ? 'check_circle' : 'pending'}
               </span>
-              <span className="truncate max-w-[100px]">{doc.nomeArquivo}</span>
+              <span className="truncate max-w-[160px]">{doc.nomeArquivo}</span>
             </button>
           ))}
         </div>
