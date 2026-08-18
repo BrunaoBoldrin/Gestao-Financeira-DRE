@@ -103,6 +103,10 @@ export const PendingReviewView: React.FC = () => {
   const prazos = activeCond ? activeCond.prazosDias : [0];
   const vencimentos = calculateDueDateSchedule(dataEmissao, prazos, dataVencimento);
   const vencimentoCalculadoDDL = calculateDueDateSchedule(dataEmissao, prazos)[0];
+  const isPdfPreview = Boolean(currentDoc.previewUrl) && currentDoc.previewMimeType === 'application/pdf';
+  const isImagePreview = Boolean(currentDoc.previewUrl) && (
+    currentDoc.previewMimeType?.startsWith('image/') || !currentDoc.previewMimeType
+  );
 
   const advanceToNextDoc = () => {
     const remaining = pendingDocs.filter((d) => d.id !== currentDoc.id);
@@ -222,23 +226,37 @@ export const PendingReviewView: React.FC = () => {
               </span>
             </div>
 
-            <div className="relative border border-gray-200 rounded-lg overflow-hidden bg-gray-100 min-h-[420px] flex items-center justify-center group">
-              <img
-                src={currentDoc.previewUrl}
-                alt={currentDoc.nomeArquivo}
-                className="w-full h-[420px] object-cover object-top filter contrast-105"
-              />
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+            <div className="relative border border-gray-200 rounded-lg overflow-hidden bg-gray-100 min-h-[520px] flex items-center justify-center group">
+              {isPdfPreview ? (
+                <iframe
+                  src={`${currentDoc.previewUrl}#view=FitH`}
+                  title={`Visualização de ${currentDoc.nomeArquivo}`}
+                  className="w-full h-[520px] bg-white border-0"
+                />
+              ) : isImagePreview ? (
+                <img
+                  src={currentDoc.previewUrl}
+                  alt={currentDoc.nomeArquivo}
+                  className="w-full h-[520px] object-contain object-top filter contrast-105 bg-white"
+                />
+              ) : (
+                <div className="p-8 text-center text-gray-500">
+                  <span className="material-symbols-outlined text-5xl text-gray-400">description</span>
+                  <p className="text-xs font-bold mt-2">Pré-visualização não disponível para este formato.</p>
+                  <p className="text-[11px] mt-1">Use “Abrir em Nova Aba” para acessar o documento original.</p>
+                </div>
+              )}
+              {currentDoc.previewUrl && (
                 <a
                   href={currentDoc.previewUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1.5 bg-white text-[#0b1c30] rounded-md text-xs font-bold shadow-lg flex items-center gap-1"
+                  className="absolute z-10 top-3 right-3 px-3 py-1.5 bg-white/95 text-[#0b1c30] rounded-md text-xs font-bold shadow-lg flex items-center gap-1 border border-gray-200 hover:bg-white"
                 >
                   <span className="material-symbols-outlined text-sm">open_in_new</span>
                   Abrir em Nova Aba
                 </a>
-              </div>
+              )}
             </div>
           </div>
 

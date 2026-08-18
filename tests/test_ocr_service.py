@@ -58,6 +58,17 @@ class OCRServiceTests(unittest.TestCase):
         )
         self.assertEqual(same_line["fornecedor"], "Galena Química e Farmacêutica Ltda")
 
+        glued_label = parse_financial_fields(
+            """
+            Local de Pagamento
+            BeneficiárioKATION RAIDEN DO BRASIL LTDA - CNPJ: 03.313.366/0001-09
+            R. TENENTE OSCAR NUNES, 285 VILA ELIDA, DIADEMA/SP
+            JUROS DE MORA: 1% A.M. APÓS O VENCIMENTO MULTA: 2%
+            """,
+            "72224.pdf",
+        )
+        self.assertEqual(glued_label["fornecedor"], "KATION RAIDEN DO BRASIL LTDA")
+
     def test_extracts_nfe_xml(self):
         xml = """<?xml version="1.0" encoding="UTF-8"?>
         <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">

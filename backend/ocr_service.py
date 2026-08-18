@@ -408,7 +408,7 @@ def _extract_digit_line(text: str) -> str:
 def _extract_supplier(text: str, file_name: str) -> str:
     lines = [re.sub(r"\s+", " ", line).strip(" :-") for line in text.splitlines() if line.strip()]
     label_pattern = re.compile(
-        r"\b(?:benefici[aá]ri[oa]|beneficiador|cedente|emitente|prestador|favorecido|raz[aã]o social)\b",
+        r"(?<![A-Za-zÀ-ÿ])(?:benefici[aá]ri[oa]|beneficiador|cedente|emitente|prestador|favorecido|raz[aã]o social)",
         flags=re.IGNORECASE,
     )
 
@@ -445,6 +445,14 @@ def _is_supplier_candidate(candidate: str) -> bool:
         "valor do documento",
         "linha digitável",
         "linha digitavel",
+        "juros",
+        "multa",
+        "desconto",
+        "protestar",
+        "após o vencimento",
+        "apos o vencimento",
+        "instruções",
+        "instrucoes",
     )
     lowered = candidate.lower()
     return not any(lowered.startswith(label) for label in rejected_labels)

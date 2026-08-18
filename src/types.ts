@@ -101,6 +101,7 @@ export interface DocumentoOCR {
     itens?: { descricao: string; quantidade: number; valorUnitario: number; valorTotal: number }[];
   };
   previewUrl: string;
+  previewMimeType?: string;
   lancamentoGeradoId?: string;
 }
 

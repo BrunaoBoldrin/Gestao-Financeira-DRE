@@ -1015,15 +1015,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const uploadDocumentoOCR = async (file: File) => {
     if (!checkFinancialPermission('Upload Documento OCR')) return;
     const docId = 'ocr-' + Date.now().toString().slice(-4);
+    const normalizedFileName = file.name.toLowerCase();
+    const isPdf = file.type === 'application/pdf' || normalizedFileName.endsWith('.pdf');
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g)$/.test(normalizedFileName);
     
     // Create preview URL
-    let objectPreviewUrl = 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600';
-    if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-      try {
-        objectPreviewUrl = URL.createObjectURL(file);
-      } catch (e) {
-        console.warn('Could not create object URL for file', e);
-      }
+    let objectPreviewUrl = '';
+    try {
+      objectPreviewUrl = URL.createObjectURL(file);
+    } catch (e) {
+      console.warn('Could not create object URL for file', e);
     }
 
     const initialDoc: DocumentoOCR = {
@@ -1047,7 +1048,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         categoria: 'Insumos Médicos & Estéticos',
         centroCusto: 'Estoque Central'
       },
-      previewUrl: objectPreviewUrl
+      previewUrl: objectPreviewUrl,
+      previewMimeType: isPdf ? 'application/pdf' : isImage ? file.type || 'image/jpeg' : file.type
     };
 
     setDocumentosOCR((prev) => [initialDoc, ...prev]);
