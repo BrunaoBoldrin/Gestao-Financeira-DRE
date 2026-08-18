@@ -33,6 +33,7 @@ interface DiaCalendario {
   receitas: number;
   despesas: number;
   resultado: number;
+  saldoProjetado: number;
   lancamentos: Lancamento[];
 }
 
@@ -183,7 +184,7 @@ export const FluxoCaixaView: React.FC = () => {
     const [year, month] = mesCalendario.split('-').map(Number);
     const first = new Date(year, month - 1, 1);
     const gridStart = new Date(year, month - 1, 1 - first.getDay());
-    return Array.from({ length: 42 }, (_, index) => {
+    const grid = Array.from({ length: 42 }, (_, index) => {
       const date = new Date(gridStart);
       date.setDate(gridStart.getDate() + index);
       const data = toDateValue(date);
@@ -192,7 +193,12 @@ export const FluxoCaixaView: React.FC = () => {
       );
       const receitas = itens.filter((item) => item.tipo === 'RECEITA').reduce((sum, item) => sum + item.valor, 0);
       const despesas = itens.filter((item) => item.tipo === 'DESPESA').reduce((sum, item) => sum + item.valor, 0);
-      return { data, dia: date.getDate(), noMes: date.getMonth() === month - 1, receitas, despesas, resultado: receitas - despesas, lancamentos: itens };
+      return { data, dia: date.getDate(), noMes: date.getMonth() === month - 1, receitas, despesas, resultado: receitas - despesas, saldoProjetado: 0, lancamentos: itens };
+    });
+    let saldoProjetado = 0;
+    return grid.map((dia) => {
+      if (dia.noMes) saldoProjetado += dia.resultado;
+      return { ...dia, saldoProjetado };
     });
   }, [eventosCalendario, mesCalendario]);
 
@@ -204,9 +210,10 @@ export const FluxoCaixaView: React.FC = () => {
     return { receitas, despesas, resultado: receitas - despesas, realizado, pendente };
   }, [eventosCalendario]);
 
-  const saldoAtual = bancos.filter((banco) =>
+  const contasAtivasUnidade = bancos.filter((banco) =>
     banco.ativo && (unidadeFluxo === 'Todas as Unidades' || banco.unidade === unidadeFluxo)
-  ).reduce((sum, banco) => sum + banco.saldo, 0);
+  );
+  const saldoAtual = contasAtivasUnidade.reduce((sum, banco) => sum + banco.saldo, 0);
   const saldoAposPendencias = saldoAtual + totaisCalendario.pendente;
   const detalheDia = diasCalendario.find((dia) => dia.data === diaSelecionado);
   const formatDate = (value: string) => parseDate(value).toLocaleDateString('pt-BR');
@@ -253,7 +260,13 @@ export const FluxoCaixaView: React.FC = () => {
           </div>
 
           <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs space-y-4">
-            <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-[#0b1c30]">Curva de Saldo Acumulado e Entradas/Saídas</h3><span className="text-xs font-bold text-[#775a19] bg-[#ffdea5] px-2.5 py-1 rounded">Visão diária · {periodoAplicadoLabel}</span></div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-[#0b1c30]">Curva de Saldo Acumulado e Entradas/Saídas</h3>
+                <p className="text-[10px] text-gray-500 mt-0.5">Soma todos os lançamentos de {unidadeFluxo}, mesmo quando a unidade possui mais de uma conta; o saldo acumulado do período inicia em zero.</p>
+              </div>
+              <span className="text-xs font-bold text-[#775a19] bg-[#ffdea5] px-2.5 py-1 rounded">Visão diária · {periodoAplicadoLabel}</span>
+            </div>
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={fluxoData} margin={{ top: 10, right: 10, left: 5, bottom: 0 }}>
@@ -292,13 +305,13 @@ export const FluxoCaixaView: React.FC = () => {
             <div className="bg-white p-4 rounded-xl border border-[#e5eeff]"><p className="text-[10px] font-bold text-gray-500 uppercase">Receitas do mês</p><p className="text-lg font-black text-emerald-700 mt-1">{formatCurrency(totaisCalendario.receitas)}</p></div>
             <div className="bg-white p-4 rounded-xl border border-[#e5eeff]"><p className="text-[10px] font-bold text-gray-500 uppercase">Despesas do mês</p><p className="text-lg font-black text-rose-700 mt-1">{formatCurrency(totaisCalendario.despesas)}</p></div>
             <div className="bg-white p-4 rounded-xl border border-[#e5eeff]"><p className="text-[10px] font-bold text-gray-500 uppercase">Resultado do mês</p><p className={`text-lg font-black mt-1 ${totaisCalendario.resultado >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{formatCurrency(totaisCalendario.resultado)}</p></div>
-            <div className="bg-white p-4 rounded-xl border border-[#e5eeff]"><p className="text-[10px] font-bold text-gray-500 uppercase">Saldo atual das contas</p><p className="text-lg font-black text-[#0b1c30] mt-1">{formatCurrency(saldoAtual)}</p></div>
+            <div className="bg-white p-4 rounded-xl border border-[#e5eeff]"><p className="text-[10px] font-bold text-gray-500 uppercase">Saldo atual das contas</p><p className="text-lg font-black text-[#0b1c30] mt-1">{formatCurrency(saldoAtual)}</p><p className="text-[9px] text-gray-500 mt-1">{contasAtivasUnidade.length} conta(s) ativa(s) somada(s)</p></div>
             <div className="bg-[#eff4ff] p-4 rounded-xl border border-[#d3e4fe]"><p className="text-[10px] font-bold text-[#0b1c30] uppercase">Saldo após pendências do mês</p><p className={`text-lg font-black mt-1 ${saldoAposPendencias >= 0 ? 'text-[#0b1c30]' : 'text-rose-700'}`}>{formatCurrency(saldoAposPendencias)}</p></div>
           </div>
 
           <div className="bg-white rounded-xl border border-[#e5eeff] shadow-xs overflow-hidden">
             <div className="p-4 border-b border-[#e5eeff] flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="flex items-center gap-2"><button onClick={() => { setMesCalendario(shiftMonth(mesCalendario, -1)); setDiaSelecionado(null); }} className="p-2 rounded-lg border border-gray-200"><span className="material-symbols-outlined text-base">chevron_left</span></button><h3 className="min-w-44 text-center text-sm font-black text-[#0b1c30]">{monthLabel(mesCalendario)}</h3><button onClick={() => { setMesCalendario(shiftMonth(mesCalendario, 1)); setDiaSelecionado(null); }} className="p-2 rounded-lg border border-gray-200"><span className="material-symbols-outlined text-base">chevron_right</span></button></div>
+              <div><div className="flex items-center gap-2"><button onClick={() => { setMesCalendario(shiftMonth(mesCalendario, -1)); setDiaSelecionado(null); }} className="p-2 rounded-lg border border-gray-200"><span className="material-symbols-outlined text-base">chevron_left</span></button><h3 className="min-w-44 text-center text-sm font-black text-[#0b1c30]">{monthLabel(mesCalendario)}</h3><button onClick={() => { setMesCalendario(shiftMonth(mesCalendario, 1)); setDiaSelecionado(null); }} className="p-2 rounded-lg border border-gray-200"><span className="material-symbols-outlined text-base">chevron_right</span></button></div><p className="text-[9px] text-gray-500 mt-1">A projeção acumulada começa em zero e considera todas as receitas e despesas da unidade.</p></div>
               <div className="flex items-center gap-1 bg-[#f8f9ff] border border-[#e5eeff] rounded-lg p-1">{(['COMPARATIVO', 'RECEITAS', 'DESPESAS'] as ModoCalendario[]).map((modo) => <button key={modo} onClick={() => setModoCalendario(modo)} className={`px-3 py-1.5 rounded-md text-[10px] font-bold ${modoCalendario === modo ? 'bg-[#131b2e] text-white' : 'text-gray-600'}`}>{modo === 'COMPARATIVO' ? 'Receitas × Despesas' : modo.charAt(0) + modo.slice(1).toLowerCase()}</button>)}</div>
             </div>
             <div className="grid grid-cols-7 bg-[#eff4ff] text-center text-[10px] font-bold uppercase text-[#0b1c30]">{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => <div key={day} className="p-2 border-r border-[#d3e4fe] last:border-r-0">{day}</div>)}</div>
@@ -310,6 +323,7 @@ export const FluxoCaixaView: React.FC = () => {
                     {modoCalendario !== 'DESPESAS' && dia.receitas > 0 && <p className="truncate rounded bg-emerald-50 px-1.5 py-1 text-[10px] font-bold text-emerald-700">+ {formatCurrency(dia.receitas)}</p>}
                     {modoCalendario !== 'RECEITAS' && dia.despesas > 0 && <p className="truncate rounded bg-rose-50 px-1.5 py-1 text-[10px] font-bold text-rose-700">− {formatCurrency(dia.despesas)}</p>}
                     {modoCalendario === 'COMPARATIVO' && (dia.receitas > 0 || dia.despesas > 0) && <p className={`truncate px-1 text-[9px] font-black ${dia.resultado >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>Resultado {formatCurrency(dia.resultado)}</p>}
+                    {(dia.receitas > 0 || dia.despesas > 0) && <p className={`truncate rounded px-1.5 py-1 text-[9px] font-black ${dia.saldoProjetado >= 0 ? 'bg-blue-50 text-blue-800' : 'bg-rose-100 text-rose-900'}`}>Saldo proj. {dia.saldoProjetado >= 0 ? '+' : '−'} {formatCurrency(Math.abs(dia.saldoProjetado))}</p>}
                   </div>
                 </button>
               ))}
@@ -318,7 +332,7 @@ export const FluxoCaixaView: React.FC = () => {
 
           {detalheDia && (
             <div className="bg-white rounded-xl border border-[#e5eeff] p-5">
-              <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-[#0b1c30]">Movimentações de {formatDate(detalheDia.data)}</h3><p className="text-[11px] text-gray-500">{detalheDia.lancamentos.length} lançamento(s) · {unidadeFluxo}</p></div><button onClick={() => setDiaSelecionado(null)} className="text-gray-500"><span className="material-symbols-outlined">close</span></button></div>
+              <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-[#0b1c30]">Movimentações de {formatDate(detalheDia.data)}</h3><p className="text-[11px] text-gray-500">{detalheDia.lancamentos.length} lançamento(s) · {unidadeFluxo}</p><p className={`text-[11px] font-black mt-1 ${detalheDia.saldoProjetado >= 0 ? 'text-blue-800' : 'text-rose-800'}`}>Saldo projetado acumulado até o dia: {detalheDia.saldoProjetado >= 0 ? '+' : '−'} {formatCurrency(Math.abs(detalheDia.saldoProjetado))}</p></div><button onClick={() => setDiaSelecionado(null)} className="text-gray-500"><span className="material-symbols-outlined">close</span></button></div>
               <div className="mt-3 divide-y divide-gray-100">{detalheDia.lancamentos.map((item) => <div key={item.id} className="py-3 flex items-center justify-between gap-4"><div><p className="text-xs font-bold text-[#0b1c30]">{item.descricao}</p><p className="text-[10px] text-gray-500">{item.fornecedorCliente} · {item.status} · {item.unidade}</p></div><p className={`text-xs font-black ${item.tipo === 'RECEITA' ? 'text-emerald-700' : 'text-rose-700'}`}>{item.tipo === 'RECEITA' ? '+' : '−'} {formatCurrency(item.valor)}</p></div>)}{detalheDia.lancamentos.length === 0 && <p className="py-5 text-center text-xs text-gray-500">Nenhum lançamento nesta data.</p>}</div>
             </div>
           )}

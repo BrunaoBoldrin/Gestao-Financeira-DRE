@@ -215,6 +215,16 @@ export const DREGerencialView: React.FC = () => {
       : 0;
     const isTotal = item.tipo === 'TOTAL';
     const isSubtotal = item.tipo === 'SUBTOTAL';
+    const currentValueColor = item.mesAtual < 0
+      ? isTotal ? 'text-rose-300' : 'text-rose-600'
+      : isTotal ? 'text-white' : 'text-[#0b1c30]';
+    const comparisonColor = isTotal ? 'text-slate-100' : 'text-gray-600';
+    const variationColor = momVarPercent > 0
+      ? isTotal ? 'text-emerald-300' : 'text-emerald-700'
+      : momVarPercent < 0
+        ? isTotal ? 'text-rose-300' : 'text-rose-700'
+        : isTotal ? 'text-sky-200' : 'text-gray-600';
+    const budgetColor = isTotal ? 'text-slate-200' : 'text-gray-500';
 
     return (
       <React.Fragment key={item.codigo}>
@@ -239,17 +249,17 @@ export const DREGerencialView: React.FC = () => {
               <span className="truncate">{item.descricao}</span>
             </div>
           </td>
-          <td className={`p-3 text-right font-mono font-bold ${item.mesAtual < 0 && !isTotal ? 'text-rose-600' : ''}`}>
+          <td className={`p-3 text-right font-mono font-bold ${currentValueColor}`}>
             R$ {item.mesAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </td>
           <td className="p-3 text-right font-mono text-[11px] font-semibold">{avPercent.toFixed(1)}%</td>
-          <td className="p-3 text-right font-mono text-gray-600">
+          <td className={`p-3 text-right font-mono ${comparisonColor}`}>
             R$ {item.mesAnterior.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </td>
-          <td className={`p-3 text-right font-mono font-bold text-[11px] ${momVarPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <td className={`p-3 text-right font-mono font-bold text-[11px] ${variationColor}`}>
             {momVarPercent >= 0 ? '+' : ''}{momVarPercent.toFixed(1)}%
           </td>
-          <td className="p-3 text-right font-mono text-gray-500">
+          <td className={`p-3 text-right font-mono ${budgetColor}`}>
             R$ {item.orcado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </td>
         </tr>
