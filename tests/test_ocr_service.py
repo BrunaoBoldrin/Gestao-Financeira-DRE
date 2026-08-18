@@ -119,6 +119,62 @@ class OCRServiceTests(unittest.TestCase):
         self.assertEqual(result["tipo"], "BOLETO")
         self.assertEqual(result["valorTotal"], 1250.00)
 
+    def test_extracts_multiple_accounts_from_pdf_pages(self):
+        document = pymupdf.open()
+        accounts = (
+            ("KATION RAIDEN DO BRASIL LTDA", "16/08/2026", "3.699,00"),
+            ("KATION RAIDEN DO BRASIL LTDA", "25/08/2026", "1.250,50"),
+        )
+        for supplier, due_date, amount in accounts:
+            page = document.new_page()
+            page.insert_text((72, 72), f"BOLETO Beneficiario: {supplier} CNPJ: 03.313.366/0001-09")
+            page.insert_text((72, 100), f"Data de emissao: 17/07/2026 Vencimento: {due_date}")
+            page.insert_text((72, 128), f"Valor do documento: R$ {amount}")
+        content = document.tobytes()
+        document.close()
+
+        result = analyze_document(
+            content=content,
+            mime_type="application/pdf",
+            file_name="boletos_multiplos.pdf",
+            max_pages=5,
+        )
+
+        extracted_accounts = result["contasExtraidas"]
+        self.assertEqual(len(extracted_accounts), 2)
+        self.assertEqual(
+            [account["dataVencimento"] for account in extracted_accounts],
+            ["2026-08-16", "2026-08-25"],
+        )
+        self.assertEqual(
+            [account["valorTotal"] for account in extracted_accounts],
+            [3699.00, 1250.50],
+        )
+
+    def test_extracts_multiple_accounts_from_same_page_text(self):
+        text = """
+        Beneficiario: Fornecedor Primeira Conta Ltda CNPJ: 11.111.111/0001-11
+        Emissao: 17/07/2026 Vencimento: 16/08/2026
+        Valor do documento: R$ 900,00
+        Beneficiario: Fornecedor Segunda Conta Ltda CNPJ: 22.222.222/0001-22
+        Emissao: 17/07/2026 Vencimento: 25/08/2026
+        Valor do documento: R$ 1.100,00
+        """
+
+        result = analyze_document(
+            content=b"",
+            mime_type="text/plain",
+            file_name="boletos_mesma_pagina.pdf",
+            text_content=text,
+            max_pages=5,
+        )
+
+        self.assertEqual(len(result["contasExtraidas"]), 2)
+        self.assertEqual(
+            [account["fornecedor"] for account in result["contasExtraidas"]],
+            ["Fornecedor Primeira Conta Ltda", "Fornecedor Segunda Conta Ltda"],
+        )
+
     @unittest.skipUnless(shutil.which("tesseract"), "Tesseract não instalado")
     def test_extracts_image_with_tesseract(self):
         image = Image.new("RGB", (1800, 650), "white")

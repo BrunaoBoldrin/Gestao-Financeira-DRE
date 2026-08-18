@@ -40,6 +40,21 @@ if allowed_origins:
     )
 
 
+def serialize_financial_data(data: dict) -> dict:
+    return {
+        "fornecedor": data["fornecedor"],
+        "cnpj": data["cnpj"],
+        "dataEmissao": data["dataEmissao"],
+        "dataVencimento": data["dataVencimento"],
+        "valorTotal": data["valorTotal"],
+        "categoria": data["categoria"],
+        "centroCusto": data["centroCusto"],
+        "linhaDigitavel": data["linhaDigitavel"],
+        "observacoes": data["observacoes"],
+        "itens": data["itens"],
+    }
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {
@@ -74,18 +89,15 @@ def run_ocr(request: OCRRequest) -> dict:
 
     return {
         "success": True,
-        "dadosExtraidos": {
-            "fornecedor": result["fornecedor"],
-            "cnpj": result["cnpj"],
-            "dataEmissao": result["dataEmissao"],
-            "dataVencimento": result["dataVencimento"],
-            "valorTotal": result["valorTotal"],
-            "categoria": result["categoria"],
-            "centroCusto": result["centroCusto"],
-            "linhaDigitavel": result["linhaDigitavel"],
-            "observacoes": result["observacoes"],
-            "itens": result["itens"],
-        },
+        "dadosExtraidos": serialize_financial_data(result),
+        "contasExtraidas": [
+            {
+                "dadosExtraidos": serialize_financial_data(account),
+                "tipo": account["tipo"],
+                "confiancaOCR": account["confiancaOCR"],
+            }
+            for account in result.get("contasExtraidas", [])
+        ],
         "tipo": result["tipo"],
         "confiancaOCR": result["confiancaOCR"],
         "motor": result["motor"],

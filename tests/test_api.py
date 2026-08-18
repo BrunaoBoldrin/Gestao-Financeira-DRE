@@ -1,6 +1,7 @@
 import base64
 import unittest
 
+import pymupdf
 from fastapi.testclient import TestClient
 
 from backend.main import app
@@ -49,6 +50,36 @@ class OCRApiTests(unittest.TestCase):
             json={"fileName": "vazio.pdf", "mimeType": "application/pdf"},
         )
         self.assertEqual(response.status_code, 422)
+
+    def test_ocr_returns_multiple_accounts_for_pdf(self):
+        document = pymupdf.open()
+        for due_date, amount in (("16/08/2026", "3.699,00"), ("25/08/2026", "1.250,50")):
+            page = document.new_page()
+            page.insert_text(
+                (72, 72),
+                "BOLETO Beneficiario: KATION RAIDEN DO BRASIL LTDA CNPJ: 03.313.366/0001-09",
+            )
+            page.insert_text((72, 100), f"Emissao: 17/07/2026 Vencimento: {due_date}")
+            page.insert_text((72, 128), f"Valor do documento: R$ {amount}")
+        pdf = document.tobytes()
+        document.close()
+
+        response = self.client.post(
+            "/api/ocr",
+            json={
+                "fileData": "data:application/pdf;base64," + base64.b64encode(pdf).decode(),
+                "mimeType": "application/pdf",
+                "fileName": "boletos_multiplos.pdf",
+            },
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload["contasExtraidas"]), 2)
+        self.assertEqual(
+            [account["dadosExtraidos"]["dataVencimento"] for account in payload["contasExtraidas"]],
+            ["2026-08-16", "2026-08-25"],
+        )
 
 
 if __name__ == "__main__":
