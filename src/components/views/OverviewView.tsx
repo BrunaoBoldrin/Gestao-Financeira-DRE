@@ -17,6 +17,44 @@ import {
   Cell
 } from 'recharts';
 
+const formatTooltipCurrency = (value: number) =>
+  `R$ ${Math.abs(value).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+
+const MonthlyFinancialTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+
+  const monthData = payload[0]?.payload || {};
+  const receitas = Number(monthData.Receitas || 0);
+  const despesas = Number(monthData.Despesas || 0);
+  const resultado = receitas - despesas;
+  const resultadoStatus = resultado > 0 ? 'Positivo' : resultado < 0 ? 'Negativo' : 'Zerado';
+  const resultadoColor = resultado > 0 ? '#34d399' : resultado < 0 ? '#fb7185' : '#cbd5e1';
+
+  return (
+    <div className="min-w-56 rounded-lg border border-slate-600 bg-[#0b1c30] p-3 text-xs shadow-xl">
+      <p className="mb-2 font-bold text-white">Competência: {label}</p>
+      <div className="space-y-1.5">
+        <p className="flex items-center justify-between gap-4 text-emerald-300">
+          <span>Receitas:</span>
+          <strong>+ {formatTooltipCurrency(receitas)}</strong>
+        </p>
+        <p className="flex items-center justify-between gap-4 text-amber-300">
+          <span>Despesas:</span>
+          <strong>− {formatTooltipCurrency(despesas)}</strong>
+        </p>
+        <div className="my-1 border-t border-slate-600" />
+        <p className="flex items-center justify-between gap-4 font-bold" style={{ color: resultadoColor }}>
+          <span>Resultado {resultadoStatus}:</span>
+          <strong>{resultado > 0 ? '+' : resultado < 0 ? '−' : ''} {formatTooltipCurrency(resultado)}</strong>
+        </p>
+      </div>
+    </div>
+  );
+};
+
 export const OverviewView: React.FC = () => {
   const {
     filteredLancamentos,
@@ -441,20 +479,7 @@ export const OverviewView: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#64748b' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                <Tooltip
-                  formatter={(value: any, name: any) => {
-                    const isExpense = String(name) === 'Despesas';
-                    const formattedValue = Number(value).toLocaleString('pt-BR', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    });
-                    return [`${isExpense ? '−' : '+'} R$ ${formattedValue}`, String(name)];
-                  }}
-                  labelFormatter={(label) => `Competência: ${label}`}
-                  contentStyle={{ backgroundColor: '#0b1c30', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                  labelStyle={{ color: '#fff', fontWeight: 700 }}
-                  itemStyle={{ fontWeight: 700 }}
-                />
+                <Tooltip content={<MonthlyFinancialTooltip />} />
                 <Bar dataKey="Receitas" fill="#0b1c30" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Despesas" fill="#C5A059" radius={[4, 4, 0, 0]} />
               </BarChart>
