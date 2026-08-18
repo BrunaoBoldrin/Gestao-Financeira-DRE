@@ -102,6 +102,9 @@ export interface DocumentoOCR {
   };
   previewUrl: string;
   previewMimeType?: string;
+  contaNumero?: number;
+  totalContasDocumento?: number;
+  documentoOrigemId?: string;
   lancamentoGeradoId?: string;
 }
 

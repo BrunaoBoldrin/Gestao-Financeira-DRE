@@ -1094,38 +1094,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (result.success && result.dadosExtraidos) {
-        const extraidos = result.dadosExtraidos;
-        setDocumentosOCR((prev) =>
-          prev.map((doc) =>
-            doc.id === docId
-              ? {
-                  ...doc,
-                  status: 'PENDENTE_REVISAO',
-                  tipo: result.tipo || doc.tipo,
-                  confiancaOCR: result.confiancaOCR ?? 0,
-                  dadosExtraidos: {
-                    fornecedor: extraidos.fornecedor || 'Fornecedor Não Identificado',
-                    cnpj: extraidos.cnpj || '',
-                    dataEmissao: extraidos.dataEmissao || '',
-                    dataVencimento: extraidos.dataVencimento || '',
-                    valorTotal: typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0,
-                    categoria: extraidos.categoria || 'Insumos Médicos & Estéticos',
-                    centroCusto: extraidos.centroCusto || 'Estoque Central',
-                    observacoes: extraidos.observacoes || '',
-                    itens: extraidos.itens || []
-                  }
-                }
-              : doc
-          )
-        );
+        const normalizeExtractedData = (extraidos: any): DocumentoOCR['dadosExtraidos'] => ({
+          fornecedor: extraidos.fornecedor || 'Fornecedor Não Identificado',
+          cnpj: extraidos.cnpj || '',
+          dataEmissao: extraidos.dataEmissao || '',
+          dataVencimento: extraidos.dataVencimento || '',
+          valorTotal: typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0,
+          categoria: extraidos.categoria || 'Insumos Médicos & Estéticos',
+          centroCusto: extraidos.centroCusto || 'Estoque Central',
+          observacoes: extraidos.observacoes || '',
+          itens: extraidos.itens || []
+        });
+        const accountResults = Array.isArray(result.contasExtraidas) && result.contasExtraidas.length > 1
+          ? result.contasExtraidas
+          : [{
+              dadosExtraidos: result.dadosExtraidos,
+              tipo: result.tipo,
+              confiancaOCR: result.confiancaOCR
+            }];
+        const totalAccounts = accountResults.length;
+        const accountDocuments: DocumentoOCR[] = accountResults.map((account: any, index: number) => ({
+          ...initialDoc,
+          id: totalAccounts > 1 ? `${docId}-conta-${index + 1}` : docId,
+          status: 'PENDENTE_REVISAO',
+          tipo: account.tipo || result.tipo || initialDoc.tipo,
+          confiancaOCR: account.confiancaOCR ?? result.confiancaOCR ?? 0,
+          dadosExtraidos: normalizeExtractedData(account.dadosExtraidos || account),
+          contaNumero: totalAccounts > 1 ? index + 1 : undefined,
+          totalContasDocumento: totalAccounts > 1 ? totalAccounts : undefined,
+          documentoOrigemId: totalAccounts > 1 ? docId : undefined
+        }));
 
-        const valorExtraido = typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0;
-        showToast(
-          valorExtraido > 0
-            ? `OCR Python concluído! Extraído R$ ${valorExtraido.toFixed(2)} (${extraidos.fornecedor}).`
-            : 'OCR Python concluído. Confira e preencha os campos que não foram identificados.',
-          valorExtraido > 0 ? 'success' : 'info'
+        setDocumentosOCR((prev) =>
+          prev.flatMap((doc) => doc.id === docId ? accountDocuments : [doc])
         );
+        setSelectedDocumentForReviewId(accountDocuments[0].id);
+
+        if (totalAccounts > 1) {
+          showToast(
+            `OCR concluído: ${totalAccounts} contas identificadas no PDF. Confira e aprove cada uma separadamente.`,
+            'success'
+          );
+        } else {
+          const extraidos = accountDocuments[0].dadosExtraidos;
+          const valorExtraido = extraidos.valorTotal;
+          showToast(
+            valorExtraido > 0
+              ? `OCR Python concluído! Extraído R$ ${valorExtraido.toFixed(2)} (${extraidos.fornecedor}).`
+              : 'OCR Python concluído. Confira e preencha os campos que não foram identificados.',
+            valorExtraido > 0 ? 'success' : 'info'
+          );
+        }
       } else {
         throw new Error('Retorno inválido do OCR');
       }

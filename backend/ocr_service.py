@@ -41,6 +41,7 @@ class DocumentText:
     source: str
     ocr_confidence: float | None = None
     pages_processed: int = 1
+    segments: list[str] | None = None
 
 
 def decode_file_data(file_data: str | None) -> bytes:
@@ -72,10 +73,17 @@ def analyze_document(
     max_pages: int = 5,
 ) -> dict[str, Any]:
     extracted = extract_document_text(content, mime_type, file_name, text_content, max_pages)
-    fields = parse_financial_fields(extracted.text, file_name)
+    accounts = _extract_financial_accounts(extracted, file_name)
+    fields = accounts[0] if accounts else parse_financial_fields(extracted.text, file_name)
     completeness = _field_completeness(fields)
     base_confidence = extracted.ocr_confidence if extracted.ocr_confidence is not None else 93.0
     confidence = round(min(99.0, max(20.0, (base_confidence * 0.65) + (completeness * 0.35))))
+
+    for account in accounts:
+        account_completeness = _field_completeness(account)
+        account["confiancaOCR"] = round(
+            min(99.0, max(20.0, (base_confidence * 0.65) + (account_completeness * 0.35)))
+        )
 
     return {
         **fields,
@@ -83,6 +91,7 @@ def analyze_document(
         "motor": "python-local",
         "fonteExtracao": extracted.source,
         "paginasProcessadas": extracted.pages_processed,
+        "contasExtraidas": accounts,
     }
 
 
@@ -98,13 +107,14 @@ def extract_document_text(
 
     if text_content and text_content.strip():
         source = "xml" if suffix == ".xml" or "xml" in normalized_mime else "texto"
-        return DocumentText(text=text_content, source=source)
+        return DocumentText(text=text_content, source=source, segments=[text_content])
 
     if suffix == ".pdf" or normalized_mime == "application/pdf":
         return _extract_pdf(content, max_pages)
 
     if suffix in {".xml", ".txt"} or normalized_mime in {"application/xml", "text/xml", "text/plain"}:
-        return DocumentText(text=_decode_text(content), source="xml" if suffix == ".xml" else "texto")
+        decoded = _decode_text(content)
+        return DocumentText(text=decoded, source="xml" if suffix == ".xml" else "texto", segments=[decoded])
 
     if suffix in {".jpg", ".jpeg", ".png"} or normalized_mime.startswith("image/"):
         return _extract_image(content)
@@ -155,6 +165,7 @@ def _extract_pdf(content: bytes, max_pages: int) -> DocumentText:
         source="pdf_ocr" if used_ocr else "pdf_texto",
         ocr_confidence=sum(confidences) / len(confidences) if confidences else None,
         pages_processed=page_limit,
+        segments=[part for part in texts if part.strip()],
     )
 
 
@@ -173,7 +184,7 @@ def _extract_image(content: bytes) -> DocumentText:
     text, confidence = _run_tesseract(buffer.getvalue())
     if not text.strip():
         raise OCRProcessingError("Nenhum texto legível foi encontrado na imagem.")
-    return DocumentText(text=text, source="imagem_ocr", ocr_confidence=confidence)
+    return DocumentText(text=text, source="imagem_ocr", ocr_confidence=confidence, segments=[text])
 
 
 def _prepare_image(image: Image.Image) -> Image.Image:
@@ -291,6 +302,52 @@ def parse_financial_fields(text: str, file_name: str) -> dict[str, Any]:
         "itens": [],
         "tipo": document_type,
     }
+
+
+def _extract_financial_accounts(extracted: DocumentText, file_name: str) -> list[dict[str, Any]]:
+    source_segments = extracted.segments or [extracted.text]
+    candidate_segments: list[str] = []
+    for segment in source_segments:
+        candidate_segments.extend(_split_financial_sections(segment))
+
+    accounts: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, float, str]] = set()
+    for segment in candidate_segments:
+        fields = parse_financial_fields(segment, file_name)
+        if not fields.get("dataVencimento") or float(fields.get("valorTotal") or 0) <= 0:
+            continue
+
+        key = (
+            str(fields.get("fornecedor") or "").casefold(),
+            str(fields.get("cnpj") or ""),
+            str(fields.get("dataVencimento") or ""),
+            float(fields.get("valorTotal") or 0),
+            str(fields.get("linhaDigitavel") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        accounts.append(fields)
+
+    return accounts if len(accounts) > 1 else []
+
+
+def _split_financial_sections(text: str) -> list[str]:
+    beneficiary_pattern = re.compile(
+        r"(?<![A-Za-zÀ-ÿ])(?:benefici[aá]ri[oa]|beneficiador|cedente|favorecido)",
+        flags=re.IGNORECASE,
+    )
+    starts = [match.start() for match in beneficiary_pattern.finditer(text)]
+    if len(starts) < 2:
+        return [text]
+
+    sections: list[str] = []
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else len(text)
+        section = text[start:end].strip()
+        if section:
+            sections.append(section)
+    return sections or [text]
 
 
 def _extract_xml_fields(text: str) -> dict[str, Any]:

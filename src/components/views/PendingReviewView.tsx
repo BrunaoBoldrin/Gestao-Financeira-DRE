@@ -182,7 +182,9 @@ export const PendingReviewView: React.FC = () => {
               Auditoria e Conferência OCR Lado a Lado
             </h2>
             <p className="text-xs text-gray-500">
-              Verifique os dados extraídos pelo OCR em paralelo com a imagem/PDF original do documento.
+              {currentDoc.totalContasDocumento && currentDoc.totalContasDocumento > 1
+                ? `${currentDoc.totalContasDocumento} contas foram identificadas neste documento. Confira e aprove cada uma individualmente.`
+                : 'Verifique os dados extraídos pelo OCR em paralelo com a imagem/PDF original do documento.'}
             </p>
           </div>
         </div>
@@ -202,7 +204,11 @@ export const PendingReviewView: React.FC = () => {
               <span className="material-symbols-outlined text-sm">
                 {doc.status === 'APROVADO' ? 'check_circle' : 'pending'}
               </span>
-              <span className="truncate max-w-[100px]">{doc.nomeArquivo}</span>
+              <span className="truncate max-w-[120px]">
+                {doc.totalContasDocumento && doc.contaNumero
+                  ? `Conta ${doc.contaNumero}/${doc.totalContasDocumento}`
+                  : doc.nomeArquivo}
+              </span>
             </button>
           ))}
         </div>
@@ -218,6 +224,9 @@ export const PendingReviewView: React.FC = () => {
                 <span className="material-symbols-outlined text-gray-500">visibility</span>
                 <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
                   Documento Original ({currentDoc.nomeArquivo})
+                  {currentDoc.totalContasDocumento && currentDoc.contaNumero
+                    ? ` — Conta ${currentDoc.contaNumero}/${currentDoc.totalContasDocumento}`
+                    : ''}
                 </h3>
               </div>
 
@@ -286,6 +295,23 @@ export const PendingReviewView: React.FC = () => {
                 {currentDoc.status}
               </span>
             </div>
+
+            {currentDoc.totalContasDocumento && currentDoc.contaNumero && (
+              <div className="flex items-center justify-between gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-lg">account_balance_wallet</span>
+                  <div>
+                    <p className="text-xs font-bold">
+                      Conta {currentDoc.contaNumero} de {currentDoc.totalContasDocumento}
+                    </p>
+                    <p className="text-[10px] text-blue-700">Esta conta será aprovada e lançada separadamente.</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold bg-white border border-blue-200 px-2 py-1 rounded">
+                  PENDENTE INDIVIDUAL
+                </span>
+              </div>
+            )}
 
             <div>
               <label className="block text-[11px] font-semibold text-gray-700 mb-1">
