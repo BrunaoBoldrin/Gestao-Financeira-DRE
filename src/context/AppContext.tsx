@@ -1080,11 +1080,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         })
       });
 
+      const result = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(result?.detail || `Falha no OCR (HTTP ${response.status})`);
       }
-
-      const result = await response.json();
 
       if (result.success && result.dadosExtraidos) {
         const extraidos = result.dadosExtraidos;
@@ -1095,12 +1094,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   ...doc,
                   status: 'PENDENTE_REVISAO',
                   tipo: result.tipo || doc.tipo,
-                  confiancaOCR: result.confiancaOCR || 92,
+                  confiancaOCR: result.confiancaOCR ?? 0,
                   dadosExtraidos: {
                     fornecedor: extraidos.fornecedor || 'Fornecedor Não Identificado',
-                    cnpj: extraidos.cnpj || '00.000.000/0001-00',
-                    dataEmissao: extraidos.dataEmissao || new Date().toISOString().substring(0, 10),
-                    dataVencimento: extraidos.dataVencimento || new Date(Date.now() + 864000000).toISOString().substring(0, 10),
+                    cnpj: extraidos.cnpj || '',
+                    dataEmissao: extraidos.dataEmissao || '',
+                    dataVencimento: extraidos.dataVencimento || '',
                     valorTotal: typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0,
                     categoria: extraidos.categoria || 'Insumos Médicos & Estéticos',
                     centroCusto: extraidos.centroCusto || 'Estoque Central',
@@ -1112,41 +1111,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           )
         );
 
+        const valorExtraido = typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0;
         showToast(
-          `OCR concluído! Extraído R$ ${extraidos.valorTotal.toFixed(2)} (${extraidos.fornecedor}).`,
-          'success'
+          valorExtraido > 0
+            ? `OCR Python concluído! Extraído R$ ${valorExtraido.toFixed(2)} (${extraidos.fornecedor}).`
+            : 'OCR Python concluído. Confira e preencha os campos que não foram identificados.',
+          valorExtraido > 0 ? 'success' : 'info'
         );
       } else {
         throw new Error('Retorno inválido do OCR');
       }
     } catch (err: any) {
       console.error('Erro na requisição de OCR:', err);
-      // Fallback update so status isn't stuck at PROCESSANDO
-      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-      const isBoleto = file.name.toLowerCase().includes('boleto');
-      
+      const errorMessage = err instanceof Error ? err.message : 'Falha desconhecida no OCR';
       setDocumentosOCR((prev) =>
         prev.map((doc) =>
           doc.id === docId
             ? {
                 ...doc,
                 status: 'PENDENTE_REVISAO',
-                confiancaOCR: 85,
-                tipo: isBoleto ? 'BOLETO' : 'NFE',
+                confiancaOCR: 0,
                 dadosExtraidos: {
-                  fornecedor: cleanName || 'Fornecedor Local',
-                  cnpj: '12.345.678/0001-99',
-                  dataEmissao: new Date().toISOString().substring(0, 10),
-                  dataVencimento: new Date(Date.now() + 864000000).toISOString().substring(0, 10),
-                  valorTotal: isBoleto ? 480.00 : 250.00,
-                  categoria: 'Insumos Médicos & Estéticos',
-                  centroCusto: 'Estoque Central'
+                  fornecedor: '',
+                  cnpj: '',
+                  dataEmissao: '',
+                  dataVencimento: '',
+                  valorTotal: 0,
+                  categoria: 'Despesas Operacionais',
+                  centroCusto: 'Administrativo',
+                  observacoes: `OCR não concluído: ${errorMessage}`
                 }
               }
             : doc
         )
       );
-      showToast('Documento pronto para conferência.', 'info');
+      showToast(`Não foi possível concluir o OCR: ${errorMessage}`, 'error');
     }
   };
 
