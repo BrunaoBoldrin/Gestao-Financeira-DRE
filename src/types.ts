@@ -32,6 +32,19 @@ export interface User {
 
 export type StatusLancamento = 'PAGO' | 'PENDENTE' | 'ATRASADO' | 'CANCELADO';
 export type TipoLancamento = 'RECEITA' | 'DESPESA';
+export type GrupoDRE =
+  | 'RECEITA_BRUTA'
+  | 'DEDUCAO_RECEITA'
+  | 'CUSTO_SERVICO_PRODUTO'
+  | 'DESPESA_VENDAS'
+  | 'DESPESA_ADMINISTRATIVA'
+  | 'OUTRA_RECEITA_OPERACIONAL'
+  | 'OUTRA_DESPESA_OPERACIONAL'
+  | 'DEPRECIACAO_AMORTIZACAO'
+  | 'RECEITA_FINANCEIRA'
+  | 'DESPESA_FINANCEIRA'
+  | 'TRIBUTO_LUCRO'
+  | 'NAO_AFETA_DRE';
 export type SentidoFinanceiro = 'ENTRADA' | 'SAIDA' | 'A_CONFIRMAR';
 export type ImpactoDRE = 'RECEITA' | 'DESPESA' | 'NAO_AFETA' | 'A_CONFIRMAR';
 export type FinalidadeFinanceira =
@@ -65,6 +78,7 @@ export interface Lancamento {
   categoria: string;
   centroCusto: string;
   valor: number;
+  dataCompetencia?: string;
   dataVencimento: string;
   dataPagamento?: string;
   status: StatusLancamento;
@@ -82,7 +96,7 @@ export interface Lancamento {
   documentoConciliadoId?: string;
   parcelamentoId?: string;
   numeroParcela?: string;
-  formaPagamento: 'PIX' | 'BOLETO' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'DINHEIRO' | 'TRANSFERENCIA';
+  formaPagamento: 'PIX' | 'BOLETO' | 'CARNE' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'DINHEIRO' | 'TRANSFERENCIA';
   unidade: string;
   observacoes?: string;
   criadoEm: string;
@@ -125,6 +139,7 @@ export interface DocumentoOCR {
     fornecedor: string;
     cnpj: string;
     dataEmissao: string;
+    dataCompetencia?: string;
     dataVencimento: string;
     valorTotal: number;
     categoria: string;
@@ -260,6 +275,7 @@ export interface CategoriaMaster {
   codigo: string;
   nome: string;
   tipo: 'RECEITA' | 'DESPESA';
+  grupoDRE: GrupoDRE;
   ativa: boolean;
 }
 

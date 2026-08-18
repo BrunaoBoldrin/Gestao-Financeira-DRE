@@ -16,6 +16,8 @@ export const PendingReviewView: React.FC = () => {
     conciliarDocumentoOCR,
     addLancamento,
     addLancamentoComDDL,
+    categorias,
+    centrosCusto,
     condicoesPagamento,
     bancos,
     setCurrentView,
@@ -36,6 +38,7 @@ export const PendingReviewView: React.FC = () => {
   const [fornecedor, setFornecedor] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [dataEmissao, setDataEmissao] = useState('');
+  const [dataCompetencia, setDataCompetencia] = useState('');
   const [dataVencimento, setDataVencimento] = useState('');
   const [valorTotal, setValorTotal] = useState('');
   const [categoria, setCategoria] = useState('');
@@ -63,6 +66,7 @@ export const PendingReviewView: React.FC = () => {
       setFornecedor(currentDoc.dadosExtraidos.fornecedor || '');
       setCnpj(currentDoc.dadosExtraidos.cnpj || '');
       setDataEmissao(extractedIssueDate);
+      setDataCompetencia(currentDoc.dadosExtraidos.dataCompetencia || extractedIssueDate);
       setDataVencimento(currentDoc.dadosExtraidos.dataVencimento || suggestedDueDate);
       setValorTotal(currentDoc.dadosExtraidos.valorTotal ? currentDoc.dadosExtraidos.valorTotal.toString() : '0');
       setCategoria(currentDoc.dadosExtraidos.categoria || 'Insumos Médicos & Estéticos');
@@ -115,6 +119,16 @@ export const PendingReviewView: React.FC = () => {
     setAcaoFinanceira(financialMatches.length > 0 || duplicateDocument ? 'A_CONFIRMAR' : 'CRIAR_NOVO');
   }, [currentDoc?.id, financialMatches.length, duplicateDocument?.id]);
 
+  useEffect(() => {
+    if (impactoDRE !== 'RECEITA' && impactoDRE !== 'DESPESA') return;
+    const categoryIsCompatible = categorias.some(
+      (item) => item.ativa && item.tipo === impactoDRE && item.nome === categoria
+    );
+    if (!categoryIsCompatible) {
+      setCategoria(categorias.find((item) => item.ativa && item.tipo === impactoDRE)?.nome || '');
+    }
+  }, [impactoDRE, categorias, categoria]);
+
   if (!currentDoc || currentDoc.status !== 'PENDENTE_REVISAO') {
     return (
       <div className="p-12 text-center bg-white rounded-xl border border-[#e5eeff] shadow-xs max-w-lg mx-auto my-10 space-y-4">
@@ -165,8 +179,8 @@ export const PendingReviewView: React.FC = () => {
   };
 
   const handleAprovar = () => {
-    if (!dataEmissao || !dataVencimento) {
-      showToast('Informe as datas do documento antes de aprovar.', 'error');
+    if (!dataEmissao || !dataCompetencia || !dataVencimento) {
+      showToast('Informe emissão, competência e vencimento antes de aprovar.', 'error');
       return;
     }
     if (!unidadeLancamento) {
@@ -175,6 +189,13 @@ export const PendingReviewView: React.FC = () => {
     }
     if (sentido === 'A_CONFIRMAR' || impactoDRE === 'A_CONFIRMAR' || finalidade === 'A_CONFIRMAR') {
       showToast('Confirme o sentido, o impacto no DRE e a finalidade financeira.', 'error');
+      return;
+    }
+    if (
+      impactoDRE !== 'NAO_AFETA' &&
+      !categorias.some((item) => item.ativa && item.tipo === impactoDRE && item.nome === categoria)
+    ) {
+      showToast('Selecione uma categoria ativa compatível com o impacto no DRE.', 'error');
       return;
     }
     if (acaoFinanceira === 'A_CONFIRMAR') {
@@ -199,6 +220,7 @@ export const PendingReviewView: React.FC = () => {
       fornecedor,
       cnpj,
       dataEmissao,
+      dataCompetencia,
       dataVencimento,
       valorTotal: numVal,
       categoria,
@@ -246,9 +268,10 @@ export const PendingReviewView: React.FC = () => {
     const baseLaunch = {
       descricao: `${currentDoc.nomeArquivo} - ${fornecedor}`,
       tipo: launchType as 'RECEITA' | 'DESPESA',
-      categoria: categoria || (launchType === 'RECEITA' ? 'Procedimentos Estéticos' : 'Despesas Operacionais'),
+      categoria: categoria || (launchType === 'RECEITA' ? 'Procedimentos Estéticos' : 'Outras Despesas Operacionais'),
       centroCusto: centroCusto || 'Administrativo',
       valor: numVal,
+      dataCompetencia,
       dataVencimento: dataVencimento || dataEmissao,
       dataPagamento: isRealizedDocument ? dataEmissao : undefined,
       status: isRealizedDocument ? 'PAGO' as const : 'PENDENTE' as const,
@@ -559,6 +582,22 @@ export const PendingReviewView: React.FC = () => {
               </div>
             </div>
 
+            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+              <label className="block text-[11px] font-semibold text-sky-900 mb-1">
+                Data de competência da DRE
+              </label>
+              <input
+                type="date"
+                required
+                value={dataCompetencia}
+                onChange={(e) => setDataCompetencia(e.target.value)}
+                className="w-full px-3 py-1.5 border border-sky-200 rounded-md text-xs font-semibold bg-white focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
+              />
+              <p className="text-[10px] text-sky-800 mt-1">
+                Por padrão usa a emissão, mas pode ser corrigida antes da aprovação.
+              </p>
+            </div>
+
             {/* DDL Condition selector and live preview */}
             {impactoDRE === 'DESPESA' && ['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo) && (
             <div className="bg-[#f8f9ff] border border-[#C5A059]/40 p-3 rounded-lg space-y-2">
@@ -652,16 +691,15 @@ export const PendingReviewView: React.FC = () => {
                   onChange={(e) => setCategoria(e.target.value)}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-semibold"
                 >
-                  <option value="Insumos Médicos & Estéticos">Insumos Médicos & Estéticos</option>
-                  <option value="Serviços Terceirizados">Serviços Terceirizados</option>
-                  <option value="Ocupação & Infraestrutura">Ocupação & Infraestrutura</option>
-                  <option value="Marketing & Publicidade">Marketing & Publicidade</option>
-                  <option value="Energia / Água / Telecom">Energia / Água / Telecom</option>
-                  <option value="Aluguel & Imóveis">Aluguel & Imóveis</option>
-                  <option value="Impostos & Taxas">Impostos & Taxas</option>
-                  <option value="Manutenção & Equipamentos">Manutenção & Equipamentos</option>
-                  <option value="Softwares & Sistemas">Softwares & Sistemas</option>
-                  <option value="Despesas Operacionais">Despesas Operacionais</option>
+                  {categorias
+                    .filter((item) => item.ativa && (
+                      impactoDRE === 'A_CONFIRMAR' ||
+                      impactoDRE === 'NAO_AFETA' ||
+                      item.tipo === impactoDRE
+                    ))
+                    .map((item) => (
+                      <option key={item.id} value={item.nome}>{item.nome}</option>
+                    ))}
                 </select>
               </div>
 
@@ -672,11 +710,9 @@ export const PendingReviewView: React.FC = () => {
                   onChange={(e) => setCentroCusto(e.target.value)}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-semibold"
                 >
-                  <option value="Estoque Central">Estoque Central</option>
-                  <option value="Clínica / Atendimento">Clínica / Atendimento</option>
-                  <option value="Administrativo">Administrativo</option>
-                  <option value="TI & Sistemas">TI & Sistemas</option>
-                  <option value="Marketing & Vendas">Marketing & Vendas</option>
+                  {centrosCusto.filter((item) => item.ativo).map((item) => (
+                    <option key={item.id} value={item.nome}>{item.nome}</option>
+                  ))}
                 </select>
               </div>
             </div>
