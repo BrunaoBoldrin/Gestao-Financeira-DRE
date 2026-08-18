@@ -30,9 +30,8 @@ export const PendingReviewView: React.FC = () => {
   const pendingDocs = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO');
 
   const currentDoc =
-    documentosOCR.find((d) => d.id === selectedDocumentForReviewId) ||
-    pendingDocs[0] ||
-    documentosOCR[0];
+    pendingDocs.find((d) => d.id === selectedDocumentForReviewId) ||
+    pendingDocs[0];
 
   const [fornecedor, setFornecedor] = useState('');
   const [cnpj, setCnpj] = useState('');
@@ -312,7 +311,7 @@ export const PendingReviewView: React.FC = () => {
 
         {/* Document Selector Pills */}
         <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 sm:flex-1">
-          {documentosOCR.map((doc) => (
+          {pendingDocs.map((doc) => (
             <button
               key={doc.id}
               onClick={() => setSelectedDocumentForReviewId(doc.id)}
