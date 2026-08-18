@@ -152,7 +152,6 @@ interface AppContextType {
   ) => void;
   rejeitarDocumentoOCR: (docId: string) => void;
   
-  abrirCaixa: (saldoInicial: number) => void;
   registrarMovimentacaoCaixa: (
     tipo: 'SUPRIMENTO' | 'SANGRIA' | 'VENDA' | 'DESPESA',
     descricao: string,
@@ -160,7 +159,12 @@ interface AppContextType {
     comprovanteRef?: string,
     detalhes?: DetalhesMovimentacaoCaixa
   ) => void;
-  fecharCaixa: (saldoContado: number, observacao: string) => void;
+  ajustarSaldoCaixa: (dados: {
+    unidade: string;
+    novoSaldo: number;
+    motivo: string;
+    comprovanteRef?: string;
+  }) => void;
   
   toggleChecklistItemFechamento: (chkId: string) => void;
   travarFechamentoMensal: () => void;
@@ -761,6 +765,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('A conta de destino deve ser diferente da conta de origem.', 'error');
       return;
     }
+    if (!Number.isFinite(dados.valor) || dados.valor <= 0) {
+      showToast('Informe um valor de transferência maior que zero.', 'error');
+      return;
+    }
+    if (origem.saldo < dados.valor) {
+      showToast(`Saldo insuficiente em "${origem.banco}" para concluir a transferência.`, 'error');
+      return;
+    }
     if (origem.unidade !== dados.unidade || destino.unidade !== dados.unidade) {
       showToast('A transferência só pode ocorrer entre contas da unidade selecionada.', 'error');
       return;
@@ -1323,36 +1335,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog('Documentos OCR', 'EDICAO', `Rejeitou documento OCR ${docId}`, 'PENDENTE_REVISAO', 'REJEITADO');
   };
 
-  // --- Caixa Fisico ---
-  const abrirCaixa = (saldoInicial: number) => {
-    if (!checkFinancialPermission('Abrir Caixa Físico')) return;
-    setSessaoCaixa({
-      id: 'cx-' + new Date().toISOString().substring(0, 10),
-      data: new Date().toISOString().substring(0, 10),
-      status: 'ABERTO',
-      saldoInicial,
-      entradasDinheiro: 0,
-      saidasDinheiro: 0,
-      saldoEsperado: saldoInicial,
-      operadorAbertura: currentUser ? currentUser.name : 'Operador',
-      movimentacoes: [
-        {
-          id: 'mov-' + Date.now(),
-          tipo: 'SUPRIMENTO',
-          descricao: 'Abertura de Caixa - Fundo de Troco',
-          valor: saldoInicial,
-          dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
-          usuario: currentUser ? currentUser.name : 'Operador',
-          finalidade: 'ABERTURA_CAIXA',
-          impactoDRE: 'NAO_AFETA',
-          statusConciliacao: 'CONCILIADO'
-        }
-      ]
-    });
-    showToast(`Caixa Físico aberto com R$ ${saldoInicial.toFixed(2)} de saldo inicial!`, 'success');
-    addAuditLog('Caixa Físico', 'CRIACAO', `Abriu o caixa do dia com saldo inicial de R$ ${saldoInicial.toFixed(2)}`);
-  };
-
+  // --- Caixa Fisico (saldo continuo por unidade) ---
   const registrarMovimentacaoCaixa = (
     tipo: 'SUPRIMENTO' | 'SANGRIA' | 'VENDA' | 'DESPESA',
     descricao: string,
@@ -1367,9 +1350,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Informe um valor maior que zero para a movimentação de caixa.', 'error');
       return;
     }
-    const unidade = resolveAllowedUnit(
-      unidadeOverride || (selectedUnit === 'Todas as Unidades' ? 'Royal Face - Matriz' : selectedUnit)
-    );
+    const unidadeSolicitada =
+      unidadeOverride || detalhes?.unidade || (selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
+    if (!unidadeSolicitada) {
+      showToast('Selecione a unidade do caixa antes de registrar a movimentação.', 'error');
+      return;
+    }
+    const unidade = resolveAllowedUnit(unidadeSolicitada);
     const caixaBanco = bancos.find(
       (banco) =>
         banco.unidade === unidade &&
@@ -1378,6 +1365,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     if (!caixaBanco && !skipBankBalance) {
       showToast(`Cadastre uma conta do tipo Caixa Físico para a unidade "${unidade}".`, 'error');
+      return;
+    }
+    const isEntrada = tipo === 'SUPRIMENTO' || tipo === 'VENDA';
+    const saldoAtual = caixaBanco?.saldo || 0;
+    if (!isEntrada && saldoAtual < valor) {
+      showToast(
+        `Saldo insuficiente no Caixa Físico de "${unidade}". Disponível: ${formatCurrency(saldoAtual)}.`,
+        'error'
+      );
       return;
     }
     if (tipo === 'SANGRIA' && detalhes?.finalidade === 'PAGAMENTO_DESPESA') {
@@ -1391,6 +1387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
     }
+    const delta = isEntrada ? valor : -valor;
     const novaMov = {
       id: 'mov-' + Date.now(),
       tipo,
@@ -1398,6 +1395,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       valor,
       dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
       usuario: currentUser ? currentUser.name : 'Operador',
+      unidade,
+      sentido: isEntrada ? 'ENTRADA' as const : 'SAIDA' as const,
+      saldoApos: saldoAtual + delta,
       comprovanteRef,
       finalidade: detalhes?.finalidade || (tipo === 'VENDA' ? 'VENDA_DINHEIRO' : tipo === 'SUPRIMENTO' ? 'REFORCO_TROCO' : 'OUTRO'),
       impactoDRE: detalhes?.impactoDRE || (tipo === 'VENDA' ? 'RECEITA' : 'NAO_AFETA'),
@@ -1408,20 +1408,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       observacoes: detalhes?.observacoes
     };
 
-    setSessaoCaixa((prev) => {
-      const isEntrada = tipo === 'SUPRIMENTO' || tipo === 'VENDA';
-      const entradas = prev.entradasDinheiro + (isEntrada ? valor : 0);
-      const saidas = prev.saidasDinheiro + (!isEntrada ? valor : 0);
-      const saldoEsperado = prev.saldoInicial + entradas - saidas;
-
-      return {
-        ...prev,
-        entradasDinheiro: entradas,
-        saidasDinheiro: saidas,
-        saldoEsperado,
-        movimentacoes: [novaMov, ...prev.movimentacoes]
-      };
-    });
+    setSessaoCaixa((prev) => ({
+      ...prev,
+      movimentacoes: [novaMov, ...prev.movimentacoes]
+    }));
 
     if (tipo === 'VENDA') {
       addLancamento({
@@ -1460,11 +1450,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adjustBancoBalance(caixaBanco.id, -valor, `Pagamento em dinheiro: "${descricao}"`);
       }
     } else if (!skipBankBalance && caixaBanco) {
-      const delta = tipo === 'SUPRIMENTO' ? valor : -valor;
       adjustBancoBalance(caixaBanco.id, delta, `${tipo} no caixa físico: "${descricao}"`);
     }
 
-    showToast(`Movimentação de ${tipo} de R$ ${valor.toFixed(2)} registrada no Caixa Físico!`, 'success');
+    showToast(`Movimentação de ${tipo} de ${formatCurrency(valor)} registrada no Caixa Físico!`, 'success');
     addAuditLog(
       'Caixa Físico',
       'CRIACAO',
@@ -1472,21 +1461,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const fecharCaixa = (saldoContado: number, observacao: string) => {
-    if (!checkFinancialPermission('Fechar Caixa Físico')) return;
-    setSessaoCaixa((prev) => {
-      const divergencia = saldoContado - prev.saldoEsperado;
-      return {
-        ...prev,
-        status: 'FECHADO',
-        saldoContado,
-        divergencia,
-        observacaoFechamento: observacao,
-        operadorFechamento: currentUser ? currentUser.name : 'Operador'
-      };
-    });
-    showToast('Caixa Físico do dia encerrado com sucesso!', 'info');
-    addAuditLog('Caixa Físico', 'FECHAMENTO', `Fechou o caixa do dia com saldo contado de R$ ${saldoContado.toFixed(2)}`);
+  const ajustarSaldoCaixa = (dados: {
+    unidade: string;
+    novoSaldo: number;
+    motivo: string;
+    comprovanteRef?: string;
+  }) => {
+    if (!checkAdminPermission('Ajustar saldo do Caixa Físico')) return;
+    const unidade = resolveAllowedUnit(dados.unidade);
+    const motivo = dados.motivo.trim();
+    if (!Number.isFinite(dados.novoSaldo) || dados.novoSaldo < 0) {
+      showToast('O novo saldo do Caixa Físico deve ser zero ou maior.', 'error');
+      return;
+    }
+    if (!motivo) {
+      showToast('Informe o motivo do ajuste manual de saldo.', 'error');
+      return;
+    }
+    const caixaBanco = bancos.find(
+      (banco) =>
+        banco.unidade === unidade &&
+        banco.ativo &&
+        banco.banco.toLocaleLowerCase('pt-BR').includes('caixa')
+    );
+    if (!caixaBanco) {
+      showToast(`Cadastre uma conta do tipo Caixa Físico para a unidade "${unidade}".`, 'error');
+      return;
+    }
+
+    const saldoAnterior = caixaBanco.saldo;
+    const diferenca = dados.novoSaldo - saldoAnterior;
+    if (Math.abs(diferenca) < 0.001) {
+      showToast('O novo saldo é igual ao saldo atual; nenhum ajuste foi necessário.', 'info');
+      return;
+    }
+
+    setBancos((prev) =>
+      prev.map((banco) => (banco.id === caixaBanco.id ? { ...banco, saldo: dados.novoSaldo } : banco))
+    );
+    setSessaoCaixa((prev) => ({
+      ...prev,
+      movimentacoes: [
+        {
+          id: 'mov-' + Date.now(),
+          tipo: 'AJUSTE',
+          descricao: `Ajuste manual de saldo: ${motivo}`,
+          valor: Math.abs(diferenca),
+          dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          usuario: currentUser ? currentUser.name : 'Administrador',
+          unidade,
+          sentido: diferenca > 0 ? 'ENTRADA' : 'SAIDA',
+          saldoApos: dados.novoSaldo,
+          motivoAjuste: motivo,
+          comprovanteRef: dados.comprovanteRef,
+          finalidade: 'AJUSTE_SALDO',
+          impactoDRE: 'NAO_AFETA',
+          statusConciliacao: 'CONCILIADO'
+        },
+        ...prev.movimentacoes
+      ]
+    }));
+    addAuditLog(
+      'Caixa Físico',
+      'EDICAO',
+      `Ajustou manualmente o saldo do Caixa Físico de "${unidade}". Motivo: ${motivo}`,
+      formatCurrency(saldoAnterior),
+      formatCurrency(dados.novoSaldo)
+    );
+    showToast(`Saldo do Caixa Físico ajustado para ${formatCurrency(dados.novoSaldo)}.`, 'success');
   };
 
   // --- Fechamento Mensal ---
@@ -1668,9 +1710,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         aprovarDocumentoOCR,
         conciliarDocumentoOCR,
         rejeitarDocumentoOCR,
-        abrirCaixa,
         registrarMovimentacaoCaixa,
-        fecharCaixa,
+        ajustarSaldoCaixa,
         toggleChecklistItemFechamento,
         travarFechamentoMensal,
         reabrirFechamentoMensal,

@@ -89,7 +89,10 @@ export const INITIAL_FORNECEDORES: FornecedorMaster[] = [
 export const INITIAL_BANCOS: BancoMaster[] = [
   { id: 'banc-1', banco: 'Itaú Uniclass - C/C 45892-1', agencia: '0892', conta: '45892-1', unidade: 'Royal Face - Matriz', saldo: 84520.00, ativo: true },
   { id: 'banc-2', banco: 'Bradesco - C/C 12904-8', agencia: '1209', conta: '12904-8', unidade: 'Royal Face - Matriz', saldo: 28100.00, ativo: true },
-  { id: 'banc-3', banco: 'Caixa Físico Recepção', agencia: '0000', conta: 'CX-REC-01', unidade: 'Royal Face - Matriz', saldo: 1060.00, ativo: true }
+  { id: 'banc-3', banco: 'Caixa Físico Recepção', agencia: '0000', conta: 'CX-REC-01', unidade: 'Royal Face - Matriz', saldo: 1060.00, ativo: true },
+  { id: 'banc-4', banco: 'Caixa Físico Recepção Centro', agencia: '0000', conta: 'CX-CEN-01', unidade: 'Royal Face - Unidade Centro', saldo: 0.00, ativo: true },
+  { id: 'banc-5', banco: 'Caixa Físico Recepção Moema', agencia: '0000', conta: 'CX-MOE-01', unidade: 'Royal Face - Moema', saldo: 0.00, ativo: true },
+  { id: 'banc-6', banco: 'Caixa Físico Recepção Jardins', agencia: '0000', conta: 'CX-JAR-01', unidade: 'Royal Face - Jardins', saldo: 0.00, ativo: true }
 ];
 
 export const INITIAL_CONDICOES_PAGAMENTO: CondicaoPagamento[] = [
@@ -382,22 +385,22 @@ export const INITIAL_DOCUMENTS_OCR: DocumentoOCR[] = [
 ];
 
 export const INITIAL_SESSAO_CAIXA: SessaoCaixaFisico = {
-  id: 'cx-2024-05-18',
-  data: '2024-05-18',
-  status: 'ABERTO',
-  saldoInicial: 500.00,
-  entradasDinheiro: 680.00,
-  saidasDinheiro: 120.00,
-  saldoEsperado: 1060.00,
-  operadorAbertura: 'Carlos Eduardo Santos',
+  id: 'caixa-fisico-continuo',
   movimentacoes: [
     {
       id: 'mov-1',
-      tipo: 'SUPRIMENTO',
-      descricao: 'Troco Inicial Abertura de Caixa',
+      tipo: 'AJUSTE',
+      descricao: 'Definição do saldo inicial do caixa físico',
       valor: 500.00,
       dataHora: '2024-05-18 08:00:00',
-      usuario: 'Carlos Eduardo Santos'
+      usuario: 'Carlos Eduardo Santos',
+      unidade: 'Royal Face - Matriz',
+      sentido: 'ENTRADA',
+      saldoApos: 500.00,
+      motivoAjuste: 'Implantação do controle contínuo de numerário',
+      finalidade: 'AJUSTE_SALDO',
+      impactoDRE: 'NAO_AFETA',
+      statusConciliacao: 'CONCILIADO'
     },
     {
       id: 'mov-2',
@@ -405,7 +408,13 @@ export const INITIAL_SESSAO_CAIXA: SessaoCaixaFisico = {
       descricao: 'Venda Kit Dermocosméticos Home Care - Cliente Camila T.',
       valor: 680.00,
       dataHora: '2024-05-18 11:20:00',
-      usuario: 'Carlos Eduardo Santos'
+      usuario: 'Carlos Eduardo Santos',
+      unidade: 'Royal Face - Matriz',
+      sentido: 'ENTRADA',
+      saldoApos: 1180.00,
+      finalidade: 'VENDA_DINHEIRO',
+      impactoDRE: 'RECEITA',
+      statusConciliacao: 'CONCILIADO'
     },
     {
       id: 'mov-3',
@@ -414,6 +423,12 @@ export const INITIAL_SESSAO_CAIXA: SessaoCaixaFisico = {
       valor: 120.00,
       dataHora: '2024-05-18 13:45:00',
       usuario: 'Carlos Eduardo Santos',
+      unidade: 'Royal Face - Matriz',
+      sentido: 'SAIDA',
+      saldoApos: 1060.00,
+      finalidade: 'PAGAMENTO_DESPESA',
+      impactoDRE: 'NAO_AFETA',
+      statusConciliacao: 'CONCILIADO',
       comprovanteRef: 'Recibo Motoboy #9082'
     }
   ]
