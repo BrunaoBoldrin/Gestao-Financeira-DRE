@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import csv
+import hashlib
 import io
 import os
 import re
@@ -41,6 +42,7 @@ class DocumentText:
     source: str
     ocr_confidence: float | None = None
     pages_processed: int = 1
+    segments: list[str] | None = None
 
 
 def decode_file_data(file_data: str | None) -> bytes:
@@ -73,6 +75,7 @@ def analyze_document(
 ) -> dict[str, Any]:
     extracted = extract_document_text(content, mime_type, file_name, text_content, max_pages)
     fields = parse_financial_fields(extracted.text, file_name)
+    entities = _extract_financial_entities(extracted, file_name)
     completeness = _field_completeness(fields)
     base_confidence = extracted.ocr_confidence if extracted.ocr_confidence is not None else 93.0
     confidence = round(min(99.0, max(20.0, (base_confidence * 0.65) + (completeness * 0.35))))
@@ -83,6 +86,8 @@ def analyze_document(
         "motor": "python-local",
         "fonteExtracao": extracted.source,
         "paginasProcessadas": extracted.pages_processed,
+        "hashArquivo": hashlib.sha256(content or extracted.text.encode("utf-8")).hexdigest(),
+        "entidadesFinanceiras": entities,
     }
 
 
@@ -98,13 +103,14 @@ def extract_document_text(
 
     if text_content and text_content.strip():
         source = "xml" if suffix == ".xml" or "xml" in normalized_mime else "texto"
-        return DocumentText(text=text_content, source=source)
+        return DocumentText(text=text_content, source=source, segments=[text_content])
 
     if suffix == ".pdf" or normalized_mime == "application/pdf":
         return _extract_pdf(content, max_pages)
 
     if suffix in {".xml", ".txt"} or normalized_mime in {"application/xml", "text/xml", "text/plain"}:
-        return DocumentText(text=_decode_text(content), source="xml" if suffix == ".xml" else "texto")
+        decoded = _decode_text(content)
+        return DocumentText(text=decoded, source="xml" if suffix == ".xml" else "texto", segments=[decoded])
 
     if suffix in {".jpg", ".jpeg", ".png"} or normalized_mime.startswith("image/"):
         return _extract_image(content)
@@ -155,6 +161,7 @@ def _extract_pdf(content: bytes, max_pages: int) -> DocumentText:
         source="pdf_ocr" if used_ocr else "pdf_texto",
         ocr_confidence=sum(confidences) / len(confidences) if confidences else None,
         pages_processed=page_limit,
+        segments=[part for part in texts if part.strip()],
     )
 
 
@@ -173,7 +180,7 @@ def _extract_image(content: bytes) -> DocumentText:
     text, confidence = _run_tesseract(buffer.getvalue())
     if not text.strip():
         raise OCRProcessingError("Nenhum texto legível foi encontrado na imagem.")
-    return DocumentText(text=text, source="imagem_ocr", ocr_confidence=confidence)
+    return DocumentText(text=text, source="imagem_ocr", ocr_confidence=confidence, segments=[text])
 
 
 def _prepare_image(image: Image.Image) -> Image.Image:
@@ -277,6 +284,15 @@ def parse_financial_fields(text: str, file_name: str) -> dict[str, Any]:
     supplier = xml_fields.get("fornecedor") or _extract_supplier(normalized, file_name)
     digit_line = _extract_digit_line(normalized)
     category = _suggest_category(normalized)
+    payer = _extract_party_after_label(normalized, ("pagador", "cliente", "remetente"))
+    receiver = _extract_party_after_label(
+        normalized,
+        ("recebedor", "beneficiário", "beneficiario", "beneficiador", "favorecido"),
+    )
+    transaction_id = _extract_transaction_identifier(normalized)
+    document_number = _extract_document_number(normalized)
+    document_key = xml_fields.get("chaveDocumento") or _extract_document_key(normalized)
+    direction, dre_impact, purpose = _suggest_financial_classification(normalized, document_type)
 
     return {
         "fornecedor": supplier,
@@ -287,10 +303,164 @@ def parse_financial_fields(text: str, file_name: str) -> dict[str, Any]:
         "categoria": category,
         "centroCusto": _suggest_cost_center(normalized, category),
         "linhaDigitavel": digit_line,
+        "chaveDocumento": document_key,
+        "identificadorTransacao": transaction_id,
+        "documentoNumero": document_number,
+        "pagador": payer,
+        "recebedor": receiver,
+        "sentidoSugerido": direction,
+        "impactoDRESugerido": dre_impact,
+        "finalidadeSugerida": purpose,
         "observacoes": _extract_observations(normalized),
         "itens": [],
         "tipo": document_type,
     }
+
+
+def _extract_financial_entities(extracted: DocumentText, file_name: str) -> list[dict[str, Any]]:
+    if extracted.source == "xml":
+        installments = _extract_xml_installments(extracted.text, file_name)
+        return installments if len(installments) > 1 else []
+
+    entities: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, float, str, str]] = set()
+
+    for page_number, page_text in enumerate(extracted.segments or [extracted.text], start=1):
+        page_type = _detect_document_type(page_text, file_name)
+        if page_type == "EXTRATO":
+            page_entities = _extract_statement_movements(page_text, file_name, page_number)
+        else:
+            sections = _split_financial_sections(page_text)
+            page_entities = []
+            for section in sections:
+                section_fields = parse_financial_fields(section, file_name)
+                section_fields["paginaOrigem"] = page_number
+                if float(section_fields.get("valorTotal") or 0) > 0:
+                    page_entities.append(section_fields)
+
+        for entity in page_entities:
+            key = (
+                str(entity.get("tipo") or ""),
+                str(entity.get("cnpj") or ""),
+                str(entity.get("dataVencimento") or entity.get("dataEmissao") or ""),
+                float(entity.get("valorTotal") or 0),
+                str(entity.get("linhaDigitavel") or ""),
+                str(entity.get("identificadorTransacao") or ""),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            entities.append(entity)
+
+    return entities if len(entities) > 1 else []
+
+
+def _split_financial_sections(text: str) -> list[str]:
+    labels = re.compile(
+        r"(?<![A-Za-zÀ-ÿ])(?:benefici[aá]ri[oa]|beneficiador|cedente|favorecido|"
+        r"comprovante\s+(?:de\s+)?(?:pix|pagamento|transfer[eê]ncia))",
+        flags=re.IGNORECASE,
+    )
+    starts = [match.start() for match in labels.finditer(text)]
+    if len(starts) < 2:
+        return [text]
+
+    sections: list[str] = []
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else len(text)
+        section = text[start:end].strip()
+        if section:
+            sections.append(section)
+    return sections or [text]
+
+
+def _extract_xml_installments(text: str, file_name: str) -> list[dict[str, Any]]:
+    try:
+        root = ET.fromstring(text.strip())
+    except ET.ParseError:
+        return []
+
+    base = parse_financial_fields(text, file_name)
+    installments: list[dict[str, Any]] = []
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] != "dup":
+            continue
+        values = {
+            child.tag.rsplit("}", 1)[-1]: (child.text or "").strip()
+            for child in element
+        }
+        amount = _parse_number(values.get("vDup", ""))
+        due = _normalize_date(values.get("dVenc", ""))
+        if amount <= 0 or not due:
+            continue
+        installments.append(
+            {
+                **base,
+                "tipo": "NFE",
+                "valorTotal": amount,
+                "dataVencimento": due,
+                "parcelaNumero": values.get("nDup") or str(len(installments) + 1),
+                "sentidoSugerido": "SAIDA",
+                "impactoDRESugerido": "DESPESA",
+                "finalidadeSugerida": "PAGAMENTO_FORNECEDOR",
+            }
+        )
+    return installments
+
+
+def _extract_statement_movements(text: str, file_name: str, page_number: int) -> list[dict[str, Any]]:
+    movements: list[dict[str, Any]] = []
+    line_pattern = re.compile(
+        r"^(?P<date>\d{2}/\d{2}(?:/\d{2,4})?)\s+"
+        r"(?P<description>.+?)\s+"
+        r"(?P<amount>-?\s*(?:R\$\s*)?\d{1,3}(?:\.\d{3})*,\d{2}|-?\s*(?:R\$\s*)?\d+[.,]\d{2})"
+        r"(?:\s*(?P<nature>[CD]))?$",
+        flags=re.IGNORECASE,
+    )
+    current_year = date.today().year
+    for line in text.splitlines():
+        normalized_line = re.sub(r"\s+", " ", line).strip()
+        match = line_pattern.match(normalized_line)
+        if not match:
+            continue
+        raw_date = match.group("date")
+        if raw_date.count("/") == 1:
+            raw_date = f"{raw_date}/{current_year}"
+        movement_date = _normalize_date(raw_date)
+        raw_amount = match.group("amount")
+        amount = _parse_number(raw_amount.replace("R$", "").replace("-", "").strip())
+        nature = (match.group("nature") or "").upper()
+        direction = "SAIDA" if raw_amount.strip().startswith("-") or nature == "D" else "ENTRADA"
+        description = match.group("description").strip(" -")
+        impact, purpose = _statement_classification(description, direction)
+        movements.append(
+            {
+                **parse_financial_fields(normalized_line, file_name),
+                "tipo": "EXTRATO",
+                "fornecedor": description,
+                "dataEmissao": movement_date,
+                "dataVencimento": movement_date,
+                "valorTotal": amount,
+                "sentidoSugerido": direction,
+                "impactoDRESugerido": impact,
+                "finalidadeSugerida": purpose,
+                "paginaOrigem": page_number,
+            }
+        )
+    return movements
+
+
+def _statement_classification(description: str, direction: str) -> tuple[str, str]:
+    sample = description.casefold()
+    if any(term in sample for term in ("transf", "aplicacao", "aplicação", "resgate")):
+        return "NAO_AFETA", "TRANSFERENCIA_INTERNA"
+    if any(term in sample for term in ("tarifa", "cesta", "juros", "encargo")):
+        return "DESPESA", "TARIFA_BANCARIA"
+    if any(term in sample for term in ("emprest", "emprést", "capital giro")):
+        return "NAO_AFETA", "EMPRESTIMO"
+    if any(term in sample for term in ("estorno", "devolu")):
+        return "A_CONFIRMAR", "ESTORNO_DEVOLUCAO"
+    return ("RECEITA", "RECEBIMENTO_CLIENTE") if direction == "ENTRADA" else ("DESPESA", "PAGAMENTO_FORNECEDOR")
 
 
 def _extract_xml_fields(text: str) -> dict[str, Any]:
@@ -313,6 +483,12 @@ def _extract_xml_fields(text: str) -> dict[str, Any]:
         result["cnpj"] = _format_cnpj(values["CNPJ"][0])
     if values.get("vNF"):
         result["valorTotal"] = _parse_number(values["vNF"][0])
+    if values.get("chNFe"):
+        result["chaveDocumento"] = re.sub(r"\D", "", values["chNFe"][0])
+    elif root.tag.rsplit("}", 1)[-1] == "NFe":
+        info = next((element for element in root.iter() if element.tag.rsplit("}", 1)[-1] == "infNFe"), None)
+        if info is not None and info.attrib.get("Id"):
+            result["chaveDocumento"] = re.sub(r"\D", "", info.attrib["Id"])
     emission = (values.get("dhEmi") or values.get("dEmi") or [""])[0]
     if emission:
         result["dataEmissao"] = emission[:10]
@@ -429,6 +605,72 @@ def _extract_supplier(text: str, file_name: str) -> str:
     return Path(file_name).stem.replace("_", " ").replace("-", " ").strip()[:160] or "Fornecedor não identificado"
 
 
+def _extract_party_after_label(text: str, labels: tuple[str, ...]) -> str:
+    label_pattern = "|".join(re.escape(label) for label in labels)
+    match = re.search(
+        rf"(?:{label_pattern})\s*[:\-]?\s*([^\n]{{3,160}})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    candidate = re.split(
+        r"\b(?:CPF|CNPJ|institui[cç][aã]o|banco|ag[eê]ncia|conta|valor|data)\b",
+        match.group(1),
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0].strip(" :-")
+    return candidate[:160] if _is_supplier_candidate(candidate) else ""
+
+
+def _extract_transaction_identifier(text: str) -> str:
+    patterns = (
+        r"(?:end\s*to\s*end(?:\s*id)?|endtoendid|e2e)\s*[:\-]?\s*([A-Za-z0-9]{12,40})",
+        r"(?:txid|id\s+da\s+transa[cç][aã]o|autentica[cç][aã]o)\s*[:\-]?\s*([A-Za-z0-9.\-/]{6,50})",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
+def _extract_document_number(text: str) -> str:
+    match = re.search(
+        r"(?:n[uú]mero\s+(?:do\s+)?documento|n[uú]mero\s+(?:da\s+)?nota|nota\s+fiscal\s+n[ºo.]*)"
+        r"\s*[:\-]?\s*([A-Za-z0-9.\-/]{2,30})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def _extract_document_key(text: str) -> str:
+    labelled = re.search(
+        r"(?:chave\s+de\s+acesso)\D{0,20}((?:\d[ .]?){44})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if labelled:
+        return re.sub(r"\D", "", labelled.group(1))
+    return ""
+
+
+def _suggest_financial_classification(text: str, document_type: str) -> tuple[str, str, str]:
+    sample = text.casefold()
+    if document_type in {"BOLETO", "DDA", "NFE", "NFSE", "FATURA"}:
+        return "SAIDA", "DESPESA", "PAGAMENTO_FORNECEDOR"
+    if document_type == "EXTRATO":
+        return "A_CONFIRMAR", "A_CONFIRMAR", "A_CONFIRMAR"
+    if any(term in sample for term in ("você recebeu", "voce recebeu", "pix recebido", "recebimento concluído", "recebimento concluido")):
+        return "ENTRADA", "RECEITA", "RECEBIMENTO_CLIENTE"
+    if any(term in sample for term in ("você pagou", "voce pagou", "pix enviado", "pagamento realizado", "transferência enviada", "transferencia enviada")):
+        return "SAIDA", "DESPESA", "PAGAMENTO_FORNECEDOR"
+    if document_type in {"COMPROVANTE", "RECIBO"}:
+        return "A_CONFIRMAR", "A_CONFIRMAR", "A_CONFIRMAR"
+    return "A_CONFIRMAR", "A_CONFIRMAR", "A_CONFIRMAR"
+
+
 def _is_supplier_candidate(candidate: str) -> bool:
     if len(candidate) < 3 or len(re.findall(r"[A-Za-zÀ-ÿ]", candidate)) < 3:
         return False
@@ -460,13 +702,19 @@ def _is_supplier_candidate(candidate: str) -> bool:
 
 def _detect_document_type(text: str, file_name: str) -> str:
     sample = f"{file_name}\n{text[:5000]}".lower()
+    if "extrato" in sample and any(term in sample for term in ("saldo", "lançamento", "lancamento", "agência", "agencia", "conta")):
+        return "EXTRATO"
+    if any(term in sample for term in ("comprovante de pix", "comprovante pix", "comprovante de pagamento", "comprovante de transferência", "comprovante de transferencia", "endtoendid", "end to end")):
+        return "COMPROVANTE"
     if "<infnfe" in sample or "nota fiscal eletr" in sample or "nf-e" in sample or "nfs-e" in sample:
-        return "NFE"
+        return "NFSE" if "nfs-e" in sample else "NFE"
+    if "dda" in sample:
+        return "DDA"
     if "linha digit" in sample or "boleto" in sample or _extract_digit_line(text):
         return "BOLETO"
     if "recibo" in sample:
         return "RECIBO"
-    if "fatura" in sample or "dda" in sample:
+    if "fatura" in sample:
         return "FATURA"
     return "OUTRO"
 
