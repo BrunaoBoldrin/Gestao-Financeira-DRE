@@ -7,6 +7,7 @@ interface InboxViewProps {
 
 export const InboxView: React.FC<InboxViewProps> = ({ onOpenUploadModal }) => {
   const { documentosOCR, setCurrentView, setSelectedDocumentForReviewId } = useApp();
+  const pendingDocuments = documentosOCR.filter((doc) => doc.status === 'PENDENTE_REVISAO');
 
   return (
     <div className="space-y-6">
@@ -18,7 +19,7 @@ export const InboxView: React.FC<InboxViewProps> = ({ onOpenUploadModal }) => {
             Caixa de Entrada de Documentos
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Central de recepção de arquivos fiscal e financeiro (NF-e, NFS-e, Recibos e Cupons).
+            {pendingDocuments.length} documento(s) aguardando conferência e aprovação.
           </p>
         </div>
 
@@ -32,12 +33,13 @@ export const InboxView: React.FC<InboxViewProps> = ({ onOpenUploadModal }) => {
       </div>
 
       {/* Grid of Documents */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {documentosOCR.map((doc) => (
-          <div
-            key={doc.id}
-            className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between"
-          >
+      {pendingDocuments.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {pendingDocuments.map((doc) => (
+            <div
+              key={doc.id}
+              className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between"
+            >
             <div>
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2.5">
@@ -54,16 +56,8 @@ export const InboxView: React.FC<InboxViewProps> = ({ onOpenUploadModal }) => {
                   </div>
                 </div>
 
-                <span
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    doc.status === 'APROVADO'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : doc.status === 'REJEITADO'
-                      ? 'bg-rose-100 text-rose-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}
-                >
-                  {doc.status === 'PENDENTE_REVISAO' ? 'Pendente' : doc.status}
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                  Pendente
                 </span>
               </div>
 
@@ -108,9 +102,20 @@ export const InboxView: React.FC<InboxViewProps> = ({ onOpenUploadModal }) => {
                 Conferir Lado a Lado
               </button>
             </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-[#e5eeff] p-10 text-center shadow-xs">
+          <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <span className="material-symbols-outlined text-3xl">task_alt</span>
           </div>
-        ))}
-      </div>
+          <h3 className="mt-3 text-sm font-bold text-[#0b1c30]">Nenhum documento pendente</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Documentos aprovados ou rejeitados permanecem disponíveis na Central de Documentos.
+          </p>
+        </div>
+      )}
     </div>
   );
 };
