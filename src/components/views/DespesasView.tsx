@@ -5,6 +5,8 @@ import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import { isDateInRange, normalizeDateValue } from '../../utils/dateRange';
 import { normalizeText } from '../../utils/text';
+import { LiquidacaoModal } from '../modals/LiquidacaoModal';
+import type { Lancamento } from '../../types';
 
 interface DespesasViewProps {
   onOpenNovoLancamentoModal: () => void;
@@ -18,6 +20,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
+  const [lancamentoLiquidacao, setLancamentoLiquidacao] = useState<Lancamento | null>(null);
 
   const despesas = filteredLancamentos.filter((l) => l.tipo === 'DESPESA');
 
@@ -240,7 +243,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                               showToast('Acesso negado: Perfil Auditoria possui apenas acesso de leitura.', 'error');
                               return;
                             }
-                            marcarLancamentoComoPago(d.id);
+                            setLancamentoLiquidacao(d);
                           }}
                           disabled={isAuditor}
                           title={isAuditor ? 'Perfil Auditoria não pode liquidar contas' : undefined}
@@ -284,6 +287,22 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
           </table>
         </div>
       </div>
+
+      <LiquidacaoModal
+        item={lancamentoLiquidacao ? {
+          titulo: lancamentoLiquidacao.descricao,
+          contraparte: lancamentoLiquidacao.fornecedorCliente,
+          tipo: lancamentoLiquidacao.tipo,
+          valor: lancamentoLiquidacao.valor,
+          unidade: lancamentoLiquidacao.unidade
+        } : null}
+        onClose={() => setLancamentoLiquidacao(null)}
+        onConfirm={(dados) => {
+          if (!lancamentoLiquidacao) return;
+          marcarLancamentoComoPago(lancamentoLiquidacao.id, dados);
+          setLancamentoLiquidacao(null);
+        }}
+      />
     </div>
   );
 };

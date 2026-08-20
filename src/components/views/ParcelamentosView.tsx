@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import { normalizeDateValue } from '../../utils/dateRange';
+import { LiquidacaoModal, type ItemLiquidacao } from '../modals/LiquidacaoModal';
 
 interface ParcelamentosViewProps {
   onOpenNovoParcelamentoModal: () => void;
@@ -11,6 +12,11 @@ interface ParcelamentosViewProps {
 export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovoParcelamentoModal }) => {
   const { filteredParcelamentos, pagarParcela, canExecuteFinancialActions } = useApp();
   const [selectedParcelamentoId, setSelectedParcelamentoId] = useState<string>('');
+  const [parcelaLiquidacao, setParcelaLiquidacao] = useState<{
+    parcelamentoId: string;
+    numeroParcela: number;
+    item: ItemLiquidacao;
+  } | null>(null);
 
   const activeContract = filteredParcelamentos.find((p) => p.id === selectedParcelamentoId) || filteredParcelamentos[0];
   const { sortedItems: sortedCronograma, sortConfig, requestSort } = useSortableData(activeContract?.cronograma || []);
@@ -128,6 +134,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                       <SortableTableHeader label="Data Vencimento" sortKey="vencimento" accessor={(item) => normalizeDateValue(item.vencimento)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                       <SortableTableHeader label="Valor Parcela" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
                       <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-center" />
+                      <SortableTableHeader label="Conta / Forma" sortKey="conta" accessor={(item) => `${item.contaBancaria || ''} ${item.formaPagamento || ''}`} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                       {canExecuteFinancialActions && <th className="p-3 text-center">Ação</th>}
                     </tr>
                   </thead>
@@ -155,10 +162,25 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                             {item.status}
                           </span>
                         </td>
+                        <td className="p-3 text-[10px] text-gray-600">
+                          {item.status === 'PAGO'
+                            ? <><span className="block font-bold text-[#0b1c30]">{item.contaBancaria || activeContract.contaBancaria || 'Conta não informada'}</span><span>{item.formaPagamento || 'Forma não informada'}</span></>
+                            : <span className="text-gray-400">—</span>}
+                        </td>
                         {canExecuteFinancialActions && <td className="p-3 text-center">
                           {item.status === 'PENDENTE' ? (
                             <button
-                              onClick={() => pagarParcela(activeContract.id, item.numero)}
+                              onClick={() => setParcelaLiquidacao({
+                                parcelamentoId: activeContract.id,
+                                numeroParcela: item.numero,
+                                item: {
+                                  titulo: `Parcela ${item.numero}/${activeContract.numeroParcelas} - ${activeContract.titulo}`,
+                                  contraparte: activeContract.fornecedor,
+                                  tipo: 'DESPESA',
+                                  valor: item.valor,
+                                  unidade: activeContract.unidade
+                                }
+                              })}
                               className="px-3 py-1 bg-[#131b2e] text-white rounded text-[11px] font-bold hover:bg-[#0b1c30] transition shadow-xs"
                             >
                               Pagar Parcela
@@ -179,6 +201,16 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
           </div>
         )}
       </div>
+
+      <LiquidacaoModal
+        item={parcelaLiquidacao?.item || null}
+        onClose={() => setParcelaLiquidacao(null)}
+        onConfirm={(dados) => {
+          if (!parcelaLiquidacao) return;
+          pagarParcela(parcelaLiquidacao.parcelamentoId, parcelaLiquidacao.numeroParcela, dados);
+          setParcelaLiquidacao(null);
+        }}
+      />
     </div>
   );
 };

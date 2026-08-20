@@ -17,7 +17,8 @@ import {
   BancoMaster,
   CondicaoPagamento,
   ViewKey,
-  DetalhesMovimentacaoCaixa
+  DetalhesMovimentacaoCaixa,
+  DadosLiquidacao
 } from '../types';
 import { ROLE_DEFAULT_VIEW, canAccessAllUnits, canAccessView } from '../config/accessControl';
 import { calculateDueDateSchedule } from '../utils/financialDates';
@@ -136,10 +137,10 @@ interface AppContextType {
   }) => void;
   updateLancamento: (id: string, l: Partial<Lancamento>) => void;
   deleteLancamento: (id: string) => void;
-  marcarLancamentoComoPago: (id: string) => void;
+  marcarLancamentoComoPago: (id: string, dados: DadosLiquidacao) => boolean;
   
   addParcelamento: (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => void;
-  pagarParcela: (parcelamentoId: string, numeroParcela: number) => void;
+  pagarParcela: (parcelamentoId: string, numeroParcela: number, dados: DadosLiquidacao) => void;
   
   uploadDocumentoOCR: (file: File) => void;
   aprovarDocumentoOCR: (docId: string, dadosFinal: DocumentoOCR['dadosExtraidos']) => void;
@@ -924,21 +925,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog('Lançamentos', 'EXCLUSAO', `Excluiu lançamento ID ${id}`);
   };
 
-  const marcarLancamentoComoPago = (id: string) => {
-    if (!checkFinancialPermission('Liquidar Lançamento')) return;
+  const marcarLancamentoComoPago = (id: string, dados: DadosLiquidacao): boolean => {
+    if (!checkFinancialPermission('Liquidar Lançamento')) return false;
     const existing = lancamentos.find((item) => item.id === id);
-    if (!existing) return;
-    if (existing && !canManageUnit(existing.unidade, 'Liquidar Lançamento')) return;
+    if (!existing) return false;
+    if (existing && !canManageUnit(existing.unidade, 'Liquidar Lançamento')) return false;
     if (existing.status === 'PAGO') {
       showToast('Este lançamento já está pago.', 'info');
-      return;
+      return false;
     }
-    const paidLancamento = bindLancamentoToBanco({
+    const banco = bancos.find(
+      (item) => item.id === dados.bancoId && item.ativo && item.unidade === existing.unidade
+    );
+    if (!banco) {
+      showToast(`Selecione uma conta bancária ativa da unidade "${existing.unidade}".`, 'error');
+      return false;
+    }
+    if (!dados.formaPagamento || !dados.dataPagamento) {
+      showToast('Informe a forma e a data do pagamento antes de liquidar.', 'error');
+      return false;
+    }
+    const paidLancamento: Lancamento = {
       ...existing,
       status: 'PAGO' as const,
-      dataPagamento: new Date().toISOString().substring(0, 10)
-    });
-    if (!ensurePaidLancamentoHasBanco(paidLancamento)) return;
+      bancoId: banco.id,
+      contaBancaria: banco.banco,
+      formaPagamento: dados.formaPagamento,
+      dataPagamento: dados.dataPagamento
+    };
+    if (!ensurePaidLancamentoHasBanco(paidLancamento)) return false;
     setLancamentos((prev) =>
       prev.map((item) => (item.id === id ? paidLancamento : item))
     );
@@ -950,7 +965,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
     showToast('Lançamento marcado como PAGO!', 'success');
-    addAuditLog('Lançamentos', 'EDICAO', `Liquidou lançamento ID ${id}`, 'Status: PENDENTE', 'Status: PAGO');
+    addAuditLog(
+      'Lançamentos',
+      'EDICAO',
+      `Liquidou lançamento ID ${id} em "${banco.banco}" via ${dados.formaPagamento}`,
+      'Status: PENDENTE',
+      `Status: PAGO | Data: ${dados.dataPagamento} | Conta: ${banco.banco} | Forma: ${dados.formaPagamento}`
+    );
+    return true;
   };
 
   // --- Parcelamentos ---
@@ -997,7 +1019,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog('Parcelamentos', 'CRIACAO', `Criou parcelamento "${p.titulo}" no valor total de R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
   };
 
-  const pagarParcela = (parcelamentoId: string, numeroParcela: number) => {
+  const pagarParcela = (parcelamentoId: string, numeroParcela: number, dados: DadosLiquidacao) => {
     if (!checkFinancialPermission('Pagar Parcela')) return;
     const parcelamento = parcelamentos.find((item) => item.id === parcelamentoId);
     if (!parcelamento) return;
@@ -1010,23 +1032,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const linkedLancamento = parcela.lancamentoId
       ? lancamentos.find((item) => item.id === parcela.lancamentoId)
       : undefined;
-    const banco = linkedLancamento
-      ? resolveBancoForLancamento(linkedLancamento)
-      : resolveBancoForLancamento({
-          bancoId: parcelamento.bancoId,
-          contaBancaria: parcelamento.contaBancaria || '',
-          unidade: parcelamento.unidade
-        });
+    const banco = bancos.find(
+      (item) => item.id === dados.bancoId && item.ativo && item.unidade === parcelamento.unidade
+    );
     if (!banco) {
       showToast(
-        `Cadastre ou vincule uma conta bancária para ${parcelamento.unidade} antes de pagar a parcela.`,
+        `Selecione uma conta bancária ativa de ${parcelamento.unidade} antes de pagar a parcela.`,
         'error'
       );
       return;
     }
+    if (!dados.formaPagamento || !dados.dataPagamento) {
+      showToast('Informe a forma e a data do pagamento da parcela.', 'error');
+      return;
+    }
 
     if (linkedLancamento) {
-      marcarLancamentoComoPago(linkedLancamento.id);
+      if (!marcarLancamentoComoPago(linkedLancamento.id, dados)) return;
     } else {
       addLancamento({
         descricao: `Parcela ${numeroParcela}/${parcelamento.numeroParcelas} - ${parcelamento.titulo}`,
@@ -1035,12 +1057,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         centroCusto: parcelamento.centroCusto,
         valor: parcela.valor,
         dataVencimento: parcela.vencimento,
-        dataPagamento: new Date().toISOString().substring(0, 10),
+        dataPagamento: dados.dataPagamento,
         status: 'PAGO',
         fornecedorCliente: parcelamento.fornecedor,
         bancoId: banco.id,
         contaBancaria: banco.banco,
-        formaPagamento: 'BOLETO',
+        formaPagamento: dados.formaPagamento,
         unidade: parcelamento.unidade,
         parcelamentoId: parcelamento.id,
         numeroParcela: `${numeroParcela}/${parcelamento.numeroParcelas}`
@@ -1052,7 +1074,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (p.id !== parcelamentoId) return p;
         const updatedCronograma = p.cronograma.map((c) =>
           c.numero === numeroParcela
-            ? { ...c, status: 'PAGO' as const, dataPagamento: new Date().toISOString().substring(0, 10) }
+            ? {
+                ...c,
+                status: 'PAGO' as const,
+                dataPagamento: dados.dataPagamento,
+                bancoId: banco.id,
+                contaBancaria: banco.banco,
+                formaPagamento: dados.formaPagamento
+              }
             : c
         );
         const pagasCount = updatedCronograma.filter((c) => c.status === 'PAGO').length;
@@ -1060,6 +1089,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         return {
           ...p,
+          bancoId: banco.id,
+          contaBancaria: banco.banco,
           parcelasPagas: pagasCount,
           status,
           cronograma: updatedCronograma
