@@ -126,6 +126,10 @@ export const CadastrosView: React.FC = () => {
     setShowFormModal(false);
   };
 
+  const contasUnidadeSelecionada = selectedUnit === 'Todas as Unidades'
+    ? bancos
+    : bancos.filter((banco) => banco.unidade === selectedUnit);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -429,13 +433,29 @@ export const CadastrosView: React.FC = () => {
 
         {activeTab === 'BANCOS' && (
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
-              Contas Bancárias & Caixas
-            </h3>
+            <div>
+              <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
+                Contas Bancárias & Caixas
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Todas as contas cadastradas são exibidas aqui. No momento do pagamento, o sistema libera somente contas ativas vinculadas à mesma unidade do lançamento.
+              </p>
+            </div>
+
+            {selectedUnit !== 'Todas as Unidades' && contasUnidadeSelecionada.length === 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                <span className="material-symbols-outlined text-base mt-0.5">warning</span>
+                <div>
+                  <p className="font-bold">Nenhuma conta bancária está vinculada à unidade “{selectedUnit}”.</p>
+                  <p className="mt-0.5">
+                    Clique em <strong>Cadastrar</strong> e selecione essa unidade para criar a conta que poderá ser usada ao pagar as despesas.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {bancos
-                .filter((banco) => selectedUnit === 'Todas as Unidades' || banco.unidade === selectedUnit)
-                .map((b) => (
+              {bancos.map((b) => (
                 <div key={b.id} className="p-4 bg-[#eff4ff] border border-[#d3e4fe] rounded-xl flex justify-between items-start">
                   <div>
                     <h4 className="text-xs font-bold text-[#0b1c30]">{b.banco}</h4>
@@ -445,6 +465,9 @@ export const CadastrosView: React.FC = () => {
                     <p className="text-sm font-black text-emerald-800 mt-2">
                       R$ {b.saldo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
+                    <span className={`inline-block mt-2 px-2 py-0.5 rounded text-[10px] font-bold ${b.ativo ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}`}>
+                      {b.ativo ? 'ATIVA' : 'INATIVA'}
+                    </span>
                   </div>
                   <button
                     onClick={() => {
