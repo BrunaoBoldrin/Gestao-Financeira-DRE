@@ -5,6 +5,8 @@ import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import { isDateInRange, normalizeDateValue } from '../../utils/dateRange';
 import { normalizeText } from '../../utils/text';
+import { LiquidacaoModal } from '../modals/LiquidacaoModal';
+import type { Lancamento } from '../../types';
 
 interface ReceitasViewProps {
   onOpenNovoLancamentoModal: () => void;
@@ -19,6 +21,7 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
+  const [lancamentoLiquidacao, setLancamentoLiquidacao] = useState<Lancamento | null>(null);
 
   const receitas = filteredLancamentos.filter((l) => l.tipo === 'RECEITA');
 
@@ -248,7 +251,7 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
                               showToast('Acesso negado: Perfil Auditoria possui apenas acesso de leitura.', 'error');
                               return;
                             }
-                            marcarLancamentoComoPago(r.id);
+                            setLancamentoLiquidacao(r);
                           }}
                           disabled={isAuditor}
                           className={`px-2 py-1 rounded text-[11px] font-bold transition ${
@@ -292,6 +295,22 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           </table>
         </div>
       </div>
+
+      <LiquidacaoModal
+        item={lancamentoLiquidacao ? {
+          titulo: lancamentoLiquidacao.descricao,
+          contraparte: lancamentoLiquidacao.fornecedorCliente,
+          tipo: lancamentoLiquidacao.tipo,
+          valor: lancamentoLiquidacao.valor,
+          unidade: lancamentoLiquidacao.unidade
+        } : null}
+        onClose={() => setLancamentoLiquidacao(null)}
+        onConfirm={(dados) => {
+          if (!lancamentoLiquidacao) return;
+          marcarLancamentoComoPago(lancamentoLiquidacao.id, dados);
+          setLancamentoLiquidacao(null);
+        }}
+      />
     </div>
   );
 };

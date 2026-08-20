@@ -102,6 +102,12 @@ export interface Lancamento {
   criadoEm: string;
 }
 
+export interface DadosLiquidacao {
+  bancoId: string;
+  formaPagamento: Lancamento['formaPagamento'];
+  dataPagamento: string;
+}
+
 export interface Parcelamento {
   id: string;
   unidade: string;
@@ -124,6 +130,9 @@ export interface Parcelamento {
     status: StatusLancamento;
     dataPagamento?: string;
     lancamentoId?: string;
+    bancoId?: string;
+    contaBancaria?: string;
+    formaPagamento?: Lancamento['formaPagamento'];
   }[];
 }
 
