@@ -103,7 +103,6 @@ const MainAppContent: React.FC = () => {
         return (
           <DespesasView
             onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)}
-            onOpenUploadModal={() => setIsUploadOCROpen(true)}
           />
         );
       case 'parcelamentos':
