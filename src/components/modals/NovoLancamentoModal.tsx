@@ -35,12 +35,13 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   const [centroCusto, setCentroCusto] = useState('');
   const [valor, setValor] = useState('');
   const [dataEmissao, setDataEmissao] = useState(new Date().toISOString().substring(0, 10));
+  const [dataCompetencia, setDataCompetencia] = useState(new Date().toISOString().substring(0, 10));
   const [dataVencimento, setDataVencimento] = useState(new Date().toISOString().substring(0, 10));
   const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 Dias default
   const [fornecedorCliente, setFornecedorCliente] = useState('');
   const [bancoId, setBancoId] = useState('');
   const [unidade, setUnidade] = useState(selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
-  const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'BOLETO' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'DINHEIRO' | 'TRANSFERENCIA'>('BOLETO');
+  const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'BOLETO' | 'CARNE' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'DINHEIRO' | 'TRANSFERENCIA'>('BOLETO');
   const [status, setStatus] = useState<StatusLancamento>('PENDENTE');
   const [contaDestinoBancoId, setContaDestinoBancoId] = useState('');
   const [anexo, setAnexo] = useState<File | null>(null);
@@ -52,7 +53,10 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
   // Set default selects when lists load
   React.useEffect(() => {
-    if (categorias.length > 0 && !categoria) {
+    const selectedCategoryIsValid = categorias.some(
+      (item) => item.nome === categoria && item.tipo === tipo && item.ativa
+    );
+    if (categorias.length > 0 && !selectedCategoryIsValid) {
       const match = categorias.find((c) => c.tipo === tipo && c.ativa);
       if (match) setCategoria(match.nome);
     }
@@ -167,6 +171,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       categoria: categoria || (tipo === 'RECEITA' ? 'Procedimentos Estéticos' : 'Insumos Médicos & Estéticos'),
       centroCusto: centroCusto || 'Clínica / Atendimento',
       valor: numVal,
+      dataCompetencia: dataCompetencia || dataEmissao,
       dataVencimento: dataVencimento || dataEmissao,
       dataPagamento: status === 'PAGO' ? dataEmissao : undefined,
       status,
@@ -176,7 +181,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       formaPagamento,
       unidade: targetUnit,
       comprovanteUrl,
-      documentoRef: anexo?.name
+      documentoRef: anexo?.name,
+      impactoDRE: tipo
     };
 
     if (tipo === 'DESPESA' && prazos.length >= 1) {
@@ -270,6 +276,22 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-medium"
               />
             </div>
+          </div>
+
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+            <label className="block text-xs font-semibold text-sky-900 mb-1">
+              Data de competência da DRE <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              required
+              value={dataCompetencia}
+              onChange={(e) => setDataCompetencia(e.target.value)}
+              className="w-full px-3 py-2 border border-sky-200 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-medium"
+            />
+            <p className="text-[10px] text-sky-800 mt-1">
+              Define o mês em que a receita ou despesa aparecerá na DRE, independentemente do pagamento.
+            </p>
           </div>
 
           {/* DDL Payment Condition Selector for Expenses */}
@@ -390,6 +412,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               >
                 <option value="PIX">PIX</option>
                 <option value="BOLETO">Boleto</option>
+                <option value="CARNE">Carnê / Crediário</option>
                 <option value="CARTAO_CREDITO">Cartão de crédito</option>
                 <option value="CARTAO_DEBITO">Cartão de débito</option>
                 <option value="DINHEIRO">Dinheiro</option>

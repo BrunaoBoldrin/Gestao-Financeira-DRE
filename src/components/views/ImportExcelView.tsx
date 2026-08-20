@@ -10,6 +10,7 @@ interface ColumnMapping {
   tipo: string;
   valor: string;
   dataEmissao: string;
+  dataCompetencia: string;
   dataVencimento: string;
   categoria: string;
   centroCusto: string;
@@ -77,6 +78,7 @@ export const ImportExcelView: React.FC = () => {
     tipo: '',
     valor: '',
     dataEmissao: '',
+    dataCompetencia: '',
     dataVencimento: '',
     categoria: '',
     centroCusto: '',
@@ -100,6 +102,7 @@ export const ImportExcelView: React.FC = () => {
         'Tipo (RECEITA ou DESPESA)': 'DESPESA',
         'Valor (R$)': 4500.00,
         'Data Emissão (AAAA-MM-DD)': '2024-05-10',
+        'Data Competência DRE (AAAA-MM-DD)': '2024-05-10',
         'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': '2024-06-09',
         'Categoria DRE': 'Insumos Médicos & Estéticos',
         'Centro de Custo': 'Clínica / Atendimento',
@@ -119,6 +122,7 @@ export const ImportExcelView: React.FC = () => {
         'Tipo (RECEITA ou DESPESA)': 'RECEITA',
         'Valor (R$)': 3800.00,
         'Data Emissão (AAAA-MM-DD)': '2024-05-12',
+        'Data Competência DRE (AAAA-MM-DD)': '2024-05-12',
         'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': '2024-05-12',
         'Categoria DRE': 'Procedimentos Estéticos',
         'Centro de Custo': 'Clínica / Atendimento',
@@ -138,8 +142,9 @@ export const ImportExcelView: React.FC = () => {
         'Tipo (RECEITA ou DESPESA)': 'DESPESA',
         'Valor (R$)': 8500.00,
         'Data Emissão (AAAA-MM-DD)': '2024-05-01',
+        'Data Competência DRE (AAAA-MM-DD)': '2024-05-01',
         'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': '2024-05-31',
-        'Categoria DRE': 'Ocupação & Infraestrutura',
+        'Categoria DRE': 'Aluguel, Condomínio & IPTU',
         'Centro de Custo': 'Administrativo',
         'Fornecedor / Cliente': 'Imobiliária Paulista S/A',
         'Conta Bancária': 'Itaú Uniclass - C/C 45892-1',
@@ -161,9 +166,10 @@ export const ImportExcelView: React.FC = () => {
       { Campo: 'Descrição, Tipo, Valor, Vencimento, Categoria, Centro de Custo, Fornecedor/Cliente, Forma de Pagamento e Unidade', Obrigatório: 'Sim', Regra: 'Devem corresponder aos cadastros ativos do sistema.' },
       { Campo: 'Conta Bancária', Obrigatório: 'Para itens PAGO', Regra: 'A conta precisa estar ativa e pertencer à unidade informada.' },
       { Campo: 'Data Pagamento', Obrigatório: 'Para itens PAGO', Regra: 'Use AAAA-MM-DD.' },
+      { Campo: 'Data Competência DRE', Obrigatório: 'Não', Regra: 'Define o mês da DRE. Quando vazia, usa a data de emissão.' },
       { Campo: 'Condição DDL', Obrigatório: 'Não', Regra: 'Quando preenchida, o valor total será dividido pelos prazos. Ex.: 30/60/90.' },
       { Campo: 'Documento / Referência', Obrigatório: 'Não', Regra: 'Use número da NF, boleto, contrato ou identificador externo. Anexos não são importados pela planilha.' },
-      { Campo: 'Tipo', Obrigatório: 'Sim', Regra: 'Aceita somente RECEITA ou DESPESA. O impacto no DRE é derivado deste campo.' }
+      { Campo: 'Tipo', Obrigatório: 'Sim', Regra: 'Aceita somente RECEITA ou DESPESA. O grupo da DRE é definido pela categoria cadastrada.' }
     ]);
     XLSX.utils.book_append_sheet(workbook, instructions, 'Instrucoes');
     XLSX.writeFile(workbook, 'Modelo_Importacao_Financeira_RoyalFace.xlsx');
@@ -202,6 +208,7 @@ export const ImportExcelView: React.FC = () => {
           tipo: detectedHeaders.find(h => /tipo/i.test(h)) || '',
           valor: detectedHeaders.find(h => /valor|montante|quantia/i.test(h)) || '',
           dataEmissao: detectedHeaders.find(h => /emiss/i.test(h)) || '',
+          dataCompetencia: detectedHeaders.find(h => /compet/i.test(h)) || '',
           dataVencimento: detectedHeaders.find(h => /venc/i.test(h)) || '',
           categoria: detectedHeaders.find(h => /categ/i.test(h)) || '',
           centroCusto: detectedHeaders.find(h => /centro|custo/i.test(h)) || '',
@@ -247,6 +254,7 @@ export const ImportExcelView: React.FC = () => {
 
       const dataVencimento = parseImportDate(row[mapping.dataVencimento]);
       const dtEmissao = parseImportDate(row[mapping.dataEmissao], dataVencimento);
+      const dataCompetencia = parseImportDate(row[mapping.dataCompetencia], dtEmissao || dataVencimento);
       const catStr = String(row[mapping.categoria] || '').trim();
       const ccStr = String(row[mapping.centroCusto] || '').trim();
       const fornStr = String(row[mapping.fornecedorCliente] || '').trim();
@@ -255,6 +263,7 @@ export const ImportExcelView: React.FC = () => {
 
       let formaFinal: Lancamento['formaPagamento'] = 'BOLETO';
       if (formaStr.includes('PIX')) formaFinal = 'PIX';
+      else if (formaStr.includes('CARN') || formaStr.includes('CREDIAR')) formaFinal = 'CARNE';
       else if (formaStr.includes('CRED') || formaStr.includes('CARTAO')) formaFinal = 'CARTAO_CREDITO';
       else if (formaStr.includes('DEB')) formaFinal = 'CARTAO_DEBITO';
       else if (formaStr.includes('DINH') || formaStr.includes('ESP')) formaFinal = 'DINHEIRO';
@@ -293,7 +302,7 @@ export const ImportExcelView: React.FC = () => {
       if (!ccStr || !centrosCusto.some((item) => item.ativo && item.nome.toLocaleLowerCase('pt-BR') === ccStr.toLocaleLowerCase('pt-BR'))) errors.push('Centro de custo não cadastrado ou inativo');
       if (!fornStr) errors.push('Fornecedor ou cliente obrigatório');
       if (!unidStr || !units.some((item) => item.ativa && item.nome === unidStr)) errors.push('Unidade não cadastrada ou inativa');
-      if (!formaStr || !/(PIX|CRED|CARTAO|DEB|DINH|ESP|TRANS|TED|BOLETO)/.test(formaStr)) errors.push('Forma de pagamento inválida');
+      if (!formaStr || !/(PIX|CRED|CARTAO|DEB|DINH|ESP|TRANS|TED|BOLETO|CARN)/.test(formaStr)) errors.push('Forma de pagamento inválida');
       const contaValida = bancos.some((item) => item.ativo && item.unidade === unidStr && item.banco.toLocaleLowerCase('pt-BR') === bancoStr.toLocaleLowerCase('pt-BR'));
       if (bancoStr && !contaValida) errors.push('Conta bancária não pertence à unidade ou está inativa');
       if (status === 'PAGO' && !contaValida) errors.push('Conta bancária obrigatória para lançamento pago');
@@ -305,6 +314,7 @@ export const ImportExcelView: React.FC = () => {
         tipo,
         valor: numValor,
         dataEmissao: dtEmissao,
+        dataCompetencia,
         dataVencimento,
         categoria: catStr,
         centroCusto: ccStr,
@@ -351,6 +361,7 @@ export const ImportExcelView: React.FC = () => {
           categoria: item.categoria,
           centroCusto: item.centroCusto,
           valor: item.valor,
+          dataCompetencia: item.dataCompetencia,
           dataVencimento: item.dataVencimento,
           status: item.status,
           dataPagamento: item.dataPagamento,
@@ -360,7 +371,8 @@ export const ImportExcelView: React.FC = () => {
           unidade: item.unidade,
           cpfCnpjContraparte: item.cpfCnpj || undefined,
           documentoRef: item.documentoRef || undefined,
-          observacoes: item.observacoes || undefined
+          observacoes: item.observacoes || undefined,
+          impactoDRE: item.tipo
         };
 
         addLancamentoComDDL(payload, item.dataEmissao, item.prazosDias, item.dataVencimento);
@@ -531,6 +543,20 @@ export const ImportExcelView: React.FC = () => {
                 className="w-full px-3 py-2 border rounded-md text-xs font-semibold text-[#0b1c30] bg-white"
               >
                 <option value="">Selecione a coluna...</option>
+                {headers.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Data de Competência DRE</label>
+              <select
+                value={mapping.dataCompetencia}
+                onChange={(e) => setMapping({ ...mapping, dataCompetencia: e.target.value })}
+                className="w-full px-3 py-2 border rounded-md text-xs font-semibold text-[#0b1c30] bg-white"
+              >
+                <option value="">Usar a data de emissão...</option>
                 {headers.map((h) => (
                   <option key={h} value={h}>{h}</option>
                 ))}
@@ -747,6 +773,7 @@ export const ImportExcelView: React.FC = () => {
                 <tr>
                   <SortableTableHeader label="#" sortKey="indice" accessor={(item) => item.sourceIndex} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Data Emissão" sortKey="emissao" accessor={(item) => item.dataEmissao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Competência DRE" sortKey="competencia" accessor={(item) => item.dataCompetencia} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Vencimento" sortKey="vencimento" accessor={(item) => item.dataVencimento} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Data Pagamento" sortKey="pagamento" accessor={(item) => item.dataPagamento} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
@@ -765,6 +792,7 @@ export const ImportExcelView: React.FC = () => {
                   <tr key={item.sourceIndex} className="hover:bg-gray-50">
                     <td className="p-3 text-gray-400 font-mono text-[11px]">{item.sourceIndex}</td>
                     <td className="p-3 font-semibold text-gray-700">{item.dataEmissao}</td>
+                    <td className="p-3 font-semibold text-sky-800">{item.dataCompetencia || '—'}</td>
                     <td className="p-3 font-semibold text-gray-700">{item.dataVencimento || '—'}</td>
                     <td className="p-3 font-semibold text-gray-700">{item.dataPagamento || '—'}</td>
                     <td className="p-3">

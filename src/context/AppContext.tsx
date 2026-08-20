@@ -548,6 +548,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!checkFinancialPermission('Lançamento DDL')) return;
     dadosBase = bindLancamentoToBanco({
       ...dadosBase,
+      dataCompetencia: dadosBase.dataCompetencia || dataEmissao || dadosBase.dataVencimento,
+      impactoDRE: dadosBase.impactoDRE || dadosBase.tipo,
       unidade: resolveAllowedUnit(dadosBase.unidade)
     });
     if (!ensurePaidLancamentoHasBanco(dadosBase)) return;
@@ -859,7 +861,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Lancamentos CRUD ---
   const addLancamento = (l: Omit<Lancamento, 'id' | 'criadoEm'>) => {
     if (!checkFinancialPermission('Criar Lançamento')) return;
-    l = bindLancamentoToBanco({ ...l, unidade: resolveAllowedUnit(l.unidade) });
+    l = bindLancamentoToBanco({
+      ...l,
+      dataCompetencia: l.dataCompetencia || l.dataVencimento,
+      impactoDRE: l.impactoDRE || l.tipo,
+      unidade: resolveAllowedUnit(l.unidade)
+    });
     if (!ensurePaidLancamentoHasBanco(l)) return;
     const id = (l.tipo === 'RECEITA' ? 'rec-' : 'desp-') + Date.now().toString().slice(-4);
     const newL: Lancamento = {
@@ -1159,9 +1166,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ) || extraidos.fornecedor || extraidos.recebedor || extraidos.pagador || 'Contraparte Não Identificada',
           cnpj: extraidos.cnpj || '',
           dataEmissao: extraidos.dataEmissao || '',
+          dataCompetencia: extraidos.dataCompetencia || extraidos.dataEmissao || extraidos.dataVencimento || '',
           dataVencimento: extraidos.dataVencimento || extraidos.dataEmissao || '',
           valorTotal: typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0,
-          categoria: extraidos.categoria || 'Despesas Operacionais',
+          categoria: extraidos.categoria || 'Outras Despesas Operacionais',
           centroCusto: extraidos.centroCusto || 'Administrativo',
           observacoes: extraidos.observacoes || '',
           pagador: extraidos.pagador || '',
@@ -1230,7 +1238,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   dataEmissao: '',
                   dataVencimento: '',
                   valorTotal: 0,
-                  categoria: 'Despesas Operacionais',
+                  categoria: 'Outras Despesas Operacionais',
                   centroCusto: 'Administrativo',
                   observacoes: `OCR não concluído: ${errorMessage}`
                 }

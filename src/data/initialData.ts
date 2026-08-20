@@ -57,17 +57,40 @@ export const INITIAL_UNITS: UnitConfig[] = [
 ];
 
 export const INITIAL_CATEGORIAS: CategoriaMaster[] = [
-  { id: 'cat-1', codigo: '1.01', nome: 'Procedimentos Estéticos', tipo: 'RECEITA', ativa: true },
-  { id: 'cat-2', codigo: '1.02', nome: 'Venda de Produtos', tipo: 'RECEITA', ativa: true },
-  { id: 'cat-3', codigo: '1.03', nome: 'Outras Receitas', tipo: 'RECEITA', ativa: true },
-  { id: 'cat-4', codigo: '2.01', nome: 'Insumos Médicos & Estéticos', tipo: 'DESPESA', ativa: true },
-  { id: 'cat-5', codigo: '2.02', nome: 'Ocupação & Infraestrutura', tipo: 'DESPESA', ativa: true },
-  { id: 'cat-6', codigo: '2.03', nome: 'Marketing & Publicidade', tipo: 'DESPESA', ativa: true },
-  { id: 'cat-7', codigo: '2.04', nome: 'Pessoal & Encargos', tipo: 'DESPESA', ativa: true },
-  { id: 'cat-8', codigo: '2.05', nome: 'Serviços Públicos & Concessionárias', tipo: 'DESPESA', ativa: true },
-  { id: 'cat-9', codigo: '2.06', nome: 'Manutenção & Equipamentos', tipo: 'DESPESA', ativa: true },
-  { id: 'cat-10', codigo: '2.07', nome: 'Serviços Terceirizados', tipo: 'DESPESA', ativa: true },
-  { id: 'cat-11', codigo: '2.08', nome: 'Softwares & Sistemas', tipo: 'DESPESA', ativa: true },
+  { id: 'cat-1', codigo: '1.01', nome: 'Procedimentos Estéticos', tipo: 'RECEITA', grupoDRE: 'RECEITA_BRUTA', ativa: true },
+  { id: 'cat-2', codigo: '1.02', nome: 'Venda de Produtos', tipo: 'RECEITA', grupoDRE: 'RECEITA_BRUTA', ativa: true },
+  { id: 'cat-3', codigo: '8.01', nome: 'Outras Receitas Operacionais', tipo: 'RECEITA', grupoDRE: 'OUTRA_RECEITA_OPERACIONAL', ativa: true },
+  { id: 'cat-4', codigo: '4.01', nome: 'Insumos Médicos & Estéticos', tipo: 'DESPESA', grupoDRE: 'CUSTO_SERVICO_PRODUTO', ativa: true },
+  { id: 'cat-5', codigo: '7.01', nome: 'Outras Despesas de Ocupação & Infraestrutura', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-6', codigo: '6.01', nome: 'Marketing & Publicidade', tipo: 'DESPESA', grupoDRE: 'DESPESA_VENDAS', ativa: true },
+  { id: 'cat-7', codigo: '7.02', nome: 'Salários & Encargos Administrativos', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-8', codigo: '7.03', nome: 'Energia Elétrica', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-9', codigo: '7.04', nome: 'Manutenção & Equipamentos', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-10', codigo: '7.05', nome: 'Serviços Terceirizados', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-11', codigo: '7.06', nome: 'Softwares & Sistemas', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-12', codigo: '2.01', nome: 'Tributos sobre Faturamento', tipo: 'DESPESA', grupoDRE: 'DEDUCAO_RECEITA', ativa: true },
+  { id: 'cat-13', codigo: '2.02', nome: 'Cancelamentos, Estornos & Descontos', tipo: 'DESPESA', grupoDRE: 'DEDUCAO_RECEITA', ativa: true },
+  { id: 'cat-14', codigo: '4.02', nome: 'Comissões Clínicas & Aplicadores', tipo: 'DESPESA', grupoDRE: 'CUSTO_SERVICO_PRODUTO', ativa: true },
+  { id: 'cat-15', codigo: '4.03', nome: 'Salários da Equipe Clínica', tipo: 'DESPESA', grupoDRE: 'CUSTO_SERVICO_PRODUTO', ativa: true },
+  { id: 'cat-16', codigo: '6.02', nome: 'Taxas de Maquininha — Débito', tipo: 'DESPESA', grupoDRE: 'DESPESA_VENDAS', ativa: true },
+  { id: 'cat-17', codigo: '6.03', nome: 'Royalties', tipo: 'DESPESA', grupoDRE: 'DESPESA_VENDAS', ativa: true },
+  { id: 'cat-18', codigo: '7.07', nome: 'Aluguel, Condomínio & IPTU', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-19', codigo: '7.08', nome: 'Limpeza', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-20', codigo: '8.02', nome: 'Outras Despesas Operacionais', tipo: 'DESPESA', grupoDRE: 'OUTRA_DESPESA_OPERACIONAL', ativa: true },
+  { id: 'cat-21', codigo: '10.01', nome: 'Depreciação & Amortização', tipo: 'DESPESA', grupoDRE: 'DEPRECIACAO_AMORTIZACAO', ativa: true },
+  { id: 'cat-22', codigo: '12.01', nome: 'Receitas Financeiras', tipo: 'RECEITA', grupoDRE: 'RECEITA_FINANCEIRA', ativa: true },
+  { id: 'cat-23', codigo: '12.02', nome: 'Tarifas, Juros & Despesas Financeiras', tipo: 'DESPESA', grupoDRE: 'DESPESA_FINANCEIRA', ativa: true },
+  { id: 'cat-24', codigo: '14.01', nome: 'IRPJ & CSLL', tipo: 'DESPESA', grupoDRE: 'TRIBUTO_LUCRO', ativa: true },
+  { id: 'cat-25', codigo: '0.01', nome: 'Movimentações sem Impacto no DRE', tipo: 'DESPESA', grupoDRE: 'NAO_AFETA_DRE', ativa: true },
+  { id: 'cat-26', codigo: '0.02', nome: 'Investimento em Equipamentos (Capex)', tipo: 'DESPESA', grupoDRE: 'NAO_AFETA_DRE', ativa: true },
+  { id: 'cat-27', codigo: '0.03', nome: 'Obras & Benfeitorias', tipo: 'DESPESA', grupoDRE: 'NAO_AFETA_DRE', ativa: true },
+  { id: 'cat-28', codigo: '0.04', nome: 'Principal de Empréstimos', tipo: 'DESPESA', grupoDRE: 'NAO_AFETA_DRE', ativa: true },
+  { id: 'cat-29', codigo: '0.05', nome: 'Aportes & Transferências Recebidas', tipo: 'RECEITA', grupoDRE: 'NAO_AFETA_DRE', ativa: true },
+  { id: 'cat-30', codigo: '0.06', nome: 'Retiradas & Transferências Enviadas', tipo: 'DESPESA', grupoDRE: 'NAO_AFETA_DRE', ativa: true },
+  { id: 'cat-31', codigo: '6.04', nome: 'Taxas de Maquininha — Crédito', tipo: 'DESPESA', grupoDRE: 'DESPESA_VENDAS', ativa: true },
+  { id: 'cat-32', codigo: '7.09', nome: 'Água & Esgoto', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-33', codigo: '7.10', nome: 'Clinicorp / Software de Gestão', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
+  { id: 'cat-34', codigo: '7.11', nome: 'Microfocado / Equipamentos', tipo: 'DESPESA', grupoDRE: 'DESPESA_ADMINISTRATIVA', ativa: true },
 ];
 
 export const INITIAL_CENTROS_CUSTO: CentroCustoMaster[] = [
@@ -208,7 +231,7 @@ export const INITIAL_LANCAMENTOS: Lancamento[] = [
     id: 'desp-102',
     descricao: 'Aluguel Imóvel Comercial - Unidade Matriz',
     tipo: 'DESPESA',
-    categoria: 'Ocupação & Infraestrutura',
+    categoria: 'Aluguel, Condomínio & IPTU',
     centroCusto: 'Administrativo',
     valor: 12500.00,
     dataVencimento: '2024-05-10',
@@ -240,7 +263,7 @@ export const INITIAL_LANCAMENTOS: Lancamento[] = [
     id: 'desp-104',
     descricao: 'Energia Elétrica - Enel SP (Maio/2024)',
     tipo: 'DESPESA',
-    categoria: 'Serviços Públicos & Concessionárias',
+    categoria: 'Energia Elétrica',
     centroCusto: 'Administrativo',
     valor: 2150.80,
     dataVencimento: '2024-05-20',
@@ -270,7 +293,7 @@ export const INITIAL_LANCAMENTOS: Lancamento[] = [
     id: 'desp-106',
     descricao: 'Folha de Pagamento - Equipe Biomédicas & Recepção',
     tipo: 'DESPESA',
-    categoria: 'Pessoal & Encargos',
+    categoria: 'Salários & Encargos Administrativos',
     centroCusto: 'Recursos Humanos',
     valor: 28400.00,
     dataVencimento: '2024-05-05',
@@ -495,7 +518,7 @@ export const INITIAL_AUTOMATIONS: RegraAutomacao[] = [
     id: 'aut-2',
     nome: 'Auto Categorizar Aluguel Imobiliária',
     palavraChave: 'IMOBILIARIA PAULISTA',
-    categoriaDestino: 'Ocupação & Infraestrutura',
+    categoriaDestino: 'Aluguel, Condomínio & IPTU',
     centroCustoDestino: 'Administrativo',
     autoAprovarConfiancaMinima: 95,
     ativa: true
@@ -504,7 +527,7 @@ export const INITIAL_AUTOMATIONS: RegraAutomacao[] = [
     id: 'aut-3',
     nome: 'Concessionária Energia Enel',
     palavraChave: 'ENEL',
-    categoriaDestino: 'Serviços Públicos & Concessionárias',
+    categoriaDestino: 'Energia Elétrica',
     centroCustoDestino: 'Administrativo',
     autoAprovarConfiancaMinima: 85,
     ativa: true
@@ -512,115 +535,19 @@ export const INITIAL_AUTOMATIONS: RegraAutomacao[] = [
 ];
 
 export const INITIAL_DRE: DREItem[] = [
-  {
-    codigo: '1',
-    descricao: 'RECEITA BRUTA DE VENDAS E SERVIÇOS',
-    tipo: 'TOTAL',
-    nivel: 1,
-    mesAtual: 142500.00,
-    mesAnterior: 128000.00,
-    orcado: 135000.00,
-    filhos: [
-      { codigo: '1.1', descricao: 'Procedimentos Estéticos (Injetáveis, Lasers)', tipo: 'CONTA', nivel: 2, mesAtual: 125000.00, mesAnterior: 112000.00, orcado: 118000.00 },
-      { codigo: '1.2', descricao: 'Venda de Produtos Dermocosméticos', tipo: 'CONTA', nivel: 2, mesAtual: 175000.00 / 10, mesAnterior: 16000.00, orcado: 17000.00 }
-    ]
-  },
-  {
-    codigo: '2',
-    descricao: '(-) DEDUÇÕES DA RECEITA BRUTA & IMPOSTOS',
-    tipo: 'SUBTOTAL',
-    nivel: 1,
-    mesAtual: -8550.00,
-    mesAnterior: -7680.00,
-    orcado: -8100.00,
-    filhos: [
-      { codigo: '2.1', descricao: 'Impostos Incidentes sobre Vendas (DAS Simples Nacional)', tipo: 'CONTA', nivel: 2, mesAtual: -8550.00, mesAnterior: -7680.00, orcado: -8100.00 }
-    ]
-  },
-  {
-    codigo: '3',
-    descricao: '(=) RECEITA LÍQUIDA OPERACIONAL',
-    tipo: 'TOTAL',
-    nivel: 1,
-    mesAtual: 133950.00,
-    mesAnterior: 120320.00,
-    orcado: 126900.00
-  },
-  {
-    codigo: '4',
-    descricao: '(-) CUSTO DOS SERVIÇOS PRESTADOS E PRODUTOS (CPV/CMV)',
-    tipo: 'SUBTOTAL',
-    nivel: 1,
-    mesAtual: -38400.00,
-    mesAnterior: -34500.00,
-    orcado: -36000.00,
-    filhos: [
-      { codigo: '4.1', descricao: 'Insumos Médicos (Toxinas, Preenchedores, Fios)', tipo: 'CONTA', nivel: 2, mesAtual: -28900.00, mesAnterior: -26000.00, orcado: -27000.00 },
-      { codigo: '4.2', descricao: 'Comissão de Biomédicas & Aplicadores', tipo: 'CONTA', nivel: 2, mesAtual: -9500.00, mesAnterior: -8500.00, orcado: -9000.00 }
-    ]
-  },
-  {
-    codigo: '5',
-    descricao: '(=) LUCRO BRUTO OPERACIONAL',
-    tipo: 'TOTAL',
-    nivel: 1,
-    mesAtual: 95550.00,
-    mesAnterior: 85820.00,
-    orcado: 90900.00
-  },
-  {
-    codigo: '6',
-    descricao: '(-) DESPESAS OPERACIONAIS (OPEX)',
-    tipo: 'SUBTOTAL',
-    nivel: 1,
-    mesAtual: -52150.00,
-    mesAnterior: -49800.00,
-    orcado: -48500.00,
-    filhos: [
-      { codigo: '6.1', descricao: 'Despesas com Pessoal & Encargos (Recepção/Admin)', tipo: 'CONTA', nivel: 2, mesAtual: -28400.00, mesAnterior: -27500.00, orcado: -27000.00 },
-      { codigo: '6.2', descricao: 'Aluguel & Condomínio', tipo: 'CONTA', nivel: 2, mesAtual: -12500.00, mesAnterior: -12500.00, orcado: -12500.00 },
-      { codigo: '6.3', descricao: 'Marketing, Tráfego Pago & Mídias', tipo: 'CONTA', nivel: 2, mesAtual: -6800.00, mesAnterior: -5800.00, orcado: -5000.00 },
-      { codigo: '6.4', descricao: 'Energia, Água, Internet & Telefone', tipo: 'CONTA', nivel: 2, mesAtual: -4450.00, mesAnterior: -4000.00, orcado: -4000.00 }
-    ]
-  },
-  {
-    codigo: '7',
-    descricao: '(=) EBITDA (LUCRO ANTES DE JUROS, IMPOSTOS E DEPRECIAÇÃO)',
-    tipo: 'TOTAL',
-    nivel: 1,
-    mesAtual: 43400.00,
-    mesAnterior: 36020.00,
-    orcado: 42400.00
-  },
-  {
-    codigo: '8',
-    descricao: '(-) DEPRECIAÇÃO E AMORTIZAÇÃO',
-    tipo: 'SUBTOTAL',
-    nivel: 1,
-    mesAtual: -2000.00,
-    mesAnterior: -2000.00,
-    orcado: -2000.00
-  },
-  {
-    codigo: '9',
-    descricao: '(=) RESULTADO FINANCEIRO (RECEITAS - DESPESAS FINANCIAM.)',
-    tipo: 'SUBTOTAL',
-    nivel: 1,
-    mesAtual: -1850.00,
-    mesAnterior: -1420.00,
-    orcado: -1200.00,
-    filhos: [
-      { codigo: '9.1', descricao: 'Taxas de Adquirentes e Cartão de Crédito', tipo: 'CONTA', nivel: 2, mesAtual: -1520.00, mesAnterior: -1300.00, orcado: -1000.00 },
-      { codigo: '9.2', descricao: 'Tarifas Bancárias e Manutenção de Conta', tipo: 'CONTA', nivel: 2, mesAtual: -330.00, mesAnterior: -120.00, orcado: -200.00 }
-    ]
-  },
-  {
-    codigo: '10',
-    descricao: '(=) LUCRO LÍQUIDO DO EXERCÍCIO (RESULTADO FINAL)',
-    tipo: 'TOTAL',
-    nivel: 1,
-    mesAtual: 39550.00,
-    mesAnterior: 32600.00,
-    orcado: 39200.00
-  }
+  { codigo: '1', descricao: 'RECEITA BRUTA DE VENDAS E SERVIÇOS', tipo: 'TOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 135000.00 },
+  { codigo: '2', descricao: '(-) DEDUÇÕES DA RECEITA BRUTA', tipo: 'SUBTOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: -8100.00 },
+  { codigo: '3', descricao: '(=) RECEITA LÍQUIDA OPERACIONAL', tipo: 'TOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 126900.00 },
+  { codigo: '4', descricao: '(-) CUSTOS DOS PRODUTOS E SERVIÇOS (CPV/CSP)', tipo: 'SUBTOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: -36000.00 },
+  { codigo: '5', descricao: '(=) LUCRO BRUTO OPERACIONAL', tipo: 'TOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 90900.00 },
+  { codigo: '6', descricao: '(-) DESPESAS COM VENDAS', tipo: 'SUBTOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: -8000.00 },
+  { codigo: '7', descricao: '(-) DESPESAS ADMINISTRATIVAS', tipo: 'SUBTOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: -40500.00 },
+  { codigo: '8', descricao: '(+/-) OUTRAS RECEITAS E DESPESAS OPERACIONAIS', tipo: 'SUBTOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 0 },
+  { codigo: '9', descricao: '(=) EBITDA', tipo: 'TOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 42400.00 },
+  { codigo: '10', descricao: '(-) DEPRECIAÇÃO E AMORTIZAÇÃO', tipo: 'SUBTOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: -2000.00 },
+  { codigo: '11', descricao: '(=) RESULTADO OPERACIONAL (EBIT)', tipo: 'TOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 40400.00 },
+  { codigo: '12', descricao: '(+/-) RESULTADO FINANCEIRO', tipo: 'SUBTOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: -1200.00 },
+  { codigo: '13', descricao: '(=) RESULTADO ANTES DOS TRIBUTOS SOBRE O LUCRO', tipo: 'TOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 39200.00 },
+  { codigo: '14', descricao: '(-) IRPJ E CSLL', tipo: 'SUBTOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 0 },
+  { codigo: '15', descricao: '(=) LUCRO OU PREJUÍZO LÍQUIDO DO PERÍODO', tipo: 'TOTAL', nivel: 1, mesAtual: 0, mesAnterior: 0, orcado: 39200.00 }
 ];

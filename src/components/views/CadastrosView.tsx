@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
+import type { GrupoDRE } from '../../types';
+import { GRUPOS_DRE, getDefaultGrupoDRE, getGrupoDRELabel } from '../../utils/dre';
 
 export const CadastrosView: React.FC = () => {
   const {
@@ -43,6 +45,7 @@ export const CadastrosView: React.FC = () => {
   const [codigo, setCodigo] = useState('');
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState<'RECEITA' | 'DESPESA'>('DESPESA');
+  const [grupoDRE, setGrupoDRE] = useState<GrupoDRE>('DESPESA_ADMINISTRATIVA');
   const [responsavel, setResponsavel] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [cidade, setCidade] = useState('');
@@ -60,6 +63,7 @@ export const CadastrosView: React.FC = () => {
     setCodigo('');
     setNome('');
     setTipo('DESPESA');
+    setGrupoDRE('DESPESA_ADMINISTRATIVA');
     setResponsavel('');
     setCnpj('');
     setCidade('');
@@ -80,9 +84,9 @@ export const CadastrosView: React.FC = () => {
     if (activeTab === 'PLANO_CONTAS') {
       if (!nome || !codigo) return;
       if (editingId) {
-        updateCategoria(editingId, { codigo, nome, tipo });
+        updateCategoria(editingId, { codigo, nome, tipo, grupoDRE });
       } else {
-        addCategoria({ codigo, nome, tipo, ativa: true });
+        addCategoria({ codigo, nome, tipo, grupoDRE, ativa: true });
       }
     } else if (activeTab === 'CENTROS_CUSTO') {
       if (!nome || !codigo) return;
@@ -217,6 +221,7 @@ export const CadastrosView: React.FC = () => {
                     <SortableTableHeader label="Código" sortKey="codigo" accessor={(item) => item.codigo} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3" />
                     <SortableTableHeader label="Nome da Conta" sortKey="nome" accessor={(item) => item.nome} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3" />
                     <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3" />
+                    <SortableTableHeader label="Grupo na DRE" sortKey="grupoDRE" accessor={(item) => getGrupoDRELabel(item.grupoDRE)} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3" />
                     <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.ativa} sortConfig={categoriasSort.sortConfig} onSort={categoriasSort.requestSort} className="p-3 text-center" />
                     <th className="p-3 text-center">Ações</th>
                   </tr>
@@ -235,6 +240,7 @@ export const CadastrosView: React.FC = () => {
                           {item.tipo}
                         </span>
                       </td>
+                      <td className="p-3 text-[11px] font-semibold text-gray-700">{getGrupoDRELabel(item.grupoDRE)}</td>
                       <td className="p-3 text-center">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -255,6 +261,7 @@ export const CadastrosView: React.FC = () => {
                             setCodigo(item.codigo);
                             setNome(item.nome);
                             setTipo(item.tipo);
+                            setGrupoDRE(item.grupoDRE);
                             setShowFormModal(true);
                           }}
                           disabled={!isAdmin}
@@ -559,12 +566,33 @@ export const CadastrosView: React.FC = () => {
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Tipo</label>
                     <select
                       value={tipo}
-                      onChange={(e) => setTipo(e.target.value as any)}
+                      onChange={(e) => {
+                        const nextTipo = e.target.value as 'RECEITA' | 'DESPESA';
+                        setTipo(nextTipo);
+                        if (!GRUPOS_DRE.find((grupo) => grupo.value === grupoDRE)?.tipos.includes(nextTipo)) {
+                          setGrupoDRE(getDefaultGrupoDRE(nextTipo));
+                        }
+                      }}
                       className="w-full px-3 py-2 border rounded text-xs focus:ring-2 focus:ring-[#131b2e] bg-white"
                     >
                       <option value="RECEITA">RECEITA</option>
                       <option value="DESPESA">DESPESA</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Grupo de apresentação na DRE</label>
+                    <select
+                      value={grupoDRE}
+                      onChange={(e) => setGrupoDRE(e.target.value as GrupoDRE)}
+                      className="w-full px-3 py-2 border rounded text-xs focus:ring-2 focus:ring-[#131b2e] bg-white"
+                    >
+                      {GRUPOS_DRE.filter((grupo) => grupo.tipos.includes(tipo)).map((grupo) => (
+                        <option key={grupo.value} value={grupo.value}>{grupo.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Esta escolha substitui a classificação automática por palavras do nome.
+                    </p>
                   </div>
                 </>
               )}
