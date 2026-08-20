@@ -186,6 +186,13 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const createEntityId = (prefix: string) => {
+  const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${randomId}`;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUserState] = useState<User | null>(INITIAL_USERS[0]);
   const [selectedUnit, setSelectedUnitState] = useState<string>('Todas as Unidades');
@@ -560,7 +567,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const totalParcelas = prazosDias.length;
     const valorUnitario = Math.round((dadosBase.valor / totalParcelas) * 100) / 100;
-    const parcelamentoId = totalParcelas > 1 ? 'parc-' + Date.now() : undefined;
+    const parcelamentoId = totalParcelas > 1 ? createEntityId('parc') : undefined;
     const vencimentos = calculateDueDateSchedule(dataEmissao, prazosDias, primeiroVencimento);
 
     const novosLancamentos: Lancamento[] = [];
@@ -569,7 +576,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     prazosDias.forEach((dias, index) => {
       const vencimentoStr = vencimentos[index];
 
-      const lancId = 'lanc-' + Date.now() + '-' + index;
+      const lancId = createEntityId('lanc');
       const statusLanc: StatusLancamento = dadosBase.status === 'PAGO'
         ? 'PAGO'
         : dadosBase.status === 'CANCELADO'
@@ -673,7 +680,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const valorTotal = baseData.valor;
     const valorParcela = Math.round((valorTotal / numeroParcelas) * 100) / 100;
-    const parcelamentoId = 'parc-' + Date.now();
+    const parcelamentoId = createEntityId('parc');
     const dataInicio = baseData.dataVencimento;
 
     const cronograma: Parcelamento['cronograma'] = [];
@@ -683,7 +690,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const dt = new Date(dataInicio + 'T00:00:00');
       dt.setMonth(dt.getMonth() + (i - 1));
       const vencimentoStr = dt.toISOString().substring(0, 10);
-      const lancId = `lanc-${parcelamentoId}-${i}`;
+      const lancId = createEntityId('lanc');
 
       const isPaid = i === 1 && baseData.status === 'PAGO';
 
@@ -869,7 +876,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unidade: resolveAllowedUnit(l.unidade)
     });
     if (!ensurePaidLancamentoHasBanco(l)) return;
-    const id = (l.tipo === 'RECEITA' ? 'rec-' : 'desp-') + Date.now().toString().slice(-4);
+    const id = createEntityId(l.tipo === 'RECEITA' ? 'rec' : 'desp');
     const newL: Lancamento = {
       ...l,
       id,
@@ -978,7 +985,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Parcelamentos ---
   const addParcelamento = (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => {
     if (!checkFinancialPermission('Criar Parcelamento')) return;
-    const id = 'parc-' + Date.now().toString().slice(-4);
+    const id = createEntityId('parc');
     const valorParcela = p.valorTotal / p.numeroParcelas;
     const cronograma = Array.from({ length: p.numeroParcelas }).map((_, idx) => {
       const dt = new Date(p.dataInicio);
@@ -1103,7 +1110,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- OCR / Documentos ---
   const uploadDocumentoOCR = async (file: File) => {
     if (!checkFinancialPermission('Upload Documento OCR')) return;
-    const docId = 'ocr-' + Date.now().toString().slice(-4);
+    const docId = createEntityId('ocr');
     const normalizedFileName = file.name.toLowerCase();
     const isPdf = file.type === 'application/pdf' || normalizedFileName.endsWith('.pdf');
     const isImage = file.type.startsWith('image/') || /\.(png|jpe?g)$/.test(normalizedFileName);
@@ -1428,7 +1435,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const delta = isEntrada ? valor : -valor;
     const novaMov = {
-      id: 'mov-' + Date.now(),
+      id: createEntityId('mov'),
       tipo,
       descricao,
       valor,
@@ -1542,7 +1549,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       movimentacoes: [
         {
-          id: 'mov-' + Date.now(),
+          id: createEntityId('mov'),
           tipo: 'AJUSTE',
           descricao: `Ajuste manual de saldo: ${motivo}`,
           valor: Math.abs(diferenca),
@@ -1613,7 +1620,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addRegraAutomacao = (r: Omit<RegraAutomacao, 'id'>) => {
     if (!checkAdminPermission('Criar Regra de Automação')) return;
-    const id = 'aut-' + Date.now();
+    const id = createEntityId('aut');
     setRegrasAutomacao((prev) => [...prev, { ...r, id }]);
     showToast('Nova regra de automação criada!', 'success');
   };
@@ -1627,7 +1634,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const newU: User = {
       ...u,
-      id: 'u-' + Date.now(),
+      id: createEntityId('user'),
       lastAccess: 'Nunca acessou'
     };
     setUsers((prev) => [...prev, newU]);
