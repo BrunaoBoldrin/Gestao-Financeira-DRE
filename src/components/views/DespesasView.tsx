@@ -8,11 +8,10 @@ import { normalizeText } from '../../utils/text';
 
 interface DespesasViewProps {
   onOpenNovoLancamentoModal: () => void;
-  onOpenUploadModal: () => void;
 }
 
-export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamentoModal, onOpenUploadModal }) => {
-  const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, setCurrentView, isAuditor, showToast } = useApp();
+export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamentoModal }) => {
+  const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, isAuditor, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
   const [competencia, setCompetencia] = useState('TODOS');
@@ -72,46 +71,6 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
         </div>
 
         {!isAuditor && <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              if (isAuditor) {
-                showToast('Acesso negado: Perfil Auditoria possui apenas acesso de leitura.', 'error');
-                return;
-              }
-              setCurrentView('import_excel');
-            }}
-            disabled={isAuditor}
-            title={isAuditor ? 'Ação restrita ao Financeiro/Administrador' : undefined}
-            className={`px-3 py-2 border rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-              isAuditor
-                ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-[#f8f9ff] border-[#C5A059]/60 text-[#0b1c30] hover:bg-[#fff9ed]'
-            }`}
-          >
-            <span className="material-symbols-outlined text-base text-[#C5A059]">table_chart</span>
-            Importar Excel
-          </button>
-
-          <button
-            onClick={() => {
-              if (isAuditor) {
-                showToast('Acesso negado: Perfil Auditoria possui apenas acesso de leitura.', 'error');
-                return;
-              }
-              onOpenUploadModal();
-            }}
-            disabled={isAuditor}
-            title={isAuditor ? 'Ação restrita ao Financeiro/Administrador' : undefined}
-            className={`px-3.5 py-2 border rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-              isAuditor
-                ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-[#eff4ff] border-[#d3e4fe] text-[#0b1c30] hover:bg-[#e5eeff]'
-            }`}
-          >
-            <span className="material-symbols-outlined text-base">upload_file</span>
-            Importar Nota (OCR)
-          </button>
-
           <button
             onClick={() => {
               if (isAuditor) {
