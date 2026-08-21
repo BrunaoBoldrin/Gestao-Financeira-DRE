@@ -50,6 +50,15 @@ const parseImportDate = (rawDate: unknown, fallback = '') => {
   return fallback;
 };
 
+const normalizeLookupText = (value: string) =>
+  value
+    .normalize('NFKC')
+    .replace(/[‐‑‒–—−/]+/g, '-')
+    .replace(/\s*-\s*/g, ' - ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase('pt-BR');
+
 export const ImportExcelView: React.FC = () => {
   const {
     addLancamento,
@@ -272,6 +281,10 @@ export const ImportExcelView: React.FC = () => {
       const unidStr = isFinance && currentUser
         ? currentUser.unit
         : String(row[mapping.unidade] || '').trim();
+      const matchedUnit = units.find(
+        (item) => item.ativa && normalizeLookupText(item.nome) === normalizeLookupText(unidStr)
+      );
+      const resolvedUnit = matchedUnit?.nome || unidStr;
       const condStr = String(row[mapping.condicaoDDL] || '').trim();
       const statusRaw = String(row[mapping.status] || '').trim().toUpperCase();
       let status: StatusLancamento = 'PENDENTE';
@@ -301,9 +314,14 @@ export const ImportExcelView: React.FC = () => {
       if (!catStr || !categorias.some((item) => item.ativa && item.nome.toLocaleLowerCase('pt-BR') === catStr.toLocaleLowerCase('pt-BR') && item.tipo === tipo)) errors.push('Categoria ativa incompatível com o tipo');
       if (!ccStr || !centrosCusto.some((item) => item.ativo && item.nome.toLocaleLowerCase('pt-BR') === ccStr.toLocaleLowerCase('pt-BR'))) errors.push('Centro de custo não cadastrado ou inativo');
       if (!fornStr) errors.push('Fornecedor ou cliente obrigatório');
-      if (!unidStr || !units.some((item) => item.ativa && item.nome === unidStr)) errors.push('Unidade não cadastrada ou inativa');
+      if (!unidStr || !matchedUnit) errors.push('Unidade não cadastrada ou inativa');
       if (!formaStr || !/(PIX|CRED|CARTAO|DEB|DINH|ESP|TRANS|TED|BOLETO|CARN)/.test(formaStr)) errors.push('Forma de pagamento inválida');
-      const contaValida = bancos.some((item) => item.ativo && item.unidade === unidStr && item.banco.toLocaleLowerCase('pt-BR') === bancoStr.toLocaleLowerCase('pt-BR'));
+      const contaValida = bancos.some(
+        (item) =>
+          item.ativo &&
+          normalizeLookupText(item.unidade) === normalizeLookupText(resolvedUnit) &&
+          item.banco.toLocaleLowerCase('pt-BR') === bancoStr.toLocaleLowerCase('pt-BR')
+      );
       if (bancoStr && !contaValida) errors.push('Conta bancária não pertence à unidade ou está inativa');
       if (status === 'PAGO' && !contaValida) errors.push('Conta bancária obrigatória para lançamento pago');
       if (status === 'PAGO' && !dataPagamento) errors.push('Data de pagamento obrigatória para lançamento pago');
@@ -321,7 +339,7 @@ export const ImportExcelView: React.FC = () => {
         fornecedorCliente: fornStr,
         contaBancaria: bancoStr,
         formaPagamento: formaFinal,
-        unidade: unidStr,
+        unidade: resolvedUnit,
         prazosDias,
         status,
         dataPagamento,
