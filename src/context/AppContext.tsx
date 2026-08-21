@@ -332,7 +332,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): BancoMaster | undefined => {
     const normalizedName = lancamento.contaBancaria?.trim().toLocaleLowerCase('pt-BR');
     const byId = lancamento.bancoId
-      ? bancos.find((banco) => banco.id === lancamento.bancoId && banco.unidade === lancamento.unidade)
+      ? bancos.find((banco) => banco.id === lancamento.bancoId)
       : undefined;
     if (byId) return byId;
 
@@ -935,10 +935,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
     const banco = bancos.find(
-      (item) => item.id === dados.bancoId && item.ativo && item.unidade === existing.unidade
+      (item) => item.id === dados.bancoId && item.ativo
     );
     if (!banco) {
-      showToast(`Selecione uma conta bancária ativa da unidade "${existing.unidade}".`, 'error');
+      showToast('Selecione uma conta bancária ou caixa ativo.', 'error');
       return false;
     }
     if (!dados.formaPagamento || !dados.dataPagamento) {
@@ -950,6 +950,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'PAGO' as const,
       bancoId: banco.id,
       contaBancaria: banco.banco,
+      unidadeConta: banco.unidade,
       formaPagamento: dados.formaPagamento,
       dataPagamento: dados.dataPagamento
     };
@@ -968,9 +969,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog(
       'Lançamentos',
       'EDICAO',
-      `Liquidou lançamento ID ${id} em "${banco.banco}" via ${dados.formaPagamento}`,
+      `Liquidou lançamento ID ${id} em "${banco.banco}" (${banco.unidade}) via ${dados.formaPagamento}`,
       'Status: PENDENTE',
-      `Status: PAGO | Data: ${dados.dataPagamento} | Conta: ${banco.banco} | Forma: ${dados.formaPagamento}`
+      `Status: PAGO | Data: ${dados.dataPagamento} | Conta: ${banco.banco} | Unidade da conta: ${banco.unidade} | Forma: ${dados.formaPagamento}`
     );
     return true;
   };
@@ -1033,11 +1034,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? lancamentos.find((item) => item.id === parcela.lancamentoId)
       : undefined;
     const banco = bancos.find(
-      (item) => item.id === dados.bancoId && item.ativo && item.unidade === parcelamento.unidade
+      (item) => item.id === dados.bancoId && item.ativo
     );
     if (!banco) {
       showToast(
-        `Selecione uma conta bancária ativa de ${parcelamento.unidade} antes de pagar a parcela.`,
+        'Selecione uma conta bancária ou caixa ativo antes de pagar a parcela.',
         'error'
       );
       return;
@@ -1062,6 +1063,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fornecedorCliente: parcelamento.fornecedor,
         bancoId: banco.id,
         contaBancaria: banco.banco,
+        unidadeConta: banco.unidade,
         formaPagamento: dados.formaPagamento,
         unidade: parcelamento.unidade,
         parcelamentoId: parcelamento.id,
@@ -1080,6 +1082,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 dataPagamento: dados.dataPagamento,
                 bancoId: banco.id,
                 contaBancaria: banco.banco,
+                unidadeConta: banco.unidade,
                 formaPagamento: dados.formaPagamento
               }
             : c
