@@ -85,6 +85,7 @@ export interface Lancamento {
   fornecedorCliente: string;
   contaBancaria: string;
   bancoId?: string;
+  unidadeConta?: string;
   comprovanteUrl?: string;
   documentoRef?: string;
   cpfCnpjContraparte?: string;
@@ -132,6 +133,7 @@ export interface Parcelamento {
     lancamentoId?: string;
     bancoId?: string;
     contaBancaria?: string;
+    unidadeConta?: string;
     formaPagamento?: Lancamento['formaPagamento'];
   }[];
 }
