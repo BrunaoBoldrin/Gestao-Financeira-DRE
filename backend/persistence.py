@@ -49,9 +49,15 @@ def _validated_entities(collection: str, entities: list[dict[str, Any]]) -> list
     seen: set[str] = set()
     validated: list[tuple[str, dict[str, Any]]] = []
     for entity in entities:
-        entity_id = str(entity.get("id", "")).strip()
+        identifier = entity.get("id")
+        if collection == "dreData" and not identifier:
+            identifier = entity.get("codigo")
+        entity_id = str(identifier or "").strip()
         if not entity_id:
-            raise ValueError(f'A coleção "{collection}" possui um registro sem ID.')
+            raise ValueError(
+                f'A coleção "{collection}" possui um registro sem ID'
+                f'{" ou código" if collection == "dreData" else ""}.'
+            )
         if entity_id in seen:
             raise ValueError(f'ID duplicado em "{collection}": {entity_id}')
         seen.add(entity_id)
