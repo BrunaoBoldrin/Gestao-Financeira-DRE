@@ -96,6 +96,10 @@ export const UsuariosPermissoesView: React.FC = () => {
           <p className="text-xs text-gray-500 mt-0.5">
             Gestão de usuários, atribuição de perfis (Administrador, Financeiro, Auditoria) e filiais.
           </p>
+          <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 max-w-3xl">
+            Nesta primeira etapa, somente o administrador criado na configuração inicial possui credenciais de login.
+            Os demais perfis ficam preparados para a futura liberação de acessos individuais.
+          </p>
         </div>
       </div>
 
@@ -152,8 +156,11 @@ export const UsuariosPermissoesView: React.FC = () => {
                       <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => startEditing(u)}
-                          disabled={!isAdmin}
-                          className="px-2 py-1 border border-[#d3e4fe] text-[#0b1c30] rounded text-[10px] font-bold hover:bg-[#eff4ff] disabled:bg-gray-100 disabled:text-gray-400"
+                          disabled={!isAdmin || currentUser?.id === u.id}
+                          title={currentUser?.id === u.id
+                            ? 'Os dados de acesso do administrador autenticado não podem ser alterados nesta etapa'
+                            : !isAdmin ? 'Apenas Administradores podem editar usuários' : undefined}
+                          className="px-2 py-1 border border-[#d3e4fe] text-[#0b1c30] rounded text-[10px] font-bold hover:bg-[#eff4ff] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                         >
                           Editar
                         </button>

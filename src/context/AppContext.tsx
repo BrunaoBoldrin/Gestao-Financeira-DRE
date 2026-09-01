@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   User,
   Lancamento,
@@ -18,7 +18,9 @@ import {
   CondicaoPagamento,
   ViewKey,
   DetalhesMovimentacaoCaixa,
-  DadosLiquidacao
+  DadosLiquidacao,
+  ApplicationStateSnapshot,
+  PersistenceStatus
 } from '../types';
 import { ROLE_DEFAULT_VIEW, canAccessAllUnits, canAccessView } from '../config/accessControl';
 import { calculateDueDateSchedule } from '../utils/financialDates';
@@ -39,6 +41,15 @@ import {
   INITIAL_BANCOS,
   INITIAL_CONDICOES_PAGAMENTO
 } from '../data/initialData';
+import {
+  getPersistenceAuthStatus,
+  loginAdmin as loginAdminApi,
+  loadApplicationState,
+  logoutAdmin as logoutAdminApi,
+  PersistenceApiError,
+  saveApplicationState,
+  setupInitialAdmin as setupInitialAdminApi
+} from '../services/persistenceApi';
 
 interface Toast {
   id: string;
@@ -47,6 +58,12 @@ interface Toast {
 }
 
 interface AppContextType {
+  persistenceStatus: PersistenceStatus;
+  persistenceMessage: string;
+  loginAdmin: (email: string, password: string) => Promise<boolean>;
+  setupInitialAdmin: (data: { setupToken: string; name: string; email: string; password: string }) => Promise<boolean>;
+  logoutAdmin: () => Promise<void>;
+  retryPersistence: () => void;
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
   selectedUnit: string;
@@ -193,8 +210,31 @@ const createEntityId = (prefix: string) => {
   return `${prefix}-${randomId}`;
 };
 
+const INITIAL_APPLICATION_STATE: ApplicationStateSnapshot = {
+  units: INITIAL_UNITS,
+  categorias: INITIAL_CATEGORIAS,
+  centrosCusto: INITIAL_CENTROS_CUSTO,
+  fornecedores: INITIAL_FORNECEDORES,
+  bancos: INITIAL_BANCOS,
+  condicoesPagamento: INITIAL_CONDICOES_PAGAMENTO,
+  users: INITIAL_USERS,
+  lancamentos: INITIAL_LANCAMENTOS,
+  parcelamentos: INITIAL_PARCELAMENTOS,
+  documentosOCR: INITIAL_DOCUMENTS_OCR,
+  sessaoCaixa: INITIAL_SESSAO_CAIXA,
+  fechamentoMensal: INITIAL_FECHAMENTO,
+  auditLogs: INITIAL_AUDIT_LOGS,
+  regrasAutomacao: INITIAL_AUTOMATIONS,
+  dreData: INITIAL_DRE
+};
+
+const persistentUrl = (value?: string) =>
+  value && !value.startsWith('blob:') && !value.startsWith('data:') ? value : undefined;
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUserState] = useState<User | null>(INITIAL_USERS[0]);
+  const [persistenceStatus, setPersistenceStatus] = useState<PersistenceStatus>('LOADING');
+  const [persistenceMessage, setPersistenceMessage] = useState('Conectando ao banco de dados...');
+  const [currentUser, setCurrentUserState] = useState<User | null>(null);
   const [selectedUnit, setSelectedUnitState] = useState<string>('Todas as Unidades');
   const [currentView, setCurrentViewState] = useState<ViewKey>('overview');
   const [selectedDocumentForReviewId, setSelectedDocumentForReviewId] = useState<string | null>('ocr-101');
@@ -213,9 +253,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [fechamentoMensal, setFechamentoMensal] = useState<FechamentoMensal>(INITIAL_FECHAMENTO);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [regrasAutomacao, setRegrasAutomacao] = useState<RegraAutomacao[]>(INITIAL_AUTOMATIONS);
-  const [dreData] = useState<DREItem[]>(INITIAL_DRE);
+  const [dreData, setDreData] = useState<DREItem[]>(INITIAL_DRE);
   
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const revisionRef = useRef(0);
+  const authenticatedUserRef = useRef<User | null>(null);
+  const hydratedRef = useRef(false);
+  const skipNextSaveRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const latestSnapshotRef = useRef<ApplicationStateSnapshot>(INITIAL_APPLICATION_STATE);
 
   // Filtering Logic
   const filteredLancamentos = lancamentos.filter((l) => {
@@ -233,6 +280,263 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   };
+
+  const persistentSnapshot = useMemo<ApplicationStateSnapshot>(() => ({
+    units,
+    categorias,
+    centrosCusto,
+    fornecedores,
+    bancos,
+    condicoesPagamento,
+    users,
+    lancamentos: lancamentos.map((item) => ({
+      ...item,
+      comprovanteUrl: persistentUrl(item.comprovanteUrl),
+      documentoRef: persistentUrl(item.documentoRef) || (item.documentoRef?.startsWith('data:') ? undefined : item.documentoRef)
+    })),
+    parcelamentos,
+    documentosOCR: documentosOCR.map((item) => ({
+      ...item,
+      previewUrl: persistentUrl(item.previewUrl) || ''
+    })),
+    sessaoCaixa: {
+      ...sessaoCaixa,
+      movimentacoes: sessaoCaixa.movimentacoes.map((item) => ({
+        ...item,
+        comprovanteRef: persistentUrl(item.comprovanteRef)
+      }))
+    },
+    fechamentoMensal,
+    auditLogs,
+    regrasAutomacao,
+    dreData
+  }), [
+    units,
+    categorias,
+    centrosCusto,
+    fornecedores,
+    bancos,
+    condicoesPagamento,
+    users,
+    lancamentos,
+    parcelamentos,
+    documentosOCR,
+    sessaoCaixa,
+    fechamentoMensal,
+    auditLogs,
+    regrasAutomacao,
+    dreData
+  ]);
+
+  const applyPersistentSnapshot = useCallback((snapshot: ApplicationStateSnapshot) => {
+    skipNextSaveRef.current = true;
+    const authenticatedUser = authenticatedUserRef.current;
+    const effectiveUsers = authenticatedUser
+      ? [
+          authenticatedUser,
+          ...snapshot.users.filter(
+            (user) => user.id !== authenticatedUser.id && user.email.toLocaleLowerCase('pt-BR') !== authenticatedUser.email.toLocaleLowerCase('pt-BR')
+          )
+        ]
+      : snapshot.users;
+    setUnits(snapshot.units);
+    setCategorias(snapshot.categorias);
+    setCentrosCusto(snapshot.centrosCusto);
+    setFornecedores(snapshot.fornecedores);
+    setBancos(snapshot.bancos);
+    setCondicoesPagamento(snapshot.condicoesPagamento);
+    setUsers(effectiveUsers);
+    setLancamentos(snapshot.lancamentos);
+    setParcelamentos(snapshot.parcelamentos);
+    setDocumentosOCR(snapshot.documentosOCR);
+    setSessaoCaixa(snapshot.sessaoCaixa);
+    setFechamentoMensal(snapshot.fechamentoMensal);
+    setAuditLogs(snapshot.auditLogs);
+    setRegrasAutomacao(snapshot.regrasAutomacao);
+    setDreData(snapshot.dreData);
+    setCurrentUserState(authenticatedUser || null);
+    setSelectedDocumentForReviewId(
+      snapshot.documentosOCR.find((document) => document.status === 'PENDENTE_REVISAO')?.id || null
+    );
+  }, []);
+
+  const enqueueSnapshotSave = useCallback((snapshot: ApplicationStateSnapshot) => {
+    saveChainRef.current = saveChainRef.current.then(async () => {
+      if (!hydratedRef.current) return;
+      setPersistenceStatus('SAVING');
+      setPersistenceMessage('Salvando alterações no Neon...');
+      try {
+        const result = await saveApplicationState(revisionRef.current, snapshot);
+        revisionRef.current = result.revision;
+        setPersistenceStatus('CONNECTED');
+        setPersistenceMessage(`Dados salvos no Neon · revisão ${result.revision}`);
+      } catch (error) {
+        if (error instanceof PersistenceApiError && error.status === 401) {
+          hydratedRef.current = false;
+          authenticatedUserRef.current = null;
+          setCurrentUserState(null);
+          setPersistenceStatus('AUTH_REQUIRED');
+          setPersistenceMessage('A sessão expirou. Faça login novamente.');
+          return;
+        }
+        if (error instanceof PersistenceApiError && error.status === 409) {
+          hydratedRef.current = false;
+          setPersistenceStatus('CONFLICT');
+          setPersistenceMessage('Outra sessão alterou os dados. Recarregue a versão mais recente antes de continuar.');
+          return;
+        }
+        setPersistenceStatus('ERROR');
+        setPersistenceMessage(error instanceof Error ? error.message : 'Falha ao salvar no Neon.');
+      }
+    });
+  }, []);
+
+  const hydratePersistence = useCallback(async () => {
+    hydratedRef.current = false;
+    setPersistenceStatus('LOADING');
+    setPersistenceMessage('Conectando ao banco de dados...');
+    try {
+      const auth = await getPersistenceAuthStatus();
+      if (!auth.databaseConfigured) {
+        if (import.meta.env.DEV) {
+          authenticatedUserRef.current = INITIAL_USERS[0];
+          setCurrentUserState(INITIAL_USERS[0]);
+          setPersistenceStatus('LOCAL_DEMO');
+          setPersistenceMessage('Modo local de demonstração: configure o Neon para salvar os dados.');
+        } else {
+          setPersistenceStatus('ERROR');
+          setPersistenceMessage('O banco Neon não está configurado. Cadastre as variáveis de conexão no Render.');
+        }
+        return;
+      }
+      if (!auth.encryptionConfigured) {
+        setPersistenceStatus('ERROR');
+        setPersistenceMessage('Configure APP_ENCRYPTION_KEY no Render antes de liberar o banco.');
+        return;
+      }
+      if (auth.error) {
+        setPersistenceStatus('ERROR');
+        setPersistenceMessage(`Falha ao preparar o banco: ${auth.error}.`);
+        return;
+      }
+      if (auth.setupRequired) {
+        setPersistenceStatus('SETUP_REQUIRED');
+        setPersistenceMessage(
+          auth.setupTokenConfigured
+            ? 'Crie o primeiro acesso de administrador.'
+            : 'Configure APP_SETUP_TOKEN no Render para criar o administrador.'
+        );
+        return;
+      }
+      if (!auth.authenticated || !auth.user) {
+        setPersistenceStatus('AUTH_REQUIRED');
+        setPersistenceMessage('Entre com o e-mail e a senha do administrador.');
+        return;
+      }
+      authenticatedUserRef.current = auth.user;
+
+      const stored = await loadApplicationState();
+      revisionRef.current = stored.revision;
+      if (stored.empty || !stored.data) {
+        const seededState: ApplicationStateSnapshot = {
+          ...INITIAL_APPLICATION_STATE,
+          users: [auth.user]
+        };
+        const seeded = await saveApplicationState(
+          stored.revision,
+          seededState
+        );
+        revisionRef.current = seeded.revision;
+        applyPersistentSnapshot(seededState);
+        latestSnapshotRef.current = seededState;
+      } else {
+        applyPersistentSnapshot(stored.data);
+        latestSnapshotRef.current = stored.data;
+      }
+      hydratedRef.current = true;
+      setPersistenceStatus('CONNECTED');
+      setPersistenceMessage(`Conectado ao Neon · revisão ${revisionRef.current}`);
+    } catch (error) {
+      if (error instanceof PersistenceApiError && error.status === 401) {
+        setPersistenceStatus('AUTH_REQUIRED');
+        setPersistenceMessage('Entre com o e-mail e a senha do administrador.');
+        return;
+      }
+      setPersistenceStatus('ERROR');
+      setPersistenceMessage(error instanceof Error ? error.message : 'Não foi possível carregar o banco de dados.');
+    }
+  }, [applyPersistentSnapshot]);
+
+  const loginAdmin = useCallback(async (email: string, password: string) => {
+    try {
+      const result = await loginAdminApi(email, password);
+      authenticatedUserRef.current = result.user;
+      await hydratePersistence();
+      return true;
+    } catch (error) {
+      setPersistenceStatus('AUTH_REQUIRED');
+      setPersistenceMessage(error instanceof Error ? error.message : 'Não foi possível entrar.');
+      return false;
+    }
+  }, [hydratePersistence]);
+
+  const setupInitialAdmin = useCallback(async (data: {
+    setupToken: string;
+    name: string;
+    email: string;
+    password: string;
+  }) => {
+    try {
+      const result = await setupInitialAdminApi(data);
+      authenticatedUserRef.current = result.user;
+      await hydratePersistence();
+      return true;
+    } catch (error) {
+      setPersistenceStatus('SETUP_REQUIRED');
+      setPersistenceMessage(error instanceof Error ? error.message : 'Não foi possível criar o administrador.');
+      return false;
+    }
+  }, [hydratePersistence]);
+
+  const logoutAdmin = useCallback(async () => {
+    try {
+      await logoutAdminApi();
+    } finally {
+      hydratedRef.current = false;
+      authenticatedUserRef.current = null;
+      setCurrentUserState(null);
+      setPersistenceStatus('AUTH_REQUIRED');
+      setPersistenceMessage('Sessão encerrada. Entre novamente para acessar os dados.');
+    }
+  }, []);
+
+  const retryPersistence = useCallback(() => {
+    if (persistenceStatus === 'ERROR' && hydratedRef.current) {
+      enqueueSnapshotSave(latestSnapshotRef.current);
+      return;
+    }
+    void hydratePersistence();
+  }, [enqueueSnapshotSave, hydratePersistence, persistenceStatus]);
+
+  useEffect(() => {
+    void hydratePersistence();
+  }, [hydratePersistence]);
+
+  useEffect(() => {
+    latestSnapshotRef.current = persistentSnapshot;
+    if (!hydratedRef.current) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      enqueueSnapshotSave(persistentSnapshot);
+    }, 350);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [enqueueSnapshotSave, persistentSnapshot]);
 
   // Permission / Role Calculation (RBAC)
   const userRole = currentUser?.role || 'AUDITOR';
@@ -1234,6 +1538,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           status: 'PENDENTE_REVISAO',
           confiancaOCR: result.confiancaOCR ?? 0,
           dadosExtraidos: normalizeExtractedData(entity.dadosExtraidos || entity),
+          previewUrl: result.metadados?.previewUrl || initialDoc.previewUrl,
           hashArquivo: result.metadados?.hashArquivo,
           entidadeNumero: totalEntities > 1 ? index + 1 : undefined,
           totalEntidadesDocumento: totalEntities > 1 ? totalEntities : undefined,
@@ -1643,18 +1948,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateUser = (id: string, changes: Partial<Omit<User, 'id' | 'lastAccess'>>) => {
     if (!checkAdminPermission('Editar Usuário')) return;
+    if (currentUser?.id === id) {
+      showToast('Os dados de acesso do administrador autenticado não podem ser alterados nesta etapa.', 'error');
+      return;
+    }
     if (changes.email && users.some((user) => user.id !== id && user.email.toLowerCase() === changes.email!.toLowerCase())) {
       showToast('Já existe outro usuário cadastrado com este e-mail.', 'error');
       return;
     }
     const existing = users.find((user) => user.id === id);
     if (!existing) return;
-    const updatedUser = { ...existing, ...changes };
     setUsers((prev) => prev.map((user) => (user.id === id ? { ...user, ...changes } : user)));
-    if (currentUser?.id === id) {
-      setCurrentUserState(updatedUser);
-      if (updatedUser.role === 'FINANCE') setSelectedUnitState(updatedUser.unit);
-    }
     showToast('Usuário atualizado com sucesso!', 'success');
     addAuditLog('Usuários', 'EDICAO', `Atualizou o cadastro do usuário ID ${id}`);
   };
@@ -1687,6 +1991,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider
       value={{
+        persistenceStatus,
+        persistenceMessage,
+        loginAdmin,
+        setupInitialAdmin,
+        logoutAdmin,
+        retryPersistence,
         currentUser,
         setCurrentUser,
         selectedUnit,

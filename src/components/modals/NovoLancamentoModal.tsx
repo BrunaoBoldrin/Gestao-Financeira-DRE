@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { TipoLancamento, StatusLancamento } from '../../types';
+import { uploadPersistentFile } from '../../services/persistenceApi';
 
 interface NovoLancamentoModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     condicoesPagamento,
     currentUser,
     isFinance,
+    persistenceStatus,
     showToast
   } = useApp();
 
@@ -119,7 +121,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     setAnexo(file);
   };
 
-  const readAnexo = (file: File) => new Promise<string>((resolve, reject) => {
+  const readDemoAttachment = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(new Error('Falha ao ler o anexo.'));
@@ -139,7 +141,9 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
     if (anexo) {
       try {
-        comprovanteUrl = await readAnexo(anexo);
+        comprovanteUrl = persistenceStatus === 'LOCAL_DEMO'
+          ? await readDemoAttachment(anexo)
+          : (await uploadPersistentFile(anexo)).url;
       } catch {
         showToast('Não foi possível processar o anexo. Tente selecionar o arquivo novamente.', 'error');
         return;

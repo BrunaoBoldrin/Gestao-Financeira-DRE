@@ -3,7 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { canAccessView } from './config/accessControl';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
-import { UserAvatar } from './components/common/UserAvatar';
+import { AuthScreen } from './components/auth/AuthScreen';
 
 // Modals
 import { NovoLancamentoModal } from './components/modals/NovoLancamentoModal';
@@ -30,7 +30,7 @@ import { UsuariosPermissoesView } from './components/views/UsuariosPermissoesVie
 import { ConfiguracoesGeraisView } from './components/views/ConfiguracoesGeraisView';
 
 const MainAppContent: React.FC = () => {
-  const { currentView, currentUser, users, setCurrentUser } = useApp();
+  const { currentView, currentUser, persistenceStatus, persistenceMessage, retryPersistence } = useApp();
 
   const [isNovoLancamentoOpen, setIsNovoLancamentoOpen] = useState(false);
   const [isUploadOCROpen, setIsUploadOCROpen] = useState(false);
@@ -43,46 +43,7 @@ const MainAppContent: React.FC = () => {
   }, [currentUser?.id]);
 
   if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-[#f8f9ff] flex items-center justify-center p-6">
-        <div className="w-full max-w-lg bg-white border border-[#e5eeff] rounded-2xl shadow-xl p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-11 h-11 rounded-xl bg-[#0b1c30] text-[#C5A059] flex items-center justify-center font-black">
-              RF
-            </div>
-            <div>
-              <h1 className="text-lg font-extrabold text-[#0b1c30]">Gestão Financeira & DRE</h1>
-              <p className="text-xs text-amber-700 font-semibold">Ambiente de teste de perfis</p>
-            </div>
-          </div>
-
-          <p className="text-sm text-gray-600 mb-4">
-            Selecione um usuário ativo para testar as páginas e permissões correspondentes ao perfil.
-          </p>
-
-          <div className="space-y-2">
-            {users.filter((user) => user.active).map((user) => (
-              <button
-                key={user.id}
-                onClick={() => setCurrentUser(user)}
-                className="w-full p-3 border border-gray-200 rounded-xl flex items-center justify-between hover:bg-[#f8f9ff] hover:border-[#C5A059] transition text-left"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <UserAvatar name={user.name} avatarUrl={user.avatarUrl} sizeClass="w-9 h-9" textClass="text-[11px]" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#0b1c30] truncate">{user.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{user.email} • {user.unit}</p>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold text-[#775a19] bg-[#ffdea5] px-2 py-1 rounded">
-                  {user.role}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <AuthScreen />;
   }
 
   const renderActiveView = () => {
@@ -145,6 +106,18 @@ const MainAppContent: React.FC = () => {
         onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)}
         onOpenUploadModal={() => setIsUploadOCROpen(true)}
       />
+
+      {persistenceStatus === 'LOCAL_DEMO' && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-[11px] font-semibold text-amber-900 text-center">
+          {persistenceMessage}
+        </div>
+      )}
+      {(persistenceStatus === 'ERROR' || persistenceStatus === 'CONFLICT') && (
+        <div className="bg-rose-50 border-b border-rose-200 px-4 py-2 text-[11px] font-semibold text-rose-900 flex items-center justify-center gap-3">
+          <span>{persistenceMessage}</span>
+          <button onClick={retryPersistence} className="underline font-black">Recarregar</button>
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}

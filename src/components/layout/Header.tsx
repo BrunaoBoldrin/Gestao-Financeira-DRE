@@ -11,14 +11,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
   const {
     currentUser,
     currentView,
-    setCurrentUser,
     selectedUnit,
     setSelectedUnit,
     setCurrentView,
     documentosOCR,
     units,
-    users,
-    showToast,
+    logoutAdmin,
+    persistenceStatus,
     isFinance,
     canExecuteFinancialActions
   } = useApp();
@@ -135,47 +134,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
                 <p className="text-gray-400 text-[10px] mt-0.5">{currentUser?.unit}</p>
               </div>
 
-              <div className="px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                Alternar Perfil de Teste
-              </div>
-
-              {users.filter((u) => u.active).map((u) => (
+              {persistenceStatus !== 'LOCAL_DEMO' && <div className="border-t border-gray-100 mt-2 pt-1">
                 <button
-                  key={u.id}
-                  onClick={() => {
-                    setCurrentUser(u);
+                  onClick={async () => {
                     setShowUserMenu(false);
-                    showToast(`Sessão alterada para ${u.name} (${u.role})`, 'info');
-                  }}
-                  className={`w-full text-left px-4 py-2 flex items-center justify-between hover:bg-gray-50 transition ${
-                    currentUser?.id === u.id ? 'bg-[#eff4ff] font-bold text-[#131b2e]' : 'text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <UserAvatar name={u.name} avatarUrl={u.avatarUrl} sizeClass="w-7 h-7" textClass="text-[9px]" />
-                    <div className="min-w-0">
-                      <p className="truncate">{u.name}</p>
-                      <span className="text-[10px] text-gray-500">{u.role}</span>
-                    </div>
-                  </div>
-                  {currentUser?.id === u.id && (
-                    <span className="material-symbols-outlined text-emerald-600 text-base">check</span>
-                  )}
-                </button>
-              ))}
-
-              <div className="border-t border-gray-100 mt-2 pt-1">
-                <button
-                  onClick={() => {
-                    setCurrentUser(null);
-                    setShowUserMenu(false);
+                    await logoutAdmin();
                   }}
                   className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium"
                 >
                   <span className="material-symbols-outlined text-base">logout</span>
                   Sair do Sistema
                 </button>
-              </div>
+              </div>}
             </div>
           )}
         </div>

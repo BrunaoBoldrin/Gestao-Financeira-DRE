@@ -321,3 +321,31 @@ export interface CondicaoPagamento {
   prazosDias: number[];
   ativa: boolean;
 }
+
+export interface ApplicationStateSnapshot {
+  units: UnitConfig[];
+  categorias: CategoriaMaster[];
+  centrosCusto: CentroCustoMaster[];
+  fornecedores: FornecedorMaster[];
+  bancos: BancoMaster[];
+  condicoesPagamento: CondicaoPagamento[];
+  users: User[];
+  lancamentos: Lancamento[];
+  parcelamentos: Parcelamento[];
+  documentosOCR: DocumentoOCR[];
+  sessaoCaixa: SessaoCaixaFisico;
+  fechamentoMensal: FechamentoMensal;
+  auditLogs: AuditLog[];
+  regrasAutomacao: RegraAutomacao[];
+  dreData: DREItem[];
+}
+
+export type PersistenceStatus =
+  | 'LOADING'
+  | 'SETUP_REQUIRED'
+  | 'AUTH_REQUIRED'
+  | 'CONNECTED'
+  | 'SAVING'
+  | 'LOCAL_DEMO'
+  | 'ERROR'
+  | 'CONFLICT';
