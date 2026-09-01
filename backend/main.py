@@ -2,12 +2,25 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .auth import (
+    LoginRequest,
+    SetupAdminRequest,
+    auth_status,
+    login_admin,
+    logout,
+    require_data_access,
+    require_data_access_when_configured,
+    setup_admin,
+)
+from .database import database_configured, database_health
+from .encryption import encryption_configured
 from .models import OCRRequest
 from .ocr_service import (
     OCRProcessingError,
@@ -16,6 +29,14 @@ from .ocr_service import (
     tesseract_status,
     validate_document,
 )
+from .persistence import (
+    StateConflictError,
+    fetch_file,
+    load_application_state,
+    save_application_state,
+    store_file,
+)
+from .state_models import SaveStateRequest
 
 
 app = FastAPI(
@@ -59,8 +80,8 @@ if allowed_origins:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
-        allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT"],
         allow_headers=["Content-Type"],
     )
 
@@ -71,10 +92,131 @@ def health() -> dict:
         "status": "ok",
         "service": "python-ocr",
         "tesseract": tesseract_status(),
+        "database": database_health(),
+        "encryption": {"configured": encryption_configured()},
     }
 
 
-@app.post("/api/ocr")
+@app.get("/api/auth/status")
+def get_auth_status(request: Request, response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return auth_status(request)
+
+
+@app.post("/api/auth/login")
+def login_with_admin_credentials(payload: LoginRequest, response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return {"success": True, "user": login_admin(payload, response)}
+
+
+@app.post("/api/auth/setup")
+def setup_initial_admin(payload: SetupAdminRequest, response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return {"success": True, "user": setup_admin(payload, response)}
+
+
+@app.post("/api/auth/logout")
+def logout_data_session(request: Request, response: Response) -> dict:
+    logout(request, response)
+    return {"success": True}
+
+
+@app.get("/api/state")
+def get_application_state(response: Response, _: dict = Depends(require_data_access)) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        revision, state = load_application_state()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Não foi possível consultar o banco de dados.") from exc
+    return {
+        "revision": revision,
+        "empty": state is None,
+        "data": state.model_dump(mode="json") if state else None,
+    }
+
+
+@app.put("/api/state")
+def put_application_state(
+    payload: SaveStateRequest,
+    auth_user: dict = Depends(require_data_access),
+) -> dict:
+    try:
+        revision = save_application_state(
+            payload.data,
+            expected_revision=payload.expectedRevision,
+            updated_by=auth_user["id"],
+        )
+    except StateConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Os dados foram alterados por outra sessão. Recarregue antes de salvar novamente.",
+                "currentRevision": exc.current_revision,
+            },
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Não foi possível salvar os dados no PostgreSQL.") from exc
+    return {"success": True, "revision": revision}
+
+
+@app.post("/api/files", dependencies=[Depends(require_data_access)])
+async def upload_financial_file(file: UploadFile = File(...)) -> dict:
+    content = await file.read()
+    max_file_mb = int(os.getenv("FILE_MAX_MB", "15"))
+    if not content:
+        raise HTTPException(status_code=422, detail="O arquivo está vazio.")
+    if len(content) > max_file_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"O arquivo deve ter no máximo {max_file_mb} MB.")
+
+    allowed_types = {
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "application/xml",
+        "text/xml",
+        "text/plain",
+    }
+    mime_type = file.content_type or "application/octet-stream"
+    if mime_type not in allowed_types:
+        raise HTTPException(status_code=415, detail="Formato de arquivo não permitido.")
+
+    try:
+        stored = store_file(file.filename or "documento", mime_type, content)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Não foi possível armazenar o arquivo no banco.") from exc
+    return {
+        "id": stored.id,
+        "fileName": stored.file_name,
+        "mimeType": stored.mime_type,
+        "sizeBytes": stored.size_bytes,
+        "sha256": stored.sha256,
+        "url": f"/api/files/{stored.id}",
+    }
+
+
+@app.get("/api/files/{file_id}", dependencies=[Depends(require_data_access)])
+def get_financial_file(file_id: str) -> Response:
+    try:
+        stored_result = fetch_file(file_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Não foi possível consultar o arquivo.") from exc
+    if not stored_result:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
+
+    stored, content = stored_result
+    return Response(
+        content=content,
+        media_type=stored.mime_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(stored.file_name)}",
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+@app.post("/api/ocr", dependencies=[Depends(require_data_access_when_configured)])
 def run_ocr(request: OCRRequest) -> dict:
     max_file_mb = int(os.getenv("OCR_MAX_FILE_MB", "15"))
     max_pages = int(os.getenv("OCR_MAX_PAGES", "5"))
@@ -85,6 +227,7 @@ def run_ocr(request: OCRRequest) -> dict:
             raise OCRProcessingError("Nenhum arquivo ou conteúdo foi enviado.")
 
         validate_document(content, request.mime_type, request.file_name, max_file_mb)
+        stored = store_file(request.file_name, request.mime_type, content) if content and database_configured() else None
         result = analyze_document(
             content=content,
             mime_type=request.mime_type,
@@ -115,6 +258,8 @@ def run_ocr(request: OCRRequest) -> dict:
             "fonteExtracao": result["fonteExtracao"],
             "paginasProcessadas": result["paginasProcessadas"],
             "hashArquivo": result["hashArquivo"],
+            "arquivoId": stored.id if stored else None,
+            "previewUrl": f"/api/files/{stored.id}" if stored else None,
         },
     }
 

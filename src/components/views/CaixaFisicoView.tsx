@@ -4,6 +4,7 @@ import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import { normalizeDateValue } from '../../utils/dateRange';
 import { FinalidadeMovimentacaoCaixa } from '../../types';
+import { uploadPersistentFile } from '../../services/persistenceApi';
 
 type ModalType = 'SANGRIA' | 'SUPRIMENTO' | 'VENDA' | 'AJUSTE';
 
@@ -24,6 +25,7 @@ export const CaixaFisicoView: React.FC = () => {
     currentUser,
     isAdmin,
     isFinance,
+    persistenceStatus,
     showToast
   } = useApp();
 
@@ -72,7 +74,7 @@ export const CaixaFisicoView: React.FC = () => {
   const ultimaMovimentacao = [...movimentacoesDaUnidade].sort((a, b) => b.dataHora.localeCompare(a.dataHora))[0];
   const { sortedItems: sortedMovimentacoes, sortConfig, requestSort } = useSortableData(movimentacoesDaUnidade);
 
-  const readAttachment = (file: File) => new Promise<string>((resolve, reject) => {
+  const readDemoAttachment = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));
     reader.onerror = () => reject(new Error('Falha ao ler o anexo.'));
@@ -131,7 +133,9 @@ export const CaixaFisicoView: React.FC = () => {
     let comprovanteUrl: string | undefined;
     if (anexo) {
       try {
-        comprovanteUrl = await readAttachment(anexo);
+        comprovanteUrl = persistenceStatus === 'LOCAL_DEMO'
+          ? await readDemoAttachment(anexo)
+          : (await uploadPersistentFile(anexo)).url;
       } catch {
         showToast('Não foi possível ler o anexo selecionado.', 'error');
         return;
@@ -290,7 +294,7 @@ export const CaixaFisicoView: React.FC = () => {
                     <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isEntrada ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>{movimento.tipo}</span></td>
                     <td className="p-3 font-medium text-[#0b1c30]">
                       {movimento.descricao}
-                      {movimento.comprovanteRef?.startsWith('data:') && <a href={movimento.comprovanteRef} target="_blank" rel="noreferrer" className="block mt-1 text-[10px] text-blue-700 hover:underline">Abrir anexo</a>}
+                      {movimento.comprovanteRef && <a href={movimento.comprovanteRef} target="_blank" rel="noreferrer" className="block mt-1 text-[10px] text-blue-700 hover:underline">Abrir anexo</a>}
                     </td>
                     <td className="p-3 text-[10px] font-semibold text-gray-700">{(movimento.finalidade || 'OUTRO').replaceAll('_', ' ')}</td>
                     <td className="p-3 text-gray-600">{movimento.usuario}</td>

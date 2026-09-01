@@ -1,0 +1,302 @@
+from __future__ import annotations
+
+import base64
+import hashlib
+import os
+import re
+import secrets
+import uuid
+from datetime import datetime, timedelta, timezone
+
+from fastapi import HTTPException, Request, Response, status
+from psycopg2.extras import RealDictCursor
+from pydantic import BaseModel, Field
+
+from .database import database_configured, ensure_schema, transaction
+from .encryption import decrypt_json, encrypt_json, encryption_configured, lookup_fingerprint
+
+
+COOKIE_NAME = "rf_admin_session"
+SESSION_MAX_AGE_SECONDS = int(os.getenv("DATA_SESSION_MAX_AGE_SECONDS", str(12 * 60 * 60)))
+PASSWORD_ITERATIONS = int(os.getenv("PASSWORD_PBKDF2_ITERATIONS", "600000"))
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
+EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=250)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class SetupAdminRequest(BaseModel):
+    setupToken: str = Field(min_length=16, max_length=500)
+    name: str = Field(min_length=2, max_length=150)
+    email: str = Field(min_length=5, max_length=250)
+    password: str = Field(min_length=12, max_length=128)
+
+
+def _normalize_email(email: str) -> str:
+    normalized = email.strip().casefold()
+    if not EMAIL_PATTERN.match(normalized):
+        raise HTTPException(status_code=422, detail="Informe um e-mail válido.")
+    return normalized
+
+
+def _password_hash(password: str, salt: bytes | None = None) -> str:
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS)
+    return "pbkdf2_sha256${}${}${}".format(
+        PASSWORD_ITERATIONS,
+        base64.b64encode(salt).decode("ascii"),
+        base64.b64encode(digest).decode("ascii"),
+    )
+
+
+def _verify_password(password: str, encoded: str) -> bool:
+    try:
+        algorithm, iterations_text, salt_text, digest_text = encoded.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        salt = base64.b64decode(salt_text)
+        expected = base64.b64decode(digest_text)
+        actual = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt, int(iterations_text)
+        )
+        return secrets.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False
+
+
+_DUMMY_PASSWORD_HASH = _password_hash("invalid-password-used-only-for-timing")
+
+
+def _session_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    secure_cookie = os.getenv("COOKIE_SECURE", "true").lower() != "false"
+    response.set_cookie(
+        COOKIE_NAME,
+        token,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=secure_cookie,
+        samesite="strict",
+        path="/",
+    )
+
+
+def _profile_from_row(row: dict) -> dict:
+    profile = decrypt_json(
+        bytes(row["profile_nonce"]),
+        bytes(row["profile_ciphertext"]),
+        f"auth_users:profile:{row['id']}",
+        row["key_version"],
+    )
+    return {
+        "id": row["id"],
+        "name": profile["name"],
+        "email": profile["email"],
+        "role": row["role"],
+        "unit": profile.get("unit", "Todas as Unidades"),
+        "active": row["active"],
+        "lastAccess": row["last_login_at"].isoformat() if row.get("last_login_at") else "Primeiro acesso",
+    }
+
+
+def current_authenticated_user(request: Request) -> dict | None:
+    token = request.cookies.get(COOKIE_NAME)
+    if not token or not database_configured() or not encryption_configured():
+        return None
+    ensure_schema()
+    with transaction() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT u.id::text, u.profile_nonce, u.profile_ciphertext, u.key_version,
+                       u.role, u.active, u.last_login_at
+                FROM auth_sessions s
+                JOIN auth_users u ON u.id = s.user_id
+                WHERE s.token_hash = %s AND s.revoked_at IS NULL
+                  AND s.expires_at > NOW() AND u.active = TRUE
+                LIMIT 1
+                """,
+                (_session_hash(token),),
+            )
+            row = cursor.fetchone()
+    return _profile_from_row(row) if row else None
+
+
+def _create_session(cursor, user_id: str, response: Response) -> None:
+    token = secrets.token_urlsafe(48)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
+    cursor.execute(
+        "INSERT INTO auth_sessions (id, user_id, token_hash, expires_at) VALUES (%s, %s, %s, %s)",
+        (str(uuid.uuid4()), user_id, _session_hash(token), expires_at),
+    )
+    _set_session_cookie(response, token)
+
+
+def setup_admin(payload: SetupAdminRequest, response: Response) -> dict:
+    if not database_configured() or not encryption_configured():
+        raise HTTPException(status_code=503, detail="Configure o Neon e a chave de criptografia primeiro.")
+    configured_token = os.getenv("APP_SETUP_TOKEN", "")
+    if not configured_token or not secrets.compare_digest(payload.setupToken, configured_token):
+        raise HTTPException(status_code=401, detail="Chave de configuração inicial inválida.")
+
+    email = _normalize_email(payload.email)
+    ensure_schema()
+    user_id = str(uuid.uuid4())
+    profile = {"name": payload.name.strip(), "email": email, "unit": "Todas as Unidades"}
+    profile_nonce, profile_ciphertext, key_version = encrypt_json(
+        profile, f"auth_users:profile:{user_id}"
+    )
+
+    with transaction() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtext('rf-initial-admin-setup'))")
+            cursor.execute("SELECT COUNT(*) AS total FROM auth_users")
+            if int(cursor.fetchone()["total"]) > 0:
+                raise HTTPException(status_code=409, detail="O administrador inicial já foi configurado.")
+            cursor.execute(
+                """
+                INSERT INTO auth_users (
+                    id, email_lookup, password_hash, profile_nonce, profile_ciphertext,
+                    key_version, role, active, last_login_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, 'ADMIN', TRUE, NOW())
+                RETURNING id::text, profile_nonce, profile_ciphertext, key_version,
+                          role, active, last_login_at
+                """,
+                (
+                    user_id,
+                    lookup_fingerprint(email, "auth-email"),
+                    _password_hash(payload.password),
+                    profile_nonce,
+                    profile_ciphertext,
+                    key_version,
+                ),
+            )
+            row = cursor.fetchone()
+            _create_session(cursor, user_id, response)
+    return _profile_from_row(row)
+
+
+def login_admin(payload: LoginRequest, response: Response) -> dict:
+    if not database_configured() or not encryption_configured():
+        raise HTTPException(status_code=503, detail="Banco ou criptografia não configurados.")
+    email = _normalize_email(payload.email)
+    email_lookup = lookup_fingerprint(email, "auth-email")
+    ensure_schema()
+    invalid_credentials = False
+
+    with transaction() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                "DELETE FROM auth_login_attempts WHERE attempted_at <= NOW() - INTERVAL '24 hours'"
+            )
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS total FROM auth_login_attempts
+                WHERE email_lookup = %s AND successful = FALSE
+                  AND attempted_at > NOW() - INTERVAL '15 minutes'
+                """,
+                (email_lookup,),
+            )
+            if int(cursor.fetchone()["total"]) >= MAX_FAILED_ATTEMPTS:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Muitas tentativas. Aguarde {LOCKOUT_MINUTES} minutos antes de tentar novamente.",
+                )
+
+            cursor.execute(
+                """
+                SELECT id::text, password_hash, profile_nonce, profile_ciphertext,
+                       key_version, role, active, last_login_at
+                FROM auth_users WHERE email_lookup = %s LIMIT 1
+                """,
+                (email_lookup,),
+            )
+            row = cursor.fetchone()
+            valid_password = _verify_password(
+                payload.password, row["password_hash"] if row else _DUMMY_PASSWORD_HASH
+            )
+            if not row or not valid_password or not row["active"]:
+                cursor.execute(
+                    "INSERT INTO auth_login_attempts (email_lookup, successful) VALUES (%s, FALSE)",
+                    (email_lookup,),
+                )
+                invalid_credentials = True
+            else:
+                cursor.execute(
+                    "UPDATE auth_users SET last_login_at = NOW() WHERE id = %s RETURNING last_login_at",
+                    (row["id"],),
+                )
+                row["last_login_at"] = cursor.fetchone()["last_login_at"]
+                cursor.execute("DELETE FROM auth_login_attempts WHERE email_lookup = %s", (email_lookup,))
+                cursor.execute("DELETE FROM auth_sessions WHERE expires_at <= NOW() OR revoked_at IS NOT NULL")
+                _create_session(cursor, row["id"], response)
+    if invalid_credentials:
+        raise HTTPException(status_code=401, detail="E-mail ou senha inválidos.")
+    return _profile_from_row(row)
+
+
+def logout(request: Request, response: Response) -> None:
+    token = request.cookies.get(COOKIE_NAME)
+    if token and database_configured():
+        ensure_schema()
+        with transaction() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = %s",
+                    (_session_hash(token),),
+                )
+    response.delete_cookie(COOKIE_NAME, path="/")
+
+
+def auth_status(request: Request) -> dict:
+    database_ready = database_configured()
+    encryption_ready = encryption_configured()
+    setup_token_ready = bool(os.getenv("APP_SETUP_TOKEN"))
+    admin_exists = False
+    user = None
+    error = None
+
+    if database_ready and encryption_ready:
+        try:
+            ensure_schema()
+            with transaction() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                    cursor.execute("SELECT EXISTS (SELECT 1 FROM auth_users) AS present")
+                    admin_exists = bool(cursor.fetchone()["present"])
+            user = current_authenticated_user(request) if admin_exists else None
+        except Exception as exc:
+            error = exc.__class__.__name__
+
+    return {
+        "databaseConfigured": database_ready,
+        "encryptionConfigured": encryption_ready,
+        "setupTokenConfigured": setup_token_ready,
+        "setupRequired": database_ready and encryption_ready and not admin_exists,
+        "authenticated": user is not None,
+        "user": user,
+        "error": error,
+    }
+
+
+def require_data_access(request: Request) -> dict:
+    if not database_configured():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Banco não configurado.")
+    if not encryption_configured():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Criptografia não configurada.")
+    user = current_authenticated_user(request)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Faça login para continuar.")
+    return user
+
+
+def require_data_access_when_configured(request: Request) -> None:
+    if database_configured():
+        require_data_access(request)
