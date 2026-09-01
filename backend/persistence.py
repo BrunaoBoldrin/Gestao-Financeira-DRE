@@ -28,6 +28,27 @@ COLLECTIONS = (
     "dreData",
 )
 SINGLETONS = ("sessaoCaixa", "fechamentoMensal")
+OPERATIONAL_CLEANUP_VERSION = 2
+OPERATIONAL_COLLECTIONS_TO_DELETE = (
+    "units",
+    "bancos",
+    "lancamentos",
+    "parcelamentos",
+    "documentosOCR",
+    "auditLogs",
+)
+EMPTY_OPERATIONAL_SINGLETONS: dict[str, dict[str, Any]] = {
+    "sessaoCaixa": {
+        "id": "caixa-fisico-continuo",
+        "movimentacoes": [],
+    },
+    "fechamentoMensal": {
+        "mesAno": "",
+        "status": "ABERTO",
+        "checklist": [],
+        "observacoes": "",
+    },
+}
 
 
 class StateConflictError(RuntimeError):
@@ -65,8 +86,64 @@ def _validated_entities(collection: str, entities: list[dict[str, Any]]) -> list
     return validated
 
 
+def _apply_requested_operational_cleanup() -> bool:
+    """Apply the user-requested production cleanup exactly once."""
+    with transaction() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('rf-operational-cleanup-v2'))"
+            )
+            cursor.execute(
+                "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = %s) AS applied",
+                (OPERATIONAL_CLEANUP_VERSION,),
+            )
+            if bool(cursor.fetchone()["applied"]):
+                return False
+
+            cursor.execute(
+                "DELETE FROM app_entities WHERE collection = ANY(%s)",
+                (list(OPERATIONAL_COLLECTIONS_TO_DELETE),),
+            )
+            cursor.execute("DELETE FROM document_files")
+            cursor.execute("DELETE FROM auth_login_attempts")
+
+            for state_key, payload in EMPTY_OPERATIONAL_SINGLETONS.items():
+                nonce, ciphertext, key_version = encrypt_json(
+                    payload,
+                    f"app_singletons:{state_key}",
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO app_singletons (
+                        state_key, payload_nonce, payload_ciphertext, key_version, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (state_key) DO UPDATE
+                    SET payload_nonce = EXCLUDED.payload_nonce,
+                        payload_ciphertext = EXCLUDED.payload_ciphertext,
+                        key_version = EXCLUDED.key_version,
+                        updated_at = NOW()
+                    """,
+                    (state_key, nonce, ciphertext, key_version),
+                )
+
+            cursor.execute(
+                """
+                UPDATE application_state_meta
+                SET revision = revision + 1, updated_at = NOW()
+                WHERE singleton = TRUE
+                """
+            )
+            cursor.execute(
+                "INSERT INTO schema_migrations (version) VALUES (%s)",
+                (OPERATIONAL_CLEANUP_VERSION,),
+            )
+    return True
+
+
 def load_application_state() -> tuple[int, ApplicationState | None]:
     ensure_schema()
+    _apply_requested_operational_cleanup()
     with transaction() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SELECT revision FROM application_state_meta WHERE singleton = TRUE")
