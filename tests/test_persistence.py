@@ -33,6 +33,26 @@ class PersistenceValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'ID duplicado em "dreData": 1'):
             _validated_entities("dreData", rows)
 
+    def test_duplicate_legacy_audit_ids_are_repaired_without_dropping_logs(self):
+        rows = [
+            {"id": "log-1788372760106", "descricao": "Primeiro lançamento"},
+            {"id": "log-1788372760106", "descricao": "Segundo lançamento"},
+            {"id": "log-1788372760106", "descricao": "Terceiro lançamento"},
+        ]
+
+        validated = _validated_entities("auditLogs", rows)
+
+        self.assertEqual(len(validated), 3)
+        self.assertEqual(validated[0][0], "log-1788372760106")
+        self.assertEqual(validated[1][0], "log-1788372760106-reparado-2")
+        self.assertEqual(validated[2][0], "log-1788372760106-reparado-3")
+        self.assertEqual([entity["descricao"] for _, entity in validated], [
+            "Primeiro lançamento",
+            "Segundo lançamento",
+            "Terceiro lançamento",
+        ])
+        self.assertEqual([entity["id"] for _, entity in validated], [identifier for identifier, _ in validated])
+
     @patch("backend.persistence.ensure_schema")
     @patch("backend.persistence.transaction")
     @patch("backend.persistence.encrypt_json")
