@@ -160,7 +160,7 @@ export const PendingReviewView: React.FC = () => {
             Ir para Caixa de Entrada
           </button>
           <button
-            onClick={() => setCurrentView('despesas')}
+            onClick={() => setCurrentView('receitas')}
             className="px-4 py-2 border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-50 transition"
           >
             Ver Lançamentos de Despesas

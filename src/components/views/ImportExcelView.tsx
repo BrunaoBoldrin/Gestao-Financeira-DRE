@@ -528,7 +528,7 @@ export const ImportExcelView: React.FC = () => {
       const saved = await flushPersistence();
       if (!saved) {
         showToast('A importação foi preparada, mas ainda não foi confirmada pelo Neon. Não importe o arquivo novamente; use “Tentar salvar”.', 'error');
-        setCurrentView('despesas');
+        setCurrentView('receitas');
         return;
       }
 
@@ -536,7 +536,7 @@ export const ImportExcelView: React.FC = () => {
         `${mappedItems.length} registros e ${totalLancamentosGerados} lançamentos salvos no Neon. Os saldos bancários atuais foram preservados.`,
         'success'
       );
-      setCurrentView('despesas');
+      setCurrentView('receitas');
     } catch (err) {
       showToast('Ocorreu um erro durante a importação em lote.', 'error');
     } finally {

@@ -37,8 +37,7 @@ export const Sidebar: React.FC = () => {
     {
       groupName: 'LANÇAMENTOS & TÍTULOS',
       items: [
-        { key: 'receitas', label: 'Receitas', icon: 'trending_up' },
-        { key: 'despesas', label: 'Despesas', icon: 'trending_down' },
+        { key: 'receitas', label: 'Receitas e Despesas', icon: 'swap_vert' },
         { key: 'caixa_fisico', label: 'Caixa Físico', icon: 'point_of_sale' }
       ]
     },
