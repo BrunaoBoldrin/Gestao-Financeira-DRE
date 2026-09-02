@@ -64,6 +64,7 @@ interface Toast {
 interface AppContextType {
   persistenceStatus: PersistenceStatus;
   persistenceMessage: string;
+  flushPersistence: () => Promise<boolean>;
   loginUser: (email: string, password: string) => Promise<boolean>;
   setupInitialAdmin: (data: { setupToken: string; name: string; email: string; password: string }) => Promise<boolean>;
   logoutUser: () => Promise<void>;
@@ -143,7 +144,8 @@ interface AppContextType {
     dadosBase: Omit<Lancamento, 'id' | 'criadoEm'>,
     dataEmissao: string,
     prazosDias: number[],
-    primeiroVencimento?: string
+    primeiroVencimento?: string,
+    options?: { adjustBankBalance?: boolean; notify?: boolean }
   ) => void;
   addLancamentoComParcelamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>, numeroParcelas: number) => void;
   addTransferencia: (dados: {
@@ -161,7 +163,7 @@ interface AppContextType {
   marcarLancamentoComoPago: (id: string, dados: DadosLiquidacao) => boolean;
   
   addParcelamento: (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => void;
-  pagarParcela: (parcelamentoId: string, numeroParcela: number, dados: DadosLiquidacao) => void;
+  pagarParcela: (parcelamentoId: string, numeroParcela: number, dados: DadosLiquidacao) => boolean;
   
   uploadDocumentoOCR: (file: File) => Promise<void>;
   aprovarDocumentoOCR: (docId: string, dadosFinal: DocumentoOCR['dadosExtraidos']) => void;
@@ -268,8 +270,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const hydratedRef = useRef(false);
   const skipNextSaveRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const saveChainRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const latestSnapshotRef = useRef<ApplicationStateSnapshot>(INITIAL_APPLICATION_STATE);
+  const hasUnsavedChangesRef = useRef(false);
 
   // Filtering Logic
   const filteredLancamentos = lancamentos.filter((l) => {
@@ -382,16 +385,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, []);
 
-  const enqueueSnapshotSave = useCallback((snapshot: ApplicationStateSnapshot) => {
-    saveChainRef.current = saveChainRef.current.then(async () => {
-      if (!hydratedRef.current) return;
+  const enqueueSnapshotSave = useCallback((snapshot: ApplicationStateSnapshot, notifyOnSuccess = true) => {
+    const saveTask = saveChainRef.current.then(async () => {
+      if (!hydratedRef.current) return false;
       setPersistenceStatus('SAVING');
       setPersistenceMessage('Salvando alterações no Neon...');
       try {
         const result = await saveApplicationState(revisionRef.current, snapshot);
         revisionRef.current = result.revision;
+        if (latestSnapshotRef.current === snapshot) {
+          hasUnsavedChangesRef.current = false;
+        }
         setPersistenceStatus('CONNECTED');
         setPersistenceMessage(`Dados salvos no Neon · revisão ${result.revision}`);
+        if (notifyOnSuccess) {
+          showToast('Alterações confirmadas e salvas no Neon.', 'success');
+        }
+        return true;
       } catch (error) {
         if (error instanceof PersistenceApiError && error.status === 401) {
           hydratedRef.current = false;
@@ -399,19 +409,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setCurrentUserState(null);
           setPersistenceStatus('AUTH_REQUIRED');
           setPersistenceMessage('A sessão expirou. Faça login novamente.');
-          return;
+          return false;
         }
         if (error instanceof PersistenceApiError && error.status === 409) {
           hydratedRef.current = false;
           setPersistenceStatus('CONFLICT');
           setPersistenceMessage('Outra sessão alterou os dados. Recarregue a versão mais recente antes de continuar.');
-          return;
+          return false;
         }
         setPersistenceStatus('ERROR');
         setPersistenceMessage(error instanceof Error ? error.message : 'Falha ao salvar no Neon.');
+        return false;
       }
     });
+    saveChainRef.current = saveTask;
+    return saveTask;
   }, []);
+
+  const flushPersistence = useCallback(async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (persistenceStatus === 'LOCAL_DEMO') return true;
+    if (!hydratedRef.current) return false;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const previousSaveSucceeded = await saveChainRef.current;
+    if (!hasUnsavedChangesRef.current) return previousSaveSucceeded;
+    return enqueueSnapshotSave(latestSnapshotRef.current, false);
+  }, [enqueueSnapshotSave, persistenceStatus]);
 
   const hydratePersistence = useCallback(async () => {
     hydratedRef.current = false;
@@ -493,6 +519,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       applyPersistentSnapshot(stateToApply);
       latestSnapshotRef.current = stateToApply;
+      hasUnsavedChangesRef.current = false;
       hydratedRef.current = true;
       setPersistenceStatus('CONNECTED');
       setPersistenceMessage(`Conectado ao Neon · revisão ${revisionRef.current}`);
@@ -539,6 +566,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [hydratePersistence]);
 
   const logoutUser = useCallback(async () => {
+    if (hasUnsavedChangesRef.current && !(await flushPersistence())) {
+      showToast('Não foi possível sair: ainda existem alterações não salvas no Neon.', 'error');
+      return;
+    }
     try {
       await logoutUserApi();
     } finally {
@@ -548,11 +579,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPersistenceStatus('AUTH_REQUIRED');
       setPersistenceMessage('Sessão encerrada. Entre novamente para acessar os dados.');
     }
-  }, []);
+  }, [flushPersistence]);
 
   const retryPersistence = useCallback(() => {
     if (persistenceStatus === 'ERROR' && hydratedRef.current) {
-      enqueueSnapshotSave(latestSnapshotRef.current);
+      void enqueueSnapshotSave(latestSnapshotRef.current);
       return;
     }
     void hydratePersistence();
@@ -569,14 +600,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       skipNextSaveRef.current = false;
       return;
     }
+    hasUnsavedChangesRef.current = true;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      enqueueSnapshotSave(persistentSnapshot);
+      saveTimerRef.current = null;
+      void enqueueSnapshotSave(persistentSnapshot);
     }, 350);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [enqueueSnapshotSave, persistentSnapshot]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChangesRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, []);
 
   // Permission / Role Calculation (RBAC)
   const userRole = currentUser?.role || 'AUDITOR';
@@ -643,12 +686,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(`Acesso negado: "${actionName}" é uma ação restrita a Administradores.`, 'error');
       return false;
     }
+    if (persistenceStatus !== 'LOCAL_DEMO' && !hydratedRef.current) {
+      showToast(`Não é possível executar "${actionName}" enquanto o Neon não estiver sincronizado.`, 'error');
+      return false;
+    }
     return true;
   };
 
   const checkFinancialPermission = (actionName: string): boolean => {
     if (isAuditor) {
       showToast(`Acesso negado: Perfil Auditoria possui apenas acesso de leitura.`, 'error');
+      return false;
+    }
+    if (persistenceStatus !== 'LOCAL_DEMO' && !hydratedRef.current) {
+      showToast(`Não é possível executar "${actionName}" enquanto o Neon não estiver sincronizado.`, 'error');
       return false;
     }
     return true;
@@ -895,7 +946,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dadosBase: Omit<Lancamento, 'id' | 'criadoEm'>,
     dataEmissao: string,
     prazosDias: number[],
-    primeiroVencimento?: string
+    primeiroVencimento?: string,
+    options?: { adjustBankBalance?: boolean; notify?: boolean }
   ) => {
     if (!checkFinancialPermission('Lançamento DDL')) return;
     dadosBase = bindLancamentoToBanco({
@@ -969,7 +1021,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const paidBalanceDelta = novosLancamentos
       .filter((item) => item.status === 'PAGO')
       .reduce((total, item) => total + balanceDeltaForLancamento(item), 0);
-    if (paidBalanceDelta !== 0 && dadosBase.bancoId) {
+    if (options?.adjustBankBalance !== false && paidBalanceDelta !== 0 && dadosBase.bancoId) {
       adjustBancoBalance(dadosBase.bancoId, paidBalanceDelta, `Lançamento "${dadosBase.descricao}"`);
     }
 
@@ -1000,12 +1052,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Lançamento criado com DDL (${prazosDias.join('/')} dias) gerando ${totalParcelas} boleto(s)`
     );
 
-    showToast(
-      totalParcelas > 1
-        ? `${totalParcelas} boletos com vencimento DDL (${prazosDias.join('/')} dias) cadastrados!`
-        : 'Lançamento cadastrado com sucesso!',
-      'success'
-    );
+    if (options?.notify !== false) {
+      showToast('Lançamento preparado. Aguardando confirmação do Neon...', 'info');
+    }
   };
   const addLancamentoComParcelamento = (
     baseData: Omit<Lancamento, 'id' | 'criadoEm'>,
@@ -1185,12 +1234,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Transferência de R$ ${dados.valor.toFixed(2)} de [${origem.banco}] para [${destino.banco}] (${dados.unidade})${dados.documentoRef ? ` — anexo: ${dados.documentoRef}` : ''}`
     );
 
-    showToast(
-      saldoOrigemApos < 0
-        ? `Transferência registrada. A conta "${origem.banco}" ficou com saldo negativo de ${formatCurrency(saldoOrigemApos)}, indicando uso do limite bancário.`
-        : `Transferência de R$ ${dados.valor.toFixed(2)} registrada com sucesso entre contas.`,
-      saldoOrigemApos < 0 ? 'info' : 'success'
-    );
+    if (saldoOrigemApos < 0) {
+      showToast(
+        `A conta "${origem.banco}" ficará com saldo negativo de ${formatCurrency(saldoOrigemApos)}, indicando uso do limite bancário.`,
+        'info'
+      );
+    }
   };
 
   const exportBackupJSON = () => {
@@ -1235,7 +1284,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (newL.status === 'PAGO' && newL.bancoId) {
       adjustBancoBalance(newL.bancoId, balanceDeltaForLancamento(newL), `Lançamento "${newL.descricao}"`);
     }
-    showToast(`${l.tipo === 'RECEITA' ? 'Receita' : 'Despesa'} lançada com sucesso!`, 'success');
     addAuditLog('Lançamentos', 'CRIACAO', `Criou ${l.tipo.toLowerCase()} "${l.descricao}" no valor de R$ ${l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, `Status: ${l.status}`);
   };
 
@@ -1259,7 +1307,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adjustBancoBalance(updated.bancoId, balanceDeltaForLancamento(updated), `Edição de "${updated.descricao}"`);
     }
     setLancamentos((prev) => prev.map((item) => (item.id === id ? updated : item)));
-    showToast('Lançamento atualizado!', 'info');
+    showToast('Alteração preparada. Aguardando confirmação do Neon...', 'info');
     addAuditLog('Lançamentos', 'EDICAO', `Atualizou lançamento ID ${id}`);
   };
 
@@ -1277,7 +1325,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adjustBancoBalance(banco.id, -balanceDeltaForLancamento(existing), `Exclusão de "${existing.descricao}"`);
     }
     setLancamentos((prev) => prev.filter((item) => item.id !== id));
-    showToast('Lançamento removido.', 'info');
+    showToast('Exclusão preparada. Aguardando confirmação do Neon...', 'info');
     addAuditLog('Lançamentos', 'EXCLUSAO', `Excluiu lançamento ID ${id}`);
   };
 
@@ -1320,7 +1368,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `Liquidação de "${paidLancamento.descricao}"`
       );
     }
-    showToast('Lançamento marcado como PAGO!', 'success');
     addAuditLog(
       'Lançamentos',
       'EDICAO',
@@ -1375,15 +1422,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog('Parcelamentos', 'CRIACAO', `Criou parcelamento "${p.titulo}" no valor total de R$ ${p.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
   };
 
-  const pagarParcela = (parcelamentoId: string, numeroParcela: number, dados: DadosLiquidacao) => {
-    if (!checkFinancialPermission('Pagar Parcela')) return;
+  const pagarParcela = (parcelamentoId: string, numeroParcela: number, dados: DadosLiquidacao): boolean => {
+    if (!checkFinancialPermission('Pagar Parcela')) return false;
     const parcelamento = parcelamentos.find((item) => item.id === parcelamentoId);
-    if (!parcelamento) return;
-    if (parcelamento && !canManageUnit(parcelamento.unidade, 'Pagar Parcela')) return;
+    if (!parcelamento) return false;
+    if (parcelamento && !canManageUnit(parcelamento.unidade, 'Pagar Parcela')) return false;
     const parcela = parcelamento.cronograma.find((item) => item.numero === numeroParcela);
     if (!parcela || parcela.status === 'PAGO') {
       showToast('Esta parcela já está paga ou não foi localizada.', 'info');
-      return;
+      return false;
     }
     const linkedLancamento = parcela.lancamentoId
       ? lancamentos.find((item) => item.id === parcela.lancamentoId)
@@ -1396,15 +1443,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `Selecione uma conta bancária ativa de ${parcelamento.unidade} antes de pagar a parcela.`,
         'error'
       );
-      return;
+      return false;
     }
     if (!dados.formaPagamento || !dados.dataPagamento) {
       showToast('Informe a forma e a data do pagamento da parcela.', 'error');
-      return;
+      return false;
     }
 
     if (linkedLancamento) {
-      if (!marcarLancamentoComoPago(linkedLancamento.id, dados)) return;
+      if (!marcarLancamentoComoPago(linkedLancamento.id, dados)) return false;
     } else {
       addLancamento({
         descricao: `Parcela ${numeroParcela}/${parcelamento.numeroParcelas} - ${parcelamento.titulo}`,
@@ -1453,7 +1500,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       })
     );
-    showToast(`Parcela ${numeroParcela} paga com sucesso! Saldo bancário atualizado.`, 'success');
+    return true;
   };
 
   // --- OCR / Documentos ---
@@ -1657,7 +1704,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    showToast('Documento conferido e aprovado.', 'success');
     addAuditLog('Documentos OCR', 'APROVACAO', `Aprovou e conferiu documento OCR ${docId} (${doc.nomeArquivo})`, 'PENDENTE_REVISAO', 'APROVADO');
   };
 
@@ -1710,12 +1756,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : item
     ));
 
-    showToast(
-      wasPaid
-        ? 'Documento vinculado ao lançamento já liquidado, sem movimentar o saldo novamente.'
-        : 'Correspondência confirmada: lançamento liquidado e comprovante vinculado.',
-      'success'
-    );
     addAuditLog(
       'Conciliação Financeira',
       'CONCILIACAO',
@@ -1728,7 +1768,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDocumentosOCR((prev) =>
       prev.map((d) => (d.id === docId ? { ...d, status: 'REJEITADO' } : d))
     );
-    showToast('Documento rejeitado.', 'info');
     addAuditLog('Documentos OCR', 'EDICAO', `Rejeitou documento OCR ${docId}`, 'PENDENTE_REVISAO', 'REJEITADO');
   };
 
@@ -2114,6 +2153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         persistenceStatus,
         persistenceMessage,
+        flushPersistence,
         loginUser,
         setupInitialAdmin,
         logoutUser,

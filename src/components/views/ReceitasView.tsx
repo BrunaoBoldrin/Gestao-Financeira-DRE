@@ -13,7 +13,7 @@ interface ReceitasViewProps {
 }
 
 export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamentoModal }) => {
-  const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, isAuditor, showToast } = useApp();
+  const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, isAuditor, flushPersistence, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
@@ -305,9 +305,16 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           unidade: lancamentoLiquidacao.unidade
         } : null}
         onClose={() => setLancamentoLiquidacao(null)}
-        onConfirm={(dados) => {
+        onConfirm={async (dados) => {
           if (!lancamentoLiquidacao) return;
-          marcarLancamentoComoPago(lancamentoLiquidacao.id, dados);
+          if (!marcarLancamentoComoPago(lancamentoLiquidacao.id, dados)) return;
+          const saved = await flushPersistence();
+          showToast(
+            saved
+              ? 'Recebimento confirmado e salvo no Neon.'
+              : 'O recebimento ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+            saved ? 'success' : 'error'
+          );
           setLancamentoLiquidacao(null);
         }}
       />

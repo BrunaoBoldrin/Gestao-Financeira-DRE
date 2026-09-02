@@ -10,7 +10,7 @@ interface ParcelamentosViewProps {
 }
 
 export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovoParcelamentoModal }) => {
-  const { filteredParcelamentos, pagarParcela, canExecuteFinancialActions } = useApp();
+  const { filteredParcelamentos, pagarParcela, canExecuteFinancialActions, flushPersistence, showToast } = useApp();
   const [selectedParcelamentoId, setSelectedParcelamentoId] = useState<string>('');
   const [parcelaLiquidacao, setParcelaLiquidacao] = useState<{
     parcelamentoId: string;
@@ -205,9 +205,16 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
       <LiquidacaoModal
         item={parcelaLiquidacao?.item || null}
         onClose={() => setParcelaLiquidacao(null)}
-        onConfirm={(dados) => {
+        onConfirm={async (dados) => {
           if (!parcelaLiquidacao) return;
-          pagarParcela(parcelaLiquidacao.parcelamentoId, parcelaLiquidacao.numeroParcela, dados);
+          if (!pagarParcela(parcelaLiquidacao.parcelamentoId, parcelaLiquidacao.numeroParcela, dados)) return;
+          const saved = await flushPersistence();
+          showToast(
+            saved
+              ? 'Pagamento da parcela confirmado e salvo no Neon.'
+              : 'O pagamento da parcela ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+            saved ? 'success' : 'error'
+          );
           setParcelaLiquidacao(null);
         }}
       />

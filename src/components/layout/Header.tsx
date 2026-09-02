@@ -18,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
     units,
     logoutUser,
     persistenceStatus,
+    persistenceMessage,
     isFinance,
     canExecuteFinancialActions
   } = useApp();
@@ -25,6 +26,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const pendingOCRCount = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO').length;
+  const persistenceBadge = persistenceStatus === 'SAVING'
+    ? { icon: 'sync', label: 'Salvando...', className: 'bg-amber-50 border-amber-200 text-amber-800' }
+    : persistenceStatus === 'CONNECTED'
+      ? { icon: 'cloud_done', label: 'Salvo no Neon', className: 'bg-emerald-50 border-emerald-200 text-emerald-800' }
+      : persistenceStatus === 'ERROR' || persistenceStatus === 'CONFLICT'
+        ? { icon: 'cloud_off', label: 'Não salvo', className: 'bg-rose-50 border-rose-200 text-rose-800' }
+        : null;
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-[#e5eeff] px-4 lg:px-6 py-3 flex items-center justify-between shadow-xs">
@@ -90,6 +98,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
               <span className="hidden sm:inline">Novo Lançamento</span>
             </button>
           </>
+        )}
+
+        {persistenceBadge && (
+          <div
+            title={persistenceMessage}
+            className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[10px] font-bold ${persistenceBadge.className}`}
+          >
+            <span className={`material-symbols-outlined text-base ${persistenceStatus === 'SAVING' ? 'animate-spin' : ''}`}>
+              {persistenceBadge.icon}
+            </span>
+            <span>{persistenceBadge.label}</span>
+          </div>
         )}
 
         <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
