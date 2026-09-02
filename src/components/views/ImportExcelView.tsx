@@ -59,6 +59,40 @@ const normalizeLookupText = (value: string) =>
     .trim()
     .toLocaleLowerCase('pt-BR');
 
+const IMPORT_TEMPLATE_HEADERS = [
+  'Descrição',
+  'Tipo (RECEITA ou DESPESA)',
+  'Valor (R$)',
+  'Data Emissão (AAAA-MM-DD)',
+  'Data Competência DRE (AAAA-MM-DD)',
+  'Data Vencimento / 1º Vencimento (AAAA-MM-DD)',
+  'Categoria DRE',
+  'Centro de Custo',
+  'Fornecedor / Cliente',
+  'Conta Bancária',
+  'Forma de Pagamento',
+  'Unidade / Filial',
+  'Condição DDL (Ex: 30/60/90 Dias)',
+  'Status (PAGO, PENDENTE, ATRASADO ou CANCELADO)',
+  'Data Pagamento (AAAA-MM-DD)',
+  'CPF/CNPJ Contraparte',
+  'Documento / Referência',
+  'Observações'
+];
+
+const IMPORT_TEMPLATE_COLUMN_WIDTHS = [
+  42, 28, 14, 25, 33, 45, 34, 28, 34, 34, 24, 28, 38, 48, 28, 24, 30, 44
+];
+
+const applyTemplateSheetLayout = (
+  worksheet: XLSX.WorkSheet,
+  columnWidths: number[],
+  autoFilter = true
+) => {
+  worksheet['!cols'] = columnWidths.map((wch) => ({ wch }));
+  if (autoFilter && worksheet['!ref']) worksheet['!autofilter'] = { ref: worksheet['!ref'] };
+};
+
 export const ImportExcelView: React.FC = () => {
   const {
     addLancamento,
@@ -103,84 +137,131 @@ export const ImportExcelView: React.FC = () => {
     observacoes: ''
   });
 
-  // Sample Excel Download Generator
+  // Excel import template generator
   const handleDownloadTemplate = () => {
-    const sampleData = [
+    const activeUnits = units.filter((item) => item.ativa && item.id !== 'all');
+    const activeCategories = categorias.filter((item) => item.ativa);
+    const activeCostCenters = centrosCusto.filter((item) => item.ativo);
+    const activeSuppliers = fornecedores.filter((item) => item.ativo);
+    const activeBanks = bancos.filter((item) => item.ativo);
+    const activePaymentTerms = condicoesPagamento.filter((item) => item.ativa);
+
+    const sampleUnit = activeUnits[0]?.nome || '[CADASTRE UMA FILIAL]';
+    const sampleExpenseCategory = activeCategories.find((item) => item.tipo === 'DESPESA')?.nome
+      || '[CADASTRE UMA CATEGORIA DE DESPESA]';
+    const sampleRevenueCategory = activeCategories.find((item) => item.tipo === 'RECEITA')?.nome
+      || '[CADASTRE UMA CATEGORIA DE RECEITA]';
+    const sampleCostCenter = activeCostCenters[0]?.nome || '[CADASTRE UM CENTRO DE CUSTO]';
+    const sampleSupplier = activeSuppliers.find((item) => item.tipo === 'FORNECEDOR');
+    const sampleClient = activeSuppliers.find((item) => item.tipo === 'CLIENTE');
+    const sampleBank = activeBanks.find((item) => normalizeLookupText(item.unidade) === normalizeLookupText(sampleUnit));
+    const sampleInstallmentTerm = activePaymentTerms.find((item) => item.prazosDias.length > 1);
+    const sampleCashTerm = activePaymentTerms.find((item) => item.prazosDias.length === 1 && item.prazosDias[0] === 0);
+    const issueDate = new Date();
+    const firstDueDate = new Date(issueDate);
+    firstDueDate.setDate(firstDueDate.getDate() + (sampleInstallmentTerm?.prazosDias[0] || 30));
+    const issueDateText = toDateValue(issueDate);
+    const firstDueDateText = toDateValue(firstDueDate);
+
+    const sampleData: Array<Record<string, string | number>> = [
       {
-        'Descrição': 'Compra Botox 100U Galderma (NF 45892)',
+        'Descrição': 'EXEMPLO — compra de insumos',
         'Tipo (RECEITA ou DESPESA)': 'DESPESA',
-        'Valor (R$)': 4500.00,
-        'Data Emissão (AAAA-MM-DD)': '2024-05-10',
-        'Data Competência DRE (AAAA-MM-DD)': '2024-05-10',
-        'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': '2024-06-09',
-        'Categoria DRE': 'Insumos Médicos & Estéticos',
-        'Centro de Custo': 'Clínica / Atendimento',
-        'Fornecedor / Cliente': 'Galderma Brasil Ltda',
-        'Conta Bancária': 'Itaú Uniclass - C/C 45892-1',
+        'Valor (R$)': 4500,
+        'Data Emissão (AAAA-MM-DD)': issueDateText,
+        'Data Competência DRE (AAAA-MM-DD)': issueDateText,
+        'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': firstDueDateText,
+        'Categoria DRE': sampleExpenseCategory,
+        'Centro de Custo': sampleCostCenter,
+        'Fornecedor / Cliente': sampleSupplier?.nome || 'Fornecedor do exemplo',
+        'Conta Bancária': '',
         'Forma de Pagamento': 'BOLETO',
-        'Unidade / Filial': 'Royal Face - Matriz',
-        'Condição DDL (Ex: 30/60/90 Dias)': '30/60/90 Dias (3x)',
-        'Status (PAGO ou PENDENTE)': 'PENDENTE',
+        'Unidade / Filial': sampleUnit,
+        'Condição DDL (Ex: 30/60/90 Dias)': sampleInstallmentTerm?.nome || '30/60/90',
+        'Status (PAGO, PENDENTE, ATRASADO ou CANCELADO)': 'PENDENTE',
         'Data Pagamento (AAAA-MM-DD)': '',
-        'CPF/CNPJ Contraparte': '02.345.678/0001-12',
-        'Documento / Referência': 'NF 45892',
-        'Observações': 'Compra parcelada conforme nota fiscal'
+        'CPF/CNPJ Contraparte': sampleSupplier?.cnpj || '',
+        'Documento / Referência': 'NF 0001',
+        'Observações': 'Conta bancária e data de pagamento ficam vazias enquanto estiver pendente.'
       },
       {
-        'Descrição': 'Pacote Harmonização Facial - Paciente Carla S.',
+        'Descrição': 'EXEMPLO — recebimento de cliente',
         'Tipo (RECEITA ou DESPESA)': 'RECEITA',
-        'Valor (R$)': 3800.00,
-        'Data Emissão (AAAA-MM-DD)': '2024-05-12',
-        'Data Competência DRE (AAAA-MM-DD)': '2024-05-12',
-        'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': '2024-05-12',
-        'Categoria DRE': 'Procedimentos Estéticos',
-        'Centro de Custo': 'Clínica / Atendimento',
-        'Fornecedor / Cliente': 'Carla Souza',
-        'Conta Bancária': 'Bradesco - C/C 12904-8',
-        'Forma de Pagamento': 'CARTAO_CREDITO',
-        'Unidade / Filial': 'Royal Face - Matriz',
-        'Condição DDL (Ex: 30/60/90 Dias)': 'À Vista / PAGO (0 dias)',
-        'Status (PAGO ou PENDENTE)': 'PAGO',
-        'Data Pagamento (AAAA-MM-DD)': '2024-05-12',
-        'CPF/CNPJ Contraparte': '',
-        'Documento / Referência': 'Contrato Carla S.',
-        'Observações': 'Recebimento à vista'
-      },
-      {
-        'Descrição': 'Aluguel Imóvel Clínica Maio/2024',
-        'Tipo (RECEITA ou DESPESA)': 'DESPESA',
-        'Valor (R$)': 8500.00,
-        'Data Emissão (AAAA-MM-DD)': '2024-05-01',
-        'Data Competência DRE (AAAA-MM-DD)': '2024-05-01',
-        'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': '2024-05-31',
-        'Categoria DRE': 'Aluguel, Condomínio & IPTU',
-        'Centro de Custo': 'Administrativo',
-        'Fornecedor / Cliente': 'Imobiliária Paulista S/A',
-        'Conta Bancária': 'Itaú Uniclass - C/C 45892-1',
-        'Forma de Pagamento': 'TRANSFERENCIA',
-        'Unidade / Filial': 'Royal Face - Matriz',
-        'Condição DDL (Ex: 30/60/90 Dias)': '30 Dias (1x)',
-        'Status (PAGO ou PENDENTE)': 'PAGO',
-        'Data Pagamento (AAAA-MM-DD)': '2024-05-31',
-        'CPF/CNPJ Contraparte': '12.345.678/0001-90',
-        'Documento / Referência': 'Contrato de locação 2024',
-        'Observações': ''
+        'Valor (R$)': 3800,
+        'Data Emissão (AAAA-MM-DD)': issueDateText,
+        'Data Competência DRE (AAAA-MM-DD)': '',
+        'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': issueDateText,
+        'Categoria DRE': sampleRevenueCategory,
+        'Centro de Custo': sampleCostCenter,
+        'Fornecedor / Cliente': sampleClient?.nome || 'Cliente do exemplo',
+        'Conta Bancária': sampleBank?.banco || '[CADASTRE UMA CONTA ATIVA PARA IMPORTAR COMO PAGO]',
+        'Forma de Pagamento': 'PIX',
+        'Unidade / Filial': sampleUnit,
+        'Condição DDL (Ex: 30/60/90 Dias)': sampleCashTerm?.nome || '',
+        'Status (PAGO, PENDENTE, ATRASADO ou CANCELADO)': 'PAGO',
+        'Data Pagamento (AAAA-MM-DD)': issueDateText,
+        'CPF/CNPJ Contraparte': sampleClient?.cnpj || '',
+        'Documento / Referência': 'Recibo 0001',
+        'Observações': 'Para lançamento pago, informe uma conta ativa da mesma filial.'
       }
     ];
 
-    const worksheet = XLSX.utils.json_to_sheet(sampleData);
+    const importWorksheet = XLSX.utils.aoa_to_sheet([IMPORT_TEMPLATE_HEADERS]);
+    applyTemplateSheetLayout(importWorksheet, IMPORT_TEMPLATE_COLUMN_WIDTHS);
+
+    const exampleWorksheet = XLSX.utils.json_to_sheet(sampleData, { header: IMPORT_TEMPLATE_HEADERS });
+    applyTemplateSheetLayout(exampleWorksheet, IMPORT_TEMPLATE_COLUMN_WIDTHS);
+
+    const instructionsData = [
+      { Campo: 'Uso das abas', Obrigatório: '—', Regra: 'Preencha e importe somente a primeira aba, “Lancamentos_Importar”. As demais abas são apenas para consulta.', Exemplo: 'Não copie as linhas da aba de exemplos.' },
+      { Campo: 'Descrição', Obrigatório: 'Sim', Regra: 'Texto livre que identifique o lançamento.', Exemplo: 'Aluguel da clínica — setembro/2026' },
+      { Campo: 'Tipo', Obrigatório: 'Sim', Regra: 'Aceita somente RECEITA ou DESPESA.', Exemplo: 'DESPESA' },
+      { Campo: 'Valor', Obrigatório: 'Sim', Regra: 'Deve ser maior que zero. Informe o valor total; a condição DDL fará a divisão das parcelas.', Exemplo: '4500,00' },
+      { Campo: 'Data Emissão', Obrigatório: 'Não', Regra: 'Use AAAA-MM-DD. Quando vazia, o sistema usa a data de vencimento.', Exemplo: issueDateText },
+      { Campo: 'Data Competência DRE', Obrigatório: 'Não', Regra: 'Define o mês da DRE. Quando vazia, usa a data de emissão ou o vencimento.', Exemplo: issueDateText },
+      { Campo: 'Data Vencimento / 1º Vencimento', Obrigatório: 'Sim', Regra: 'Use AAAA-MM-DD. Com DDL, representa o primeiro vencimento.', Exemplo: firstDueDateText },
+      { Campo: 'Categoria DRE', Obrigatório: 'Sim', Regra: 'Deve ser uma categoria ativa e compatível com o tipo RECEITA ou DESPESA.', Exemplo: sampleExpenseCategory },
+      { Campo: 'Centro de Custo', Obrigatório: 'Sim', Regra: 'Deve corresponder exatamente a um centro de custo ativo.', Exemplo: sampleCostCenter },
+      { Campo: 'Fornecedor / Cliente', Obrigatório: 'Sim', Regra: 'Texto livre. Não precisa existir previamente no cadastro de fornecedores.', Exemplo: sampleSupplier?.nome || 'Fornecedor do exemplo' },
+      { Campo: 'Conta Bancária', Obrigatório: 'Somente se PAGO', Regra: 'Se preenchida, deve ser uma conta ativa pertencente à unidade informada.', Exemplo: sampleBank?.banco || 'Deixe vazio enquanto estiver PENDENTE' },
+      { Campo: 'Forma de Pagamento', Obrigatório: 'Sim', Regra: 'Use PIX, BOLETO, CARNE, CARTAO_CREDITO, CARTAO_DEBITO, DINHEIRO ou TRANSFERENCIA.', Exemplo: 'BOLETO' },
+      { Campo: 'Unidade / Filial', Obrigatório: 'Sim para Admin', Regra: 'Deve corresponder exatamente a uma unidade ativa. No perfil Financeiro, o sistema usa automaticamente a unidade do usuário.', Exemplo: sampleUnit },
+      { Campo: 'Condição DDL', Obrigatório: 'Não', Regra: 'Divide o valor total pelos prazos. Pode usar uma condição ativa ou informar os dias separados por barra.', Exemplo: sampleInstallmentTerm?.nome || '30/60/90' },
+      { Campo: 'Status', Obrigatório: 'Não', Regra: 'Aceita PAGO, PENDENTE, ATRASADO ou CANCELADO. Quando vazio, assume PENDENTE.', Exemplo: 'PENDENTE' },
+      { Campo: 'Data Pagamento', Obrigatório: 'Somente se PAGO', Regra: 'Use AAAA-MM-DD.', Exemplo: issueDateText },
+      { Campo: 'CPF/CNPJ Contraparte', Obrigatório: 'Não', Regra: 'Identificação opcional do fornecedor ou cliente.', Exemplo: sampleSupplier?.cnpj || '00.000.000/0001-00' },
+      { Campo: 'Documento / Referência', Obrigatório: 'Não', Regra: 'Use número da NF, boleto, contrato ou identificador externo. Anexos não são importados pela planilha.', Exemplo: 'NF 0001' },
+      { Campo: 'Observações', Obrigatório: 'Não', Regra: 'Texto livre para informações complementares.', Exemplo: 'Compra referente ao mês de setembro.' }
+    ];
+    const instructionsWorksheet = XLSX.utils.json_to_sheet(instructionsData, {
+      header: ['Campo', 'Obrigatório', 'Regra', 'Exemplo']
+    });
+    applyTemplateSheetLayout(instructionsWorksheet, [38, 20, 100, 48]);
+
+    const referenceRows: Array<Array<string | number>> = [
+      ['Tipo de cadastro', 'Nome aceito na importação', 'Detalhe']
+    ];
+    activeUnits.forEach((item) => referenceRows.push(['Unidade / Filial', item.nome, `${item.razaoSocial} — ${item.cidade}`]));
+    if (activeUnits.length === 0) referenceRows.push(['Unidade / Filial', 'Nenhuma unidade ativa cadastrada', 'Cadastre uma filial antes de importar.']);
+    activeCategories.forEach((item) => referenceRows.push(['Categoria DRE', item.nome, `${item.tipo} — código ${item.codigo}`]));
+    activeCostCenters.forEach((item) => referenceRows.push(['Centro de Custo', item.nome, `Código ${item.codigo}`]));
+    activeSuppliers.forEach((item) => referenceRows.push(['Fornecedor / Cliente', item.nome, `${item.tipo} — ${item.cnpj || 'sem CPF/CNPJ'}`]));
+    activeBanks.forEach((item) => referenceRows.push(['Conta Bancária', item.banco, `Unidade: ${item.unidade}`]));
+    if (activeBanks.length === 0) referenceRows.push(['Conta Bancária', 'Nenhuma conta ativa cadastrada', 'Necessária para importar lançamentos pagos.']);
+    activePaymentTerms.forEach((item) => referenceRows.push(['Condição DDL', item.nome, `Prazos: ${item.prazosDias.join('/')} dias`]));
+    ['PIX', 'BOLETO', 'CARNE', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'DINHEIRO', 'TRANSFERENCIA']
+      .forEach((value) => referenceRows.push(['Forma de Pagamento', value, 'Valor aceito']));
+    ['PAGO', 'PENDENTE', 'ATRASADO', 'CANCELADO']
+      .forEach((value) => referenceRows.push(['Status', value, 'Valor aceito']));
+
+    const referenceWorksheet = XLSX.utils.aoa_to_sheet(referenceRows);
+    applyTemplateSheetLayout(referenceWorksheet, [28, 52, 65]);
+
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Lancamentos_Modelo');
-    const instructions = XLSX.utils.json_to_sheet([
-      { Campo: 'Descrição, Tipo, Valor, Vencimento, Categoria, Centro de Custo, Fornecedor/Cliente, Forma de Pagamento e Unidade', Obrigatório: 'Sim', Regra: 'Devem corresponder aos cadastros ativos do sistema.' },
-      { Campo: 'Conta Bancária', Obrigatório: 'Para itens PAGO', Regra: 'A conta precisa estar ativa e pertencer à unidade informada.' },
-      { Campo: 'Data Pagamento', Obrigatório: 'Para itens PAGO', Regra: 'Use AAAA-MM-DD.' },
-      { Campo: 'Data Competência DRE', Obrigatório: 'Não', Regra: 'Define o mês da DRE. Quando vazia, usa a data de emissão.' },
-      { Campo: 'Condição DDL', Obrigatório: 'Não', Regra: 'Quando preenchida, o valor total será dividido pelos prazos. Ex.: 30/60/90.' },
-      { Campo: 'Documento / Referência', Obrigatório: 'Não', Regra: 'Use número da NF, boleto, contrato ou identificador externo. Anexos não são importados pela planilha.' },
-      { Campo: 'Tipo', Obrigatório: 'Sim', Regra: 'Aceita somente RECEITA ou DESPESA. O grupo da DRE é definido pela categoria cadastrada.' }
-    ]);
-    XLSX.utils.book_append_sheet(workbook, instructions, 'Instrucoes');
+    XLSX.utils.book_append_sheet(workbook, importWorksheet, 'Lancamentos_Importar');
+    XLSX.utils.book_append_sheet(workbook, exampleWorksheet, 'Exemplo_Preenchimento');
+    XLSX.utils.book_append_sheet(workbook, instructionsWorksheet, 'Instrucoes');
+    XLSX.utils.book_append_sheet(workbook, referenceWorksheet, 'Cadastros_Atuais');
     XLSX.writeFile(workbook, 'Modelo_Importacao_Financeira_RoyalFace.xlsx');
     showToast('Modelo Excel baixado com sucesso!', 'success');
   };
@@ -273,8 +354,8 @@ export const ImportExcelView: React.FC = () => {
       let formaFinal: Lancamento['formaPagamento'] = 'BOLETO';
       if (formaStr.includes('PIX')) formaFinal = 'PIX';
       else if (formaStr.includes('CARN') || formaStr.includes('CREDIAR')) formaFinal = 'CARNE';
-      else if (formaStr.includes('CRED') || formaStr.includes('CARTAO')) formaFinal = 'CARTAO_CREDITO';
       else if (formaStr.includes('DEB')) formaFinal = 'CARTAO_DEBITO';
+      else if (formaStr.includes('CRED') || formaStr.includes('CARTAO')) formaFinal = 'CARTAO_CREDITO';
       else if (formaStr.includes('DINH') || formaStr.includes('ESP')) formaFinal = 'DINHEIRO';
       else if (formaStr.includes('TRANS') || formaStr.includes('TED')) formaFinal = 'TRANSFERENCIA';
 
@@ -292,6 +373,9 @@ export const ImportExcelView: React.FC = () => {
       else if (statusRaw.includes('ATRAS')) status = 'ATRASADO';
       else if (statusRaw.includes('CANCEL')) status = 'CANCELADO';
       else if (!statusRaw && /PAGO|À\s*VISTA/i.test(condStr)) status = 'PAGO';
+      if (statusRaw && !/(PAGO|RECEB|LIQUID|PEND|ATRAS|CANCEL)/.test(statusRaw)) {
+        errors.push('Status deve ser PAGO, PENDENTE, ATRASADO ou CANCELADO');
+      }
 
       const dataPagamento = status === 'PAGO' ? parseImportDate(row[mapping.dataPagamento]) : undefined;
       const cpfCnpj = String(row[mapping.cpfCnpj] || '').trim();
@@ -540,13 +624,13 @@ export const ImportExcelView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Tipo (RECEITA ou DESPESA)</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Tipo (RECEITA ou DESPESA) *</label>
               <select
                 value={mapping.tipo}
                 onChange={(e) => setMapping({ ...mapping, tipo: e.target.value })}
                 className="w-full px-3 py-2 border rounded-md text-xs font-semibold text-[#0b1c30] bg-white"
               >
-                <option value="">Selecione a coluna (opcional)...</option>
+                <option value="">Selecione a coluna...</option>
                 {headers.map((h) => (
                   <option key={h} value={h}>{h}</option>
                 ))}
@@ -554,13 +638,13 @@ export const ImportExcelView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Data de Emissão</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Data de Emissão (opcional)</label>
               <select
                 value={mapping.dataEmissao}
                 onChange={(e) => setMapping({ ...mapping, dataEmissao: e.target.value })}
                 className="w-full px-3 py-2 border rounded-md text-xs font-semibold text-[#0b1c30] bg-white"
               >
-                <option value="">Selecione a coluna...</option>
+                <option value="">Usar a data de vencimento...</option>
                 {headers.map((h) => (
                   <option key={h} value={h}>{h}</option>
                 ))}
@@ -590,7 +674,7 @@ export const ImportExcelView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Fornecedor ou Cliente</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Fornecedor ou Cliente *</label>
               <select
                 value={mapping.fornecedorCliente}
                 onChange={(e) => setMapping({ ...mapping, fornecedorCliente: e.target.value })}
@@ -604,7 +688,7 @@ export const ImportExcelView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Categoria DRE</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Categoria DRE *</label>
               <select
                 value={mapping.categoria}
                 onChange={(e) => setMapping({ ...mapping, categoria: e.target.value })}
@@ -626,7 +710,9 @@ export const ImportExcelView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Unidade / Filial</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                {isFinance ? 'Unidade / Filial (definida pelo seu acesso)' : 'Unidade / Filial *'}
+              </label>
               <select
                 value={mapping.unidade}
                 onChange={(e) => setMapping({ ...mapping, unidade: e.target.value })}
