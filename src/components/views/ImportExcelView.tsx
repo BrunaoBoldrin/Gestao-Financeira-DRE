@@ -26,25 +26,56 @@ interface ColumnMapping {
   observacoes: string;
 }
 
+const normalizeDateParts = (year: number, month: number, day: number) => {
+  if (!Number.isInteger(year) || year < 1000 || year > 9999) return '';
+  if (!Number.isInteger(month) || !Number.isInteger(day)) return '';
+
+  const parsedDate = new Date(year, month - 1, day, 12);
+  if (
+    parsedDate.getFullYear() !== year
+    || parsedDate.getMonth() !== month - 1
+    || parsedDate.getDate() !== day
+  ) return '';
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
 const toDateValue = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  normalizeDateParts(date.getFullYear(), date.getMonth() + 1, date.getDate());
+
+const toTemplateDateValue = (date: Date) =>
+  `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
+
+const toDisplayDateValue = (isoDate?: string) => {
+  const match = isoDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : isoDate || '—';
+};
 
 const parseImportDate = (rawDate: unknown, fallback = '') => {
   if (rawDate instanceof Date && !Number.isNaN(rawDate.getTime())) return toDateValue(rawDate);
 
+  if (typeof rawDate === 'number' && Number.isFinite(rawDate)) {
+    const parsedExcelDate = XLSX.SSF.parse_date_code(rawDate);
+    if (parsedExcelDate) {
+      return normalizeDateParts(parsedExcelDate.y, parsedExcelDate.m, parsedExcelDate.d) || fallback;
+    }
+  }
+
   if (typeof rawDate === 'string' && rawDate.trim()) {
     const value = rawDate.trim();
-    if (value.includes('/')) {
-      const parts = value.split('/');
-      if (parts.length === 3) {
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
-        return `${year}-${month}-${day}`;
-      }
+
+    const isoMatch = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/);
+    if (isoMatch) {
+      return normalizeDateParts(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3])) || fallback;
     }
 
-    if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.substring(0, 10);
+    const brazilianMatch = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})(?:[T\s].*)?$/);
+    if (brazilianMatch) {
+      const year = brazilianMatch[3].length === 2
+        ? Number(`20${brazilianMatch[3]}`)
+        : Number(brazilianMatch[3]);
+      return normalizeDateParts(year, Number(brazilianMatch[2]), Number(brazilianMatch[1])) || fallback;
+    }
   }
 
   return fallback;
@@ -63,9 +94,9 @@ const IMPORT_TEMPLATE_HEADERS = [
   'Descrição',
   'Tipo (RECEITA ou DESPESA)',
   'Valor (R$)',
-  'Data Emissão (AAAA-MM-DD)',
-  'Data Competência DRE (AAAA-MM-DD)',
-  'Data Vencimento / 1º Vencimento (AAAA-MM-DD)',
+  'Data Emissão (DD-MM-AAAA)',
+  'Data Competência DRE (DD-MM-AAAA)',
+  'Data Vencimento / 1º Vencimento (DD-MM-AAAA)',
   'Categoria DRE',
   'Centro de Custo',
   'Fornecedor / Cliente',
@@ -74,7 +105,7 @@ const IMPORT_TEMPLATE_HEADERS = [
   'Unidade / Filial',
   'Condição DDL (Ex: 30/60/90 Dias)',
   'Status (PAGO, PENDENTE, ATRASADO ou CANCELADO)',
-  'Data Pagamento (AAAA-MM-DD)',
+  'Data Pagamento (DD-MM-AAAA)',
   'CPF/CNPJ Contraparte',
   'Documento / Referência',
   'Observações'
@@ -160,17 +191,17 @@ export const ImportExcelView: React.FC = () => {
     const issueDate = new Date();
     const firstDueDate = new Date(issueDate);
     firstDueDate.setDate(firstDueDate.getDate() + (sampleInstallmentTerm?.prazosDias[0] || 30));
-    const issueDateText = toDateValue(issueDate);
-    const firstDueDateText = toDateValue(firstDueDate);
+    const issueDateText = toTemplateDateValue(issueDate);
+    const firstDueDateText = toTemplateDateValue(firstDueDate);
 
     const sampleData: Array<Record<string, string | number>> = [
       {
         'Descrição': 'EXEMPLO — compra de insumos',
         'Tipo (RECEITA ou DESPESA)': 'DESPESA',
         'Valor (R$)': 4500,
-        'Data Emissão (AAAA-MM-DD)': issueDateText,
-        'Data Competência DRE (AAAA-MM-DD)': issueDateText,
-        'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': firstDueDateText,
+        'Data Emissão (DD-MM-AAAA)': issueDateText,
+        'Data Competência DRE (DD-MM-AAAA)': issueDateText,
+        'Data Vencimento / 1º Vencimento (DD-MM-AAAA)': firstDueDateText,
         'Categoria DRE': sampleExpenseCategory,
         'Centro de Custo': sampleCostCenter,
         'Fornecedor / Cliente': sampleSupplier?.nome || 'Fornecedor do exemplo',
@@ -179,7 +210,7 @@ export const ImportExcelView: React.FC = () => {
         'Unidade / Filial': sampleUnit,
         'Condição DDL (Ex: 30/60/90 Dias)': sampleInstallmentTerm?.nome || '30/60/90',
         'Status (PAGO, PENDENTE, ATRASADO ou CANCELADO)': 'PENDENTE',
-        'Data Pagamento (AAAA-MM-DD)': '',
+        'Data Pagamento (DD-MM-AAAA)': '',
         'CPF/CNPJ Contraparte': sampleSupplier?.cnpj || '',
         'Documento / Referência': 'NF 0001',
         'Observações': 'Conta bancária e data de pagamento ficam vazias enquanto estiver pendente.'
@@ -188,9 +219,9 @@ export const ImportExcelView: React.FC = () => {
         'Descrição': 'EXEMPLO — recebimento de cliente',
         'Tipo (RECEITA ou DESPESA)': 'RECEITA',
         'Valor (R$)': 3800,
-        'Data Emissão (AAAA-MM-DD)': issueDateText,
-        'Data Competência DRE (AAAA-MM-DD)': '',
-        'Data Vencimento / 1º Vencimento (AAAA-MM-DD)': issueDateText,
+        'Data Emissão (DD-MM-AAAA)': issueDateText,
+        'Data Competência DRE (DD-MM-AAAA)': '',
+        'Data Vencimento / 1º Vencimento (DD-MM-AAAA)': issueDateText,
         'Categoria DRE': sampleRevenueCategory,
         'Centro de Custo': sampleCostCenter,
         'Fornecedor / Cliente': sampleClient?.nome || 'Cliente do exemplo',
@@ -199,7 +230,7 @@ export const ImportExcelView: React.FC = () => {
         'Unidade / Filial': sampleUnit,
         'Condição DDL (Ex: 30/60/90 Dias)': sampleCashTerm?.nome || '',
         'Status (PAGO, PENDENTE, ATRASADO ou CANCELADO)': 'PAGO',
-        'Data Pagamento (AAAA-MM-DD)': issueDateText,
+        'Data Pagamento (DD-MM-AAAA)': issueDateText,
         'CPF/CNPJ Contraparte': sampleClient?.cnpj || '',
         'Documento / Referência': 'Recibo 0001',
         'Observações': 'Para lançamento pago, informe uma conta ativa da mesma filial.'
@@ -217,9 +248,9 @@ export const ImportExcelView: React.FC = () => {
       { Campo: 'Descrição', Obrigatório: 'Sim', Regra: 'Texto livre que identifique o lançamento.', Exemplo: 'Aluguel da clínica — setembro/2026' },
       { Campo: 'Tipo', Obrigatório: 'Sim', Regra: 'Aceita somente RECEITA ou DESPESA.', Exemplo: 'DESPESA' },
       { Campo: 'Valor', Obrigatório: 'Sim', Regra: 'Deve ser maior que zero. Informe o valor total; a condição DDL fará a divisão das parcelas.', Exemplo: '4500,00' },
-      { Campo: 'Data Emissão', Obrigatório: 'Não', Regra: 'Use AAAA-MM-DD. Quando vazia, o sistema usa a data de vencimento.', Exemplo: issueDateText },
-      { Campo: 'Data Competência DRE', Obrigatório: 'Não', Regra: 'Define o mês da DRE. Quando vazia, usa a data de emissão ou o vencimento.', Exemplo: issueDateText },
-      { Campo: 'Data Vencimento / 1º Vencimento', Obrigatório: 'Sim', Regra: 'Use AAAA-MM-DD. Com DDL, representa o primeiro vencimento.', Exemplo: firstDueDateText },
+      { Campo: 'Data Emissão', Obrigatório: 'Não', Regra: 'Use DD-MM-AAAA. Quando vazia, o sistema usa a data de vencimento.', Exemplo: issueDateText },
+      { Campo: 'Data Competência DRE', Obrigatório: 'Não', Regra: 'Use DD-MM-AAAA. Define o mês da DRE; quando vazia, usa a data de emissão ou o vencimento.', Exemplo: issueDateText },
+      { Campo: 'Data Vencimento / 1º Vencimento', Obrigatório: 'Sim', Regra: 'Use DD-MM-AAAA. Com DDL, representa o primeiro vencimento.', Exemplo: firstDueDateText },
       { Campo: 'Categoria DRE', Obrigatório: 'Sim', Regra: 'Deve ser uma categoria ativa e compatível com o tipo RECEITA ou DESPESA.', Exemplo: sampleExpenseCategory },
       { Campo: 'Centro de Custo', Obrigatório: 'Sim', Regra: 'Deve corresponder exatamente a um centro de custo ativo.', Exemplo: sampleCostCenter },
       { Campo: 'Fornecedor / Cliente', Obrigatório: 'Sim', Regra: 'Texto livre. Não precisa existir previamente no cadastro de fornecedores.', Exemplo: sampleSupplier?.nome || 'Fornecedor do exemplo' },
@@ -228,7 +259,7 @@ export const ImportExcelView: React.FC = () => {
       { Campo: 'Unidade / Filial', Obrigatório: 'Sim para Admin', Regra: 'Deve corresponder exatamente a uma unidade ativa. No perfil Financeiro, o sistema usa automaticamente a unidade do usuário.', Exemplo: sampleUnit },
       { Campo: 'Condição DDL', Obrigatório: 'Não', Regra: 'Divide o valor total pelos prazos. Pode usar uma condição ativa ou informar os dias separados por barra.', Exemplo: sampleInstallmentTerm?.nome || '30/60/90' },
       { Campo: 'Status', Obrigatório: 'Não', Regra: 'Aceita PAGO, PENDENTE, ATRASADO ou CANCELADO. Quando vazio, assume PENDENTE.', Exemplo: 'PENDENTE' },
-      { Campo: 'Data Pagamento', Obrigatório: 'Somente se PAGO', Regra: 'Use AAAA-MM-DD.', Exemplo: issueDateText },
+      { Campo: 'Data Pagamento', Obrigatório: 'Somente se PAGO', Regra: 'Use DD-MM-AAAA.', Exemplo: issueDateText },
       { Campo: 'CPF/CNPJ Contraparte', Obrigatório: 'Não', Regra: 'Identificação opcional do fornecedor ou cliente.', Exemplo: sampleSupplier?.cnpj || '00.000.000/0001-00' },
       { Campo: 'Documento / Referência', Obrigatório: 'Não', Regra: 'Use número da NF, boleto, contrato ou identificador externo. Anexos não são importados pela planilha.', Exemplo: 'NF 0001' },
       { Campo: 'Observações', Obrigatório: 'Não', Regra: 'Texto livre para informações complementares.', Exemplo: 'Compra referente ao mês de setembro.' }
@@ -558,7 +589,7 @@ export const ImportExcelView: React.FC = () => {
             </div>
             <h3 className="text-base font-bold text-[#0b1c30]">Selecione a Planilha com Informações Passadas</h3>
             <p className="text-xs text-gray-500">
-              Aceita formatos <strong>.XLSX, .XLS ou .CSV</strong>. O arquivo pode conter receitas, despesas, fornecedores e vencimentos DDL.
+              Aceita formatos <strong>.XLSX, .XLS ou .CSV</strong>. Use datas no padrão <strong>DD-MM-AAAA</strong>; planilhas antigas continuam compatíveis.
             </p>
           </div>
 
@@ -895,10 +926,10 @@ export const ImportExcelView: React.FC = () => {
                 {sortedMappedItems.map((item) => (
                   <tr key={item.sourceIndex} className="hover:bg-gray-50">
                     <td className="p-3 text-gray-400 font-mono text-[11px]">{item.sourceIndex}</td>
-                    <td className="p-3 font-semibold text-gray-700">{item.dataEmissao}</td>
-                    <td className="p-3 font-semibold text-sky-800">{item.dataCompetencia || '—'}</td>
-                    <td className="p-3 font-semibold text-gray-700">{item.dataVencimento || '—'}</td>
-                    <td className="p-3 font-semibold text-gray-700">{item.dataPagamento || '—'}</td>
+                    <td className="p-3 font-semibold text-gray-700">{toDisplayDateValue(item.dataEmissao)}</td>
+                    <td className="p-3 font-semibold text-sky-800">{toDisplayDateValue(item.dataCompetencia)}</td>
+                    <td className="p-3 font-semibold text-gray-700">{toDisplayDateValue(item.dataVencimento)}</td>
+                    <td className="p-3 font-semibold text-gray-700">{toDisplayDateValue(item.dataPagamento)}</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.tipo === 'RECEITA' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
                         {item.tipo}
