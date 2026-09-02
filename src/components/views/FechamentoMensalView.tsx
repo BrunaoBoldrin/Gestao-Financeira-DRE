@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { getMonthValue, resolveReferenceMonth } from '../../utils/dateRange';
+import { getCurrentMonthValue, getMonthValue } from '../../utils/dateRange';
 
 export const FechamentoMensalView: React.FC = () => {
   const app = useApp();
-  const referenceMonth = resolveReferenceMonth(app.lancamentos.map((item) => item.dataCompetencia || item.dataVencimento));
+  const referenceMonth = getCurrentMonthValue();
   const [month, setMonth] = useState(referenceMonth);
   const [confirmLock, setConfirmLock] = useState(false);
   const months = useMemo(() => Array.from(new Set([

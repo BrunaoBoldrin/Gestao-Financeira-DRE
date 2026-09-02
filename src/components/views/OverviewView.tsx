@@ -1,14 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CompetenciaSelect, formatCompetencia } from '../common/CompetenciaSelect';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import {
   getDateRangeBounds,
+  getCurrentMonthValue,
   getMonthValue,
   isDateInRange,
   isMonthValue,
-  normalizeDateValue,
-  resolveReferenceMonth
+  normalizeDateValue
 } from '../../utils/dateRange';
 import { getLancamentoCompetencia } from '../../utils/dre';
 import { useSortableData } from '../../hooks/useSortableData';
@@ -68,30 +68,19 @@ export const OverviewView: React.FC = () => {
     filteredLancamentos,
     documentosOCR,
     bancos,
-    fechamentoMensal,
     currentUser,
     selectedUnit,
     setSelectedUnit,
     units,
     isFinance,
     setCurrentView,
-    setSelectedDocumentForReviewId,
     canExecuteFinancialActions
   } = useApp();
 
-  const dashboardReferenceMonth = useMemo(
-    () => resolveReferenceMonth(
-      filteredLancamentos.map((lancamento) => lancamento.dataVencimento),
-      fechamentoMensal.mesAno
-    ),
-    [fechamentoMensal.mesAno, filteredLancamentos]
-  );
+  const dashboardReferenceMonth = getCurrentMonthValue();
   const [competencia, setCompetencia] = useState(dashboardReferenceMonth);
   const [periodoRascunho, setPeriodoRascunho] = useState({ inicio: '', fim: '' });
   const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
-  useEffect(() => {
-    if (!isMonthValue(fechamentoMensal.mesAno)) setCompetencia(dashboardReferenceMonth);
-  }, [dashboardReferenceMonth, fechamentoMensal.mesAno]);
   const periodoPersonalizadoAtivo = Boolean(periodoAplicado.inicio && periodoAplicado.fim);
   const caixasFisicosVisiveis = bancos.filter(
     (banco) =>
@@ -418,67 +407,6 @@ export const OverviewView: React.FC = () => {
           </p>
         </div>
       </div>
-
-      {/* OCR & Excel Import Action Banners */}
-      {canExecuteFinancialActions && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {pendingOCRDocs.length > 0 ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-100 text-amber-800 rounded-lg">
-                <span className="material-symbols-outlined text-2xl">document_scanner</span>
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-amber-900">
-                  {pendingOCRDocs.length} Documentos na Fila de Conferência OCR
-                </h4>
-                <p className="text-[11px] text-amber-700">
-                  Último arquivo: {pendingOCRDocs[0].nomeArquivo} ({pendingOCRDocs[0].confiancaOCR}% confiança)
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                setSelectedDocumentForReviewId(pendingOCRDocs[0].id);
-                setCurrentView('pending_review');
-              }}
-              className="px-3 py-1.5 bg-amber-700 text-white text-xs font-bold rounded-md hover:bg-amber-800 transition"
-            >
-              Conferir Lado a Lado
-            </button>
-          </div>
-        ) : (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-emerald-100 text-emerald-800 rounded-lg">
-                <span className="material-symbols-outlined text-2xl">task_alt</span>
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-emerald-900">Fila OCR Concluída</h4>
-                <p className="text-[11px] text-emerald-700">Nenhum documento aguardando auditoria no momento.</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-gradient-to-r from-blue-900 via-[#131b2e] to-blue-950 text-white border border-blue-800 rounded-xl p-4 flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-[#C5A059]/20 text-[#C5A059] rounded-lg">
-              <span className="material-symbols-outlined text-2xl">table_chart</span>
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white">Importar Planilha / Dados Históricos</h4>
-              <p className="text-[11px] text-gray-300">Alimente o sistema com lançamentos em lote via Excel/CSV.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setCurrentView('import_excel')}
-            className="px-3 py-1.5 bg-[#C5A059] text-white text-xs font-bold rounded-md hover:bg-[#b08d46] transition flex items-center gap-1"
-          >
-            <span>Importar Excel</span>
-            <span className="material-symbols-outlined text-sm">arrow_forward</span>
-          </button>
-        </div>
-      </div>}
 
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

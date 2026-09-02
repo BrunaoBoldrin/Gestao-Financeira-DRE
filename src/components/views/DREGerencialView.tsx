@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { CategoriaMaster, DREItem, GrupoDRE, Lancamento } from '../../types';
 import { getLancamentoCompetencia, resolveGrupoDRE } from '../../utils/dre';
-import { isMonthValue, resolveReferenceMonth } from '../../utils/dateRange';
+import { getCurrentMonthValue, isMonthValue } from '../../utils/dateRange';
 
 type CategoryValues = Map<string, number>;
 type MonthSummary = Record<GrupoDRE, CategoryValues>;
@@ -118,7 +118,7 @@ export const DREGerencialView: React.FC = () => {
     units,
     currentUser,
     isFinance,
-    fechamentoMensal, fechamentosMensais, dreVersions, saveDREVersion,
+    fechamentosMensais, dreVersions, saveDREVersion,
     canExecuteFinancialActions, flushPersistence,
     showToast
   } = useApp();
@@ -135,13 +135,7 @@ export const DREGerencialView: React.FC = () => {
     '14': true
   });
 
-  const currentReferenceMonth = useMemo(
-    () => resolveReferenceMonth(
-      lancamentos.map((item) => getLancamentoCompetencia(item)),
-      fechamentoMensal.mesAno
-    ),
-    [fechamentoMensal.mesAno, lancamentos]
-  );
+  const currentReferenceMonth = getCurrentMonthValue();
   const [selectedMonth, setSelectedMonth] = useState(currentReferenceMonth);
   const [unidadeDre, setUnidadeDre] = useState(
     isFinance && currentUser ? currentUser.unit : selectedUnit
@@ -349,9 +343,12 @@ export const DREGerencialView: React.FC = () => {
   const lancamentosSemImpactoDRE = lancamentosDaCompetencia.filter(
     (item) => resolveGrupoDRE(item, categorias) === 'NAO_AFETA_DRE'
   );
-  const monthStatus = selectedMonth === currentReferenceMonth
-    ? fechamentoMensal.status === 'FECHADO' ? 'FECHADO' : 'EM ANDAMENTO'
-    : selectedMonth < currentReferenceMonth ? 'HISTÓRICO' : 'PLANEJADO';
+  const selectedClosing = fechamentosMensais.find((item) => item.mesAno === selectedMonth);
+  const monthStatus = selectedClosing?.status === 'FECHADO'
+    ? 'FECHADO'
+    : selectedMonth === currentReferenceMonth
+      ? 'EM ANDAMENTO'
+      : selectedMonth < currentReferenceMonth ? 'HISTÓRICO' : 'PLANEJADO';
 
   const renderDRERow = (item: DREItem) => {
     const isExpanded = expandedNodes[item.codigo];
