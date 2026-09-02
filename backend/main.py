@@ -10,14 +10,22 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .auth import (
+    CreateUserRequest,
     LoginRequest,
     SetupAdminRequest,
+    UpdateUserRequest,
     auth_status,
-    login_admin,
+    create_auth_user,
+    delete_auth_user,
+    list_auth_users,
+    login_user,
     logout,
+    require_admin_access,
     require_data_access,
-    require_data_access_when_configured,
+    require_write_access,
+    require_write_access_when_configured,
     setup_admin,
+    update_auth_user,
 )
 from .database import database_configured, database_health
 from .encryption import encryption_configured
@@ -81,7 +89,7 @@ if allowed_origins:
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Content-Type"],
     )
 
@@ -104,9 +112,9 @@ def get_auth_status(request: Request, response: Response) -> dict:
 
 
 @app.post("/api/auth/login")
-def login_with_admin_credentials(payload: LoginRequest, response: Response) -> dict:
+def login_with_credentials(payload: LoginRequest, response: Response) -> dict:
     response.headers["Cache-Control"] = "no-store"
-    return {"success": True, "user": login_admin(payload, response)}
+    return {"success": True, "user": login_user(payload, response)}
 
 
 @app.post("/api/auth/setup")
@@ -118,6 +126,37 @@ def setup_initial_admin(payload: SetupAdminRequest, response: Response) -> dict:
 @app.post("/api/auth/logout")
 def logout_data_session(request: Request, response: Response) -> dict:
     logout(request, response)
+    return {"success": True}
+
+
+@app.post("/api/auth/users")
+def create_user(
+    payload: CreateUserRequest,
+    _: dict = Depends(require_admin_access),
+) -> dict:
+    return {"success": True, "user": create_auth_user(payload)}
+
+
+@app.get("/api/auth/users")
+def list_users(_: dict = Depends(require_admin_access)) -> dict:
+    return {"users": list_auth_users()}
+
+
+@app.put("/api/auth/users/{user_id}")
+def update_user(
+    user_id: str,
+    payload: UpdateUserRequest,
+    auth_user: dict = Depends(require_admin_access),
+) -> dict:
+    return {"success": True, "user": update_auth_user(user_id, payload, auth_user)}
+
+
+@app.delete("/api/auth/users/{user_id}")
+def delete_user(
+    user_id: str,
+    auth_user: dict = Depends(require_admin_access),
+) -> dict:
+    delete_auth_user(user_id, auth_user)
     return {"success": True}
 
 
@@ -138,7 +177,7 @@ def get_application_state(response: Response, _: dict = Depends(require_data_acc
 @app.put("/api/state")
 def put_application_state(
     payload: SaveStateRequest,
-    auth_user: dict = Depends(require_data_access),
+    auth_user: dict = Depends(require_write_access),
 ) -> dict:
     try:
         revision = save_application_state(
@@ -161,7 +200,7 @@ def put_application_state(
     return {"success": True, "revision": revision}
 
 
-@app.post("/api/files", dependencies=[Depends(require_data_access)])
+@app.post("/api/files", dependencies=[Depends(require_write_access)])
 async def upload_financial_file(file: UploadFile = File(...)) -> dict:
     content = await file.read()
     max_file_mb = int(os.getenv("FILE_MAX_MB", "15"))
@@ -216,7 +255,7 @@ def get_financial_file(file_id: str) -> Response:
     )
 
 
-@app.post("/api/ocr", dependencies=[Depends(require_data_access_when_configured)])
+@app.post("/api/ocr", dependencies=[Depends(require_write_access_when_configured)])
 def run_ocr(request: OCRRequest) -> dict:
     max_file_mb = int(os.getenv("OCR_MAX_FILE_MB", "15"))
     max_pages = int(os.getenv("OCR_MAX_PAGES", "5"))

@@ -7,6 +7,7 @@ import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import HTTPException, Request, Response, status
 from psycopg2.extras import RealDictCursor
@@ -36,11 +37,51 @@ class SetupAdminRequest(BaseModel):
     password: str = Field(min_length=12, max_length=128)
 
 
+class CreateUserRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=150)
+    email: str = Field(min_length=5, max_length=250)
+    password: str = Field(min_length=12, max_length=128)
+    role: Literal["ADMIN", "FINANCE", "AUDITOR"]
+    unit: str = Field(min_length=2, max_length=150)
+    active: bool = True
+
+
+class UpdateUserRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=150)
+    email: str = Field(min_length=5, max_length=250)
+    password: str | None = Field(default=None, min_length=12, max_length=128)
+    role: Literal["ADMIN", "FINANCE", "AUDITOR"]
+    unit: str = Field(min_length=2, max_length=150)
+    active: bool
+
+
 def _normalize_email(email: str) -> str:
     normalized = email.strip().casefold()
     if not EMAIL_PATTERN.match(normalized):
         raise HTTPException(status_code=422, detail="Informe um e-mail válido.")
     return normalized
+
+
+def _normalized_profile(name: str, email: str, unit: str) -> tuple[dict, str]:
+    normalized_name = name.strip()
+    normalized_unit = unit.strip()
+    if len(normalized_name) < 2:
+        raise HTTPException(status_code=422, detail="Informe o nome do usuário.")
+    if len(normalized_unit) < 2:
+        raise HTTPException(status_code=422, detail="Informe a unidade do usuário.")
+    normalized_email = _normalize_email(email)
+    return {
+        "name": normalized_name,
+        "email": normalized_email,
+        "unit": normalized_unit,
+    }, normalized_email
+
+
+def _validated_user_id(user_id: str) -> str:
+    try:
+        return str(uuid.UUID(user_id))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.") from exc
 
 
 def _password_hash(password: str, salt: bytes | None = None) -> str:
@@ -184,7 +225,7 @@ def setup_admin(payload: SetupAdminRequest, response: Response) -> dict:
     return _profile_from_row(row)
 
 
-def login_admin(payload: LoginRequest, response: Response) -> dict:
+def login_user(payload: LoginRequest, response: Response) -> dict:
     if not database_configured() or not encryption_configured():
         raise HTTPException(status_code=503, detail="Banco ou criptografia não configurados.")
     email = _normalize_email(payload.email)
@@ -243,6 +284,149 @@ def login_admin(payload: LoginRequest, response: Response) -> dict:
     return _profile_from_row(row)
 
 
+def create_auth_user(payload: CreateUserRequest) -> dict:
+    if not database_configured() or not encryption_configured():
+        raise HTTPException(status_code=503, detail="Banco ou criptografia não configurados.")
+
+    profile, email = _normalized_profile(payload.name, payload.email, payload.unit)
+    if payload.role == "FINANCE" and profile["unit"] == "Todas as Unidades":
+        raise HTTPException(status_code=422, detail="Defina uma unidade específica para o perfil Financeiro.")
+    user_id = str(uuid.uuid4())
+    email_lookup = lookup_fingerprint(email, "auth-email")
+    profile_nonce, profile_ciphertext, key_version = encrypt_json(
+        profile, f"auth_users:profile:{user_id}"
+    )
+    ensure_schema()
+
+    with transaction() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtext('rf-auth-user-management'))")
+            cursor.execute(
+                "SELECT EXISTS (SELECT 1 FROM auth_users WHERE email_lookup = %s) AS present",
+                (email_lookup,),
+            )
+            if cursor.fetchone()["present"]:
+                raise HTTPException(status_code=409, detail="Já existe um usuário com este e-mail.")
+            cursor.execute(
+                """
+                INSERT INTO auth_users (
+                    id, email_lookup, password_hash, profile_nonce, profile_ciphertext,
+                    key_version, role, active
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id::text, profile_nonce, profile_ciphertext, key_version,
+                          role, active, last_login_at
+                """,
+                (
+                    user_id,
+                    email_lookup,
+                    _password_hash(payload.password),
+                    profile_nonce,
+                    profile_ciphertext,
+                    key_version,
+                    payload.role,
+                    payload.active,
+                ),
+            )
+            row = cursor.fetchone()
+    return _profile_from_row(row)
+
+
+def list_auth_users() -> list[dict]:
+    ensure_schema()
+    with transaction() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT id::text, profile_nonce, profile_ciphertext, key_version,
+                       role, active, last_login_at
+                FROM auth_users
+                ORDER BY created_at ASC
+                """
+            )
+            rows = cursor.fetchall()
+    return [_profile_from_row(row) for row in rows]
+
+
+def update_auth_user(user_id: str, payload: UpdateUserRequest, actor: dict) -> dict:
+    validated_user_id = _validated_user_id(user_id)
+    if actor["id"] == validated_user_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Não é possível alterar o próprio usuário nesta tela.",
+        )
+
+    profile, email = _normalized_profile(payload.name, payload.email, payload.unit)
+    if payload.role == "FINANCE" and profile["unit"] == "Todas as Unidades":
+        raise HTTPException(status_code=422, detail="Defina uma unidade específica para o perfil Financeiro.")
+    email_lookup = lookup_fingerprint(email, "auth-email")
+    profile_nonce, profile_ciphertext, key_version = encrypt_json(
+        profile, f"auth_users:profile:{validated_user_id}"
+    )
+    password_hash = _password_hash(payload.password) if payload.password else None
+    ensure_schema()
+
+    with transaction() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtext('rf-auth-user-management'))")
+            cursor.execute(
+                "SELECT EXISTS (SELECT 1 FROM auth_users WHERE email_lookup = %s AND id <> %s) AS present",
+                (email_lookup, validated_user_id),
+            )
+            if cursor.fetchone()["present"]:
+                raise HTTPException(status_code=409, detail="Já existe outro usuário com este e-mail.")
+            cursor.execute(
+                """
+                UPDATE auth_users
+                SET email_lookup = %s,
+                    password_hash = COALESCE(%s, password_hash),
+                    profile_nonce = %s,
+                    profile_ciphertext = %s,
+                    key_version = %s,
+                    role = %s,
+                    active = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING id::text, profile_nonce, profile_ciphertext, key_version,
+                          role, active, last_login_at
+                """,
+                (
+                    email_lookup,
+                    password_hash,
+                    profile_nonce,
+                    profile_ciphertext,
+                    key_version,
+                    payload.role,
+                    payload.active,
+                    validated_user_id,
+                ),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+            cursor.execute(
+                "UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = %s AND revoked_at IS NULL",
+                (validated_user_id,),
+            )
+    return _profile_from_row(row)
+
+
+def delete_auth_user(user_id: str, actor: dict) -> None:
+    validated_user_id = _validated_user_id(user_id)
+    if actor["id"] == validated_user_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Não é possível excluir o próprio usuário durante a sessão.",
+        )
+
+    ensure_schema()
+    with transaction() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM auth_users WHERE id = %s RETURNING id", (validated_user_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+
 def logout(request: Request, response: Response) -> None:
     token = request.cookies.get(COOKIE_NAME)
     if token and database_configured():
@@ -297,6 +481,31 @@ def require_data_access(request: Request) -> dict:
     return user
 
 
+def require_admin_access(request: Request) -> dict:
+    user = require_data_access(request)
+    if user["role"] != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas administradores podem gerenciar usuários.",
+        )
+    return user
+
+
+def require_write_access(request: Request) -> dict:
+    user = require_data_access(request)
+    if user["role"] == "AUDITOR":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="O perfil de auditoria possui acesso somente para consulta.",
+        )
+    return user
+
+
 def require_data_access_when_configured(request: Request) -> None:
     if database_configured():
         require_data_access(request)
+
+
+def require_write_access_when_configured(request: Request) -> None:
+    if database_configured():
+        require_write_access(request)

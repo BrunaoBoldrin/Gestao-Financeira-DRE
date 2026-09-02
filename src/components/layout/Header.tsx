@@ -16,7 +16,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
     setCurrentView,
     documentosOCR,
     units,
-    logoutAdmin,
+    logoutUser,
     persistenceStatus,
     isFinance,
     canExecuteFinancialActions
@@ -138,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
                 <button
                   onClick={async () => {
                     setShowUserMenu(false);
-                    await logoutAdmin();
+                    await logoutUser();
                   }}
                   className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium"
                 >

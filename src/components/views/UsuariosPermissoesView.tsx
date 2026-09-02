@@ -16,6 +16,10 @@ export const UsuariosPermissoesView: React.FC = () => {
   const [role, setRole] = useState<UserRole>('FINANCE');
   const [unit, setUnit] = useState('Royal Face - Matriz');
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const userToDelete = users.find((user) => user.id === userToDeleteId);
   const { sortedItems: sortedUsers, sortConfig, requestSort } = useSortableData(users);
@@ -27,6 +31,9 @@ export const UsuariosPermissoesView: React.FC = () => {
     setRole('FINANCE');
     setUnit('Royal Face - Matriz');
     setAvatarUrl(undefined);
+    setPassword('');
+    setPasswordConfirmation('');
+    setShowPassword(false);
     if (photoInputRef.current) photoInputRef.current.value = '';
   };
 
@@ -37,6 +44,8 @@ export const UsuariosPermissoesView: React.FC = () => {
     setRole(user.role);
     setUnit(user.unit);
     setAvatarUrl(user.avatarUrl);
+    setPassword('');
+    setPasswordConfirmation('');
     if (photoInputRef.current) photoInputRef.current.value = '';
   };
 
@@ -63,10 +72,30 @@ export const UsuariosPermissoesView: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleRoleChange = (nextRole: UserRole) => {
+    setRole(nextRole);
+    if (nextRole === 'FINANCE' && unit === 'Todas as Unidades') {
+      const firstActiveUnit = units.find((item) => item.ativa && item.id !== 'all');
+      if (firstActiveUnit) setUnit(firstActiveUnit.nome);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) return;
     if (!name || !email) return;
+    if (!editingUserId && !password) {
+      showToast('Defina uma senha para o novo usuário.', 'error');
+      return;
+    }
+    if (password && password.length < 12) {
+      showToast('A senha deve ter pelo menos 12 caracteres.', 'error');
+      return;
+    }
+    if (password !== passwordConfirmation) {
+      showToast('A confirmação da senha não confere.', 'error');
+      return;
+    }
     const emailInUse = users.some((user) =>
       user.id !== editingUserId && user.email.toLowerCase() === email.toLowerCase()
     );
@@ -75,13 +104,30 @@ export const UsuariosPermissoesView: React.FC = () => {
       return;
     }
 
+    setSubmitting(true);
+    let success = false;
     if (editingUserId) {
-      updateUser(editingUserId, { name, email, role, unit, avatarUrl });
+      success = await updateUser(editingUserId, {
+        name: name.trim(),
+        email: email.trim(),
+        role,
+        unit,
+        avatarUrl,
+        ...(password ? { password } : {})
+      });
     } else {
-      addUser({ name, email, role, unit, active: true, avatarUrl });
+      success = await addUser({
+        name: name.trim(),
+        email: email.trim(),
+        role,
+        unit,
+        active: true,
+        avatarUrl,
+        password
+      });
     }
-
-    resetForm();
+    setSubmitting(false);
+    if (success) resetForm();
   };
 
   return (
@@ -95,10 +141,6 @@ export const UsuariosPermissoesView: React.FC = () => {
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
             Gestão de usuários, atribuição de perfis (Administrador, Financeiro, Auditoria) e filiais.
-          </p>
-          <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 max-w-3xl">
-            Nesta primeira etapa, somente o administrador criado na configuração inicial possui credenciais de login.
-            Os demais perfis ficam preparados para a futura liberação de acessos individuais.
           </p>
         </div>
       </div>
@@ -158,14 +200,14 @@ export const UsuariosPermissoesView: React.FC = () => {
                           onClick={() => startEditing(u)}
                           disabled={!isAdmin || currentUser?.id === u.id}
                           title={currentUser?.id === u.id
-                            ? 'Os dados de acesso do administrador autenticado não podem ser alterados nesta etapa'
+                            ? 'Não é possível alterar o usuário da sessão atual nesta tela'
                             : !isAdmin ? 'Apenas Administradores podem editar usuários' : undefined}
                           className="px-2 py-1 border border-[#d3e4fe] text-[#0b1c30] rounded text-[10px] font-bold hover:bg-[#eff4ff] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                         >
                           Editar
                         </button>
                         <button
-                          onClick={() => toggleUserActive(u.id)}
+                          onClick={() => void toggleUserActive(u.id)}
                           disabled={!isAdmin || currentUser?.id === u.id}
                           title={currentUser?.id === u.id
                             ? 'Não é possível desativar o usuário da sessão atual'
@@ -268,11 +310,54 @@ export const UsuariosPermissoesView: React.FC = () => {
             </div>
 
             <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                {editingUserId ? 'Nova Senha (opcional)' : 'Senha de Acesso'}
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required={!editingUserId}
+                  minLength={12}
+                  disabled={!isAdmin}
+                  placeholder={editingUserId ? 'Deixe em branco para manter a atual' : 'Mínimo de 12 caracteres'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  className="w-full px-3 py-1.5 pr-9 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  disabled={!isAdmin}
+                  className="absolute inset-y-0 right-0 px-2 text-gray-500 disabled:text-gray-300"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  <span className="material-symbols-outlined text-base">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">Confirmar Senha</label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required={!editingUserId || Boolean(password)}
+                minLength={password ? 12 : undefined}
+                disabled={!isAdmin}
+                value={passwordConfirmation}
+                onChange={(e) => setPasswordConfirmation(e.target.value)}
+                autoComplete="new-password"
+                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-[9px] text-gray-500">A senha deve ter pelo menos 12 caracteres.</p>
+            </div>
+
+            <div>
               <label className="block text-[11px] font-semibold text-gray-700 mb-1">Perfil / Papel</label>
               <select
                 value={role}
                 disabled={!isAdmin}
-                onChange={(e) => setRole(e.target.value as UserRole)}
+                onChange={(e) => handleRoleChange(e.target.value as UserRole)}
                 className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-semibold disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="ADMIN">Administrador (Acesso Total)</option>
@@ -292,20 +377,20 @@ export const UsuariosPermissoesView: React.FC = () => {
                 {units.filter((item) => item.ativa && item.id !== 'all').map((item) => (
                   <option key={item.id} value={item.nome}>{item.nome}</option>
                 ))}
-                <option value="Todas as Unidades">Todas as Unidades</option>
+                {role !== 'FINANCE' && <option value="Todas as Unidades">Todas as Unidades</option>}
               </select>
             </div>
 
             <button
               type="submit"
-              disabled={!isAdmin}
+              disabled={!isAdmin || submitting}
               className={`w-full py-2 rounded-md text-xs font-bold transition shadow-xs mt-2 ${
-                !isAdmin
+                !isAdmin || submitting
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-[#131b2e] text-white hover:bg-[#0b1c30]'
               }`}
             >
-              {editingUserId ? 'Salvar Alterações' : 'Cadastrar Usuário'}
+              {submitting ? 'Salvando...' : editingUserId ? 'Salvar Alterações' : 'Cadastrar Usuário'}
             </button>
           </form>
         </div>
@@ -331,10 +416,12 @@ export const UsuariosPermissoesView: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  deleteUser(userToDelete.id);
-                  if (editingUserId === userToDelete.id) resetForm();
-                  setUserToDeleteId(null);
+                onClick={async () => {
+                  const success = await deleteUser(userToDelete.id);
+                  if (success) {
+                    if (editingUserId === userToDelete.id) resetForm();
+                    setUserToDeleteId(null);
+                  }
                 }}
                 className="px-3 py-2 bg-rose-600 text-white rounded-md text-xs font-bold hover:bg-rose-700"
               >

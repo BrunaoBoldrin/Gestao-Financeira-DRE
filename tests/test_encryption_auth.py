@@ -6,7 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cryptography.exceptions import InvalidTag
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from backend import auth, database
 from backend.encryption import decrypt_bytes, decrypt_json, encrypt_bytes, encrypt_json, lookup_fingerprint
@@ -106,6 +108,49 @@ class AuthenticationApiWithoutDatabaseTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
 
+
+class AuthenticationRoleTests(unittest.TestCase):
+    def test_admin_can_manage_users(self):
+        with patch.object(auth, "require_data_access", return_value={"role": "ADMIN"}):
+            user = auth.require_admin_access(object())
+
+        self.assertEqual(user["role"], "ADMIN")
+
+    def test_finance_cannot_manage_users(self):
+        with patch.object(auth, "require_data_access", return_value={"role": "FINANCE"}):
+            with self.assertRaises(HTTPException) as error:
+                auth.require_admin_access(object())
+
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_finance_can_write_and_auditor_cannot(self):
+        with patch.object(auth, "require_data_access", return_value={"role": "FINANCE"}):
+            self.assertEqual(auth.require_write_access(object())["role"], "FINANCE")
+
+        with patch.object(auth, "require_data_access", return_value={"role": "AUDITOR"}):
+            with self.assertRaises(HTTPException) as error:
+                auth.require_write_access(object())
+
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_administrator_must_set_a_strong_password_for_new_users(self):
+        with self.assertRaises(ValidationError):
+            auth.CreateUserRequest(
+                name="Usuário Financeiro",
+                email="financeiro@empresa.com",
+                password="curta",
+                role="FINANCE",
+                unit="Matriz",
+            )
+
+        payload = auth.CreateUserRequest(
+            name="Usuário Financeiro",
+            email="financeiro@empresa.com",
+            password="senha-forte-123",
+            role="FINANCE",
+            unit="Matriz",
+        )
+        self.assertEqual(payload.role, "FINANCE")
 
 if __name__ == "__main__":
     unittest.main()
