@@ -6,6 +6,7 @@ import { useSortableData } from '../../hooks/useSortableData';
 import { isDateInRange, normalizeDateValue } from '../../utils/dateRange';
 import { normalizeText } from '../../utils/text';
 import { LiquidacaoModal } from '../modals/LiquidacaoModal';
+import { EditarLancamentoModal } from '../modals/EditarLancamentoModal';
 import type { Lancamento } from '../../types';
 
 interface DespesasViewProps {
@@ -16,11 +17,15 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
   const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, isAuditor, flushPersistence, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
+  const [statusFilter, setStatusFilter] = useState('TODOS');
+  const [costCenterFilter, setCostCenterFilter] = useState('TODOS');
+  const [accountFilter, setAccountFilter] = useState('TODAS');
   const [competencia, setCompetencia] = useState('TODOS');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
   const [lancamentoLiquidacao, setLancamentoLiquidacao] = useState<Lancamento | null>(null);
+  const [lancamentoEdicao, setLancamentoEdicao] = useState<Lancamento | null>(null);
 
   const despesas = filteredLancamentos.filter((l) => l.tipo === 'DESPESA');
 
@@ -35,6 +40,8 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
     ...categorias.filter((categoria) => categoria.tipo === 'DESPESA').map((categoria) => categoria.nome),
     ...filteredLancamentos.filter((l) => l.tipo === 'DESPESA').map((l) => l.categoria)
   ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')), [categorias, filteredLancamentos]);
+  const availableCenters = useMemo(() => Array.from(new Set(despesas.map((item) => item.centroCusto).filter(Boolean))).sort(), [despesas]);
+  const availableAccounts = useMemo(() => Array.from(new Set(despesas.map((item) => item.contaBancaria).filter(Boolean))).sort(), [despesas]);
 
   const despesasNoPeriodo = despesas.filter((d) => {
     if (competencia === 'TODOS') return true;
@@ -51,13 +58,16 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
       normalizeText(d.descricao).includes(normalizedSearch) ||
       normalizeText(d.fornecedorCliente).includes(normalizedSearch);
     const matchesCategory = categoryFilter === 'TODAS' || normalizeText(d.categoria) === normalizeText(categoryFilter);
-    return matchesSearch && matchesCategory;
+    const matchesStatus = statusFilter === 'TODOS' || d.status === statusFilter;
+    const matchesCenter = costCenterFilter === 'TODOS' || d.centroCusto === costCenterFilter;
+    const matchesAccount = accountFilter === 'TODAS' || d.contaBancaria === accountFilter;
+    return matchesSearch && matchesCategory && matchesStatus && matchesCenter && matchesAccount;
   });
 
   const { sortedItems: sortedDespesas, sortConfig, requestSort } = useSortableData(filteredDespesas);
 
-  const totalPago = despesasNoPeriodo.filter((d) => d.status === 'PAGO').reduce((a, b) => a + b.valor, 0);
-  const totalPendente = despesasNoPeriodo.filter((d) => d.status === 'PENDENTE').reduce((a, b) => a + b.valor, 0);
+  const totalPago = filteredDespesas.filter((d) => d.status === 'PAGO').reduce((a, b) => a + b.valor, 0);
+  const totalPendente = filteredDespesas.filter((d) => d.status === 'PENDENTE').reduce((a, b) => a + b.valor, 0);
 
   return (
     <div className="space-y-6">
@@ -138,7 +148,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-gray-500 font-semibold">Categoria:</span>
             <select
               value={categoryFilter}
@@ -150,6 +160,9 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                 <option key={categoria} value={categoria}>{categoria}</option>
               ))}
             </select>
+            <select value={costCenterFilter} onChange={(e) => setCostCenterFilter(e.target.value)} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-semibold"><option value="TODOS">Todos os centros</option>{availableCenters.map((value) => <option key={value}>{value}</option>)}</select>
+            <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-semibold"><option value="TODAS">Todas as contas</option>{availableAccounts.map((value) => <option key={value}>{value}</option>)}</select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-semibold"><option value="TODOS">Todos os status</option><option value="PAGO">Pago</option><option value="PENDENTE">Pendente</option></select>
           </div>
         </div>
 
@@ -189,6 +202,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                 <SortableTableHeader label="Fornecedor" sortKey="fornecedor" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Descrição" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Categoria" sortKey="categoria" accessor={(item) => item.categoria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Centro / Conta" sortKey="centro" accessor={(item) => `${item.centroCusto} ${item.contaBancaria}`} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Comprovante" sortKey="comprovante" accessor={(item) => Boolean(item.comprovanteUrl)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Valor (R$)" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
                 <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-center" />
@@ -206,6 +220,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                       {d.categoria}
                     </span>
                   </td>
+                  <td className="p-3 text-gray-600"><div>{d.centroCusto}</div><div className="text-[10px] text-gray-400">{d.contaBancaria}</div></td>
                   <td className="p-3 text-gray-600">
                     {d.comprovanteUrl ? (
                       <a
@@ -256,6 +271,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
                           Pagar
                         </button>
                       )}
+                      <button onClick={() => setLancamentoEdicao(d)} className="p-1 text-blue-600 hover:text-blue-800" title="Editar transação"><span className="material-symbols-outlined text-base">edit</span></button>
                       <button
                         onClick={() => {
                           if (isAuditor) {
@@ -278,7 +294,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
               ))}
               {sortedDespesas.length === 0 && (
                 <tr>
-                  <td colSpan={isAuditor ? 7 : 8} className="p-8 text-center text-gray-500">
+                  <td colSpan={isAuditor ? 8 : 9} className="p-8 text-center text-gray-500">
                     Nenhuma despesa encontrada para os filtros selecionados.
                   </td>
                 </tr>
@@ -310,6 +326,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
           setLancamentoLiquidacao(null);
         }}
       />
+      <EditarLancamentoModal item={lancamentoEdicao} onClose={() => setLancamentoEdicao(null)} />
     </div>
   );
 };

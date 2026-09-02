@@ -7,9 +7,11 @@ import {
   DocumentoOCR,
   SessaoCaixaFisico,
   FechamentoMensal,
+  FechamentoCompetencia,
   AuditLog,
   RegraAutomacao,
   DREItem,
+  DREVersion,
   UnitConfig,
   CategoriaMaster,
   CentroCustoMaster,
@@ -24,7 +26,7 @@ import {
 } from '../types';
 import { ROLE_DEFAULT_VIEW, canAccessAllUnits, canAccessView } from '../config/accessControl';
 import { calculateDueDateSchedule } from '../utils/financialDates';
-import { normalizeDateValue, resolveReferenceMonth } from '../utils/dateRange';
+import { getMonthValue, isMonthValue, normalizeDateValue, resolveReferenceMonth } from '../utils/dateRange';
 import {
   INITIAL_USERS,
   INITIAL_UNITS,
@@ -93,9 +95,11 @@ interface AppContextType {
   documentosOCR: DocumentoOCR[];
   sessaoCaixa: SessaoCaixaFisico;
   fechamentoMensal: FechamentoMensal;
+  fechamentosMensais: FechamentoCompetencia[];
   auditLogs: AuditLog[];
   regrasAutomacao: RegraAutomacao[];
   dreData: DREItem[];
+  dreVersions: DREVersion[];
   users: User[];
   
   toasts: Toast[];
@@ -159,7 +163,7 @@ interface AppContextType {
     comprovanteUrl?: string;
     documentoRef?: string;
   }) => void;
-  updateLancamento: (id: string, l: Partial<Lancamento>) => void;
+  updateLancamento: (id: string, l: Partial<Lancamento>) => boolean;
   deleteLancamento: (id: string) => void;
   marcarLancamentoComoPago: (id: string, dados: DadosLiquidacao) => boolean;
   
@@ -191,9 +195,13 @@ interface AppContextType {
     comprovanteRef?: string;
   }) => void;
   
-  toggleChecklistItemFechamento: (chkId: string) => void;
-  travarFechamentoMensal: () => void;
-  reabrirFechamentoMensal: () => void;
+  iniciarFechamentoMensal: (mesAno: string) => void;
+  toggleChecklistItemFechamento: (mesAno: string, chkId: string) => void;
+  atualizarObservacoesFechamento: (mesAno: string, observacoes: string) => void;
+  travarFechamentoMensal: (mesAno: string) => boolean;
+  reabrirFechamentoMensal: (mesAno: string) => void;
+
+  saveDREVersion: (data: Omit<DREVersion, 'id' | 'versao' | 'criadoEm' | 'criadoPor'>) => DREVersion | null;
   
   addAuditLog: (modulo: string, acao: AuditLog['acao'], descricao: string, valorAnterior?: string, valorNovo?: string) => void;
   
@@ -230,10 +238,27 @@ const INITIAL_APPLICATION_STATE: ApplicationStateSnapshot = {
   documentosOCR: INITIAL_DOCUMENTS_OCR,
   sessaoCaixa: INITIAL_SESSAO_CAIXA,
   fechamentoMensal: INITIAL_FECHAMENTO,
+  fechamentosMensais: [],
   auditLogs: INITIAL_AUDIT_LOGS,
   regrasAutomacao: INITIAL_AUTOMATIONS,
-  dreData: INITIAL_DRE
+  dreData: INITIAL_DRE,
+  dreVersions: []
 };
+
+const createFechamentoChecklist = (): FechamentoMensal['checklist'] => [
+  { id: 'conciliacao-bancaria', item: 'Conciliação bancária de todas as contas concluída', concluido: false },
+  { id: 'contas-pagar-receber', item: 'Contas a pagar e a receber revisadas', concluido: false },
+  { id: 'documentos-ocr', item: 'Documentos e pendências do OCR conferidos', concluido: false },
+  { id: 'dre-revisado', item: 'DRE da competência revisado e validado', concluido: false }
+];
+
+const createFechamentoCompetencia = (mesAno: string): FechamentoCompetencia => ({
+  id: `fech-${mesAno}`,
+  mesAno,
+  status: 'ABERTO',
+  checklist: createFechamentoChecklist(),
+  observacoes: ''
+});
 
 const normalizePersistedFinancialDates = (snapshot: ApplicationStateSnapshot): ApplicationStateSnapshot => {
   const lancamentos = snapshot.lancamentos.map((item) => {
@@ -252,14 +277,34 @@ const normalizePersistedFinancialDates = (snapshot: ApplicationStateSnapshot): A
     lancamentos.map((item) => item.dataCompetencia || item.dataVencimento),
     snapshot.fechamentoMensal?.mesAno
   );
+  const persistedClosings = snapshot.fechamentosMensais || [];
+  const normalizedClosings = persistedClosings.map((closing) => ({
+    ...closing,
+    id: closing.id || `fech-${closing.mesAno}`,
+    checklist: closing.checklist?.length ? closing.checklist : createFechamentoChecklist()
+  }));
+  const existingReferenceClosing = normalizedClosings.find((closing) => closing.mesAno === mesAno);
+  const legacyClosing = snapshot.fechamentoMensal?.mesAno === mesAno
+    ? snapshot.fechamentoMensal
+    : undefined;
+  const referenceClosing: FechamentoCompetencia = existingReferenceClosing || {
+    ...createFechamentoCompetencia(mesAno),
+    ...legacyClosing,
+    id: `fech-${mesAno}`,
+    mesAno,
+    checklist: legacyClosing?.checklist?.length ? legacyClosing.checklist : createFechamentoChecklist()
+  };
+  const fechamentosMensais = existingReferenceClosing
+    ? normalizedClosings
+    : [referenceClosing, ...normalizedClosings];
+  const { id: _referenceClosingId, ...fechamentoMensal } = referenceClosing;
 
   return {
     ...snapshot,
     lancamentos,
-    fechamentoMensal: {
-      ...snapshot.fechamentoMensal,
-      mesAno
-    }
+    fechamentoMensal,
+    fechamentosMensais,
+    dreVersions: snapshot.dreVersions || []
   };
 };
 
@@ -289,9 +334,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [documentosOCR, setDocumentosOCR] = useState<DocumentoOCR[]>(INITIAL_DOCUMENTS_OCR);
   const [sessaoCaixa, setSessaoCaixa] = useState<SessaoCaixaFisico>(INITIAL_SESSAO_CAIXA);
   const [fechamentoMensal, setFechamentoMensal] = useState<FechamentoMensal>(INITIAL_FECHAMENTO);
+  const [fechamentosMensais, setFechamentosMensais] = useState<FechamentoCompetencia[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [regrasAutomacao, setRegrasAutomacao] = useState<RegraAutomacao[]>(INITIAL_AUTOMATIONS);
   const [dreData, setDreData] = useState<DREItem[]>(INITIAL_DRE);
+  const [dreVersions, setDreVersions] = useState<DREVersion[]>([]);
   
   const [toasts, setToasts] = useState<Toast[]>([]);
   const revisionRef = useRef(0);
@@ -346,9 +393,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }))
     },
     fechamentoMensal,
+    fechamentosMensais,
     auditLogs,
     regrasAutomacao,
-    dreData
+    dreData,
+    dreVersions
   }), [
     units,
     categorias,
@@ -362,9 +411,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     documentosOCR,
     sessaoCaixa,
     fechamentoMensal,
+    fechamentosMensais,
     auditLogs,
     regrasAutomacao,
-    dreData
+    dreData,
+    dreVersions
   ]);
 
   const applyPersistentSnapshot = useCallback((snapshot: ApplicationStateSnapshot) => {
@@ -399,9 +450,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDocumentosOCR(snapshot.documentosOCR);
     setSessaoCaixa(snapshot.sessaoCaixa);
     setFechamentoMensal(snapshot.fechamentoMensal);
+    setFechamentosMensais(snapshot.fechamentosMensais);
     setAuditLogs(snapshot.auditLogs);
     setRegrasAutomacao(snapshot.regrasAutomacao);
     setDreData(snapshot.dreData);
+    setDreVersions(snapshot.dreVersions);
     setCurrentUserState(effectiveAuthenticatedUser);
     setCurrentViewState(effectiveAuthenticatedUser ? ROLE_DEFAULT_VIEW[effectiveAuthenticatedUser.role] : 'overview');
     setSelectedUnitState(
@@ -986,6 +1039,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       impactoDRE: dadosBase.impactoDRE || dadosBase.tipo,
       unidade: resolveAllowedUnit(dadosBase.unidade)
     });
+    if (!ensureCompetenciaAberta(dadosBase.dataCompetencia || dadosBase.dataVencimento, 'criar lançamentos')) return;
     if (!ensurePaidLancamentoHasBanco(dadosBase)) return;
     if (!prazosDias || prazosDias.length === 0) {
       prazosDias = [0];
@@ -1097,6 +1151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...baseData,
       unidade: resolveAllowedUnit(baseData.unidade)
     });
+    if (!ensureCompetenciaAberta(baseData.dataCompetencia || baseData.dataVencimento, 'criar lançamentos')) return;
     if (!ensurePaidLancamentoHasBanco(baseData)) return;
     if (numeroParcelas <= 1) {
       addLancamento(baseData);
@@ -1289,6 +1344,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         documentosOCR,
         sessaoCaixa,
         fechamentoMensal,
+        fechamentosMensais,
+        dreVersions,
         auditLogs
       },
       null,
@@ -1296,9 +1353,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const isCompetenciaFechada = (dateValue?: string) => {
+    const month = getMonthValue(dateValue);
+    return Boolean(month && fechamentosMensais.some(
+      (closing) => closing.mesAno === month && closing.status === 'FECHADO'
+    ));
+  };
+
+  const ensureCompetenciaAberta = (dateValue: string | undefined, action: string) => {
+    if (!isCompetenciaFechada(dateValue)) return true;
+    showToast(`A competência ${getMonthValue(dateValue)} está fechada. Reabra o mês antes de ${action}.`, 'error');
+    return false;
+  };
+
   // --- Lancamentos CRUD ---
   const addLancamento = (l: Omit<Lancamento, 'id' | 'criadoEm'>) => {
     if (!checkFinancialPermission('Criar Lançamento')) return;
+    if (!ensureCompetenciaAberta(l.dataCompetencia || l.dataVencimento, 'criar lançamentos')) return;
     l = bindLancamentoToBanco({
       ...l,
       dataCompetencia: l.dataCompetencia || l.dataVencimento,
@@ -1319,19 +1390,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addAuditLog('Lançamentos', 'CRIACAO', `Criou ${l.tipo.toLowerCase()} "${l.descricao}" no valor de R$ ${l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, `Status: ${l.status}`);
   };
 
-  const updateLancamento = (id: string, l: Partial<Lancamento>) => {
-    if (!checkFinancialPermission('Editar Lançamento')) return;
+  const updateLancamento = (id: string, l: Partial<Lancamento>): boolean => {
+    if (!checkFinancialPermission('Editar Lançamento')) return false;
     const existing = lancamentos.find((item) => item.id === id);
-    if (!existing) return;
-    if (existing && !canManageUnit(existing.unidade, 'Editar Lançamento')) return;
+    if (!existing) return false;
+    if (!ensureCompetenciaAberta(existing.dataCompetencia || existing.dataVencimento, 'editar lançamentos')) return false;
+    if (!ensureCompetenciaAberta(l.dataCompetencia || l.dataVencimento, 'mover o lançamento para este mês')) return false;
+    if (!canManageUnit(existing.unidade, 'Editar Lançamento')) return false;
     if (isFinance && currentUser) l = { ...l, unidade: currentUser.unit };
     const updated = bindLancamentoToBanco({ ...existing, ...l });
-    if (!ensurePaidLancamentoHasBanco(updated)) return;
+    if (!ensurePaidLancamentoHasBanco(updated)) return false;
     if (existing.status === 'PAGO') {
       const oldBank = resolveBancoForLancamento(existing);
       if (!oldBank) {
         showToast('Não foi possível estornar o saldo da conta anterior. Vincule uma conta válida.', 'error');
-        return;
+        return false;
       }
       adjustBancoBalance(oldBank.id, -balanceDeltaForLancamento(existing), `Estorno da edição de "${existing.descricao}"`);
     }
@@ -1340,13 +1413,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setLancamentos((prev) => prev.map((item) => (item.id === id ? updated : item)));
     showToast('Alteração preparada. Aguardando confirmação do Neon...', 'info');
-    addAuditLog('Lançamentos', 'EDICAO', `Atualizou lançamento ID ${id}`);
+    addAuditLog(
+      'Lançamentos',
+      'EDICAO',
+      `Atualizou lançamento ID ${id}`,
+      `${existing.categoria} • ${existing.centroCusto}`,
+      `${updated.categoria} • ${updated.centroCusto}`
+    );
+    return true;
   };
 
   const deleteLancamento = (id: string) => {
     if (!checkFinancialPermission('Excluir Lançamento')) return;
     const existing = lancamentos.find((item) => item.id === id);
     if (!existing) return;
+    if (!ensureCompetenciaAberta(existing.dataCompetencia || existing.dataVencimento, 'excluir lançamentos')) return;
     if (existing && !canManageUnit(existing.unidade, 'Excluir Lançamento')) return;
     if (existing.status === 'PAGO') {
       const banco = resolveBancoForLancamento(existing);
@@ -1365,6 +1446,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!checkFinancialPermission('Liquidar Lançamento')) return false;
     const existing = lancamentos.find((item) => item.id === id);
     if (!existing) return false;
+    if (!ensureCompetenciaAberta(existing.dataCompetencia || existing.dataVencimento, 'liquidar lançamentos')) return false;
     if (existing && !canManageUnit(existing.unidade, 'Liquidar Lançamento')) return false;
     if (existing.status === 'PAGO') {
       showToast('Este lançamento já está pago.', 'info');
@@ -1413,6 +1495,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Parcelamentos ---
   const addParcelamento = (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => {
     if (!checkFinancialPermission('Criar Parcelamento')) return;
+    if (!ensureCompetenciaAberta(p.dataInicio, 'criar parcelamentos')) return;
     const id = createEntityId('parc');
     const valorParcela = p.valorTotal / p.numeroParcelas;
     const cronograma = Array.from({ length: p.numeroParcelas }).map((_, idx) => {
@@ -1467,6 +1550,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const linkedLancamento = parcela.lancamentoId
       ? lancamentos.find((item) => item.id === parcela.lancamentoId)
       : undefined;
+    if (linkedLancamento && !ensureCompetenciaAberta(
+      linkedLancamento.dataCompetencia || linkedLancamento.dataVencimento,
+      'liquidar parcelas'
+    )) return false;
     const banco = bancos.find(
       (item) => item.id === dados.bancoId && item.ativo && item.unidade === parcelamento.unidade
     );
@@ -2000,36 +2087,134 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // --- Fechamento Mensal ---
-  const toggleChecklistItemFechamento = (chkId: string) => {
+  const syncLegacyFechamento = (record: FechamentoCompetencia) => {
+    if (record.mesAno !== fechamentoMensal.mesAno) return;
+    const { id: _recordId, ...legacyRecord } = record;
+    setFechamentoMensal(legacyRecord);
+  };
+
+  const iniciarFechamentoMensal = (mesAno: string) => {
+    if (!checkFinancialPermission('Iniciar Fechamento Mensal')) return;
+    if (!isMonthValue(mesAno)) {
+      showToast('Selecione uma competência válida para iniciar o fechamento.', 'error');
+      return;
+    }
+    if (fechamentosMensais.some((item) => item.mesAno === mesAno)) return;
+    const newClosing = createFechamentoCompetencia(mesAno);
+    setFechamentosMensais((prev) => [newClosing, ...prev]);
+    syncLegacyFechamento(newClosing);
+    addAuditLog('Fechamento Mensal', 'CRIACAO', `Iniciou o fechamento da competência ${mesAno}`);
+    showToast(`Fechamento de ${mesAno} iniciado.`, 'success');
+  };
+
+  const updateFechamentoRecord = (
+    mesAno: string,
+    updater: (record: FechamentoCompetencia) => FechamentoCompetencia
+  ) => {
+    const currentRecord = fechamentosMensais.find((record) => record.mesAno === mesAno);
+    if (!currentRecord) return;
+    const updatedRecord = updater(currentRecord);
+    setFechamentosMensais((prev) => prev.map((record) =>
+      record.mesAno === mesAno ? updatedRecord : record
+    ));
+    syncLegacyFechamento(updatedRecord);
+  };
+
+  const toggleChecklistItemFechamento = (mesAno: string, chkId: string) => {
     if (!checkFinancialPermission('Alterar Checklist de Fechamento')) return;
-    setFechamentoMensal((prev) => ({
-      ...prev,
-      checklist: prev.checklist.map((c) =>
+    const closing = fechamentosMensais.find((item) => item.mesAno === mesAno);
+    if (!closing || closing.status === 'FECHADO') return;
+    updateFechamentoRecord(mesAno, (record) => ({
+      ...record,
+      status: record.status === 'ABERTO' ? 'EM_REVISAO' : record.status,
+      checklist: record.checklist.map((c) =>
         c.id === chkId ? { ...c, concluido: !c.concluido, responsavel: currentUser?.name } : c
       )
     }));
   };
 
-  const travarFechamentoMensal = () => {
-    if (!checkAdminPermission('Travar Fechamento Mensal')) return;
-    setFechamentoMensal((prev) => ({
-      ...prev,
+  const atualizarObservacoesFechamento = (mesAno: string, observacoes: string) => {
+    if (!checkFinancialPermission('Editar Observações do Fechamento')) return;
+    updateFechamentoRecord(mesAno, (record) => ({ ...record, observacoes }));
+  };
+
+  const travarFechamentoMensal = (mesAno: string): boolean => {
+    if (!checkAdminPermission('Travar Fechamento Mensal')) return false;
+    const closing = fechamentosMensais.find((item) => item.mesAno === mesAno);
+    if (!closing) {
+      showToast('Inicie o fechamento desta competência antes de travá-la.', 'error');
+      return false;
+    }
+    if (closing.checklist.length === 0 || closing.checklist.some((item) => !item.concluido)) {
+      showToast('Conclua todo o checklist antes de travar a competência.', 'error');
+      return false;
+    }
+    const updatedRecord: FechamentoCompetencia = {
+      ...closing,
       status: 'FECHADO',
       dataFechamento: new Date().toISOString().replace('T', ' ').substring(0, 19),
       fechadoPor: currentUser?.name
-    }));
+    };
+    updateFechamentoRecord(mesAno, () => updatedRecord);
     showToast('Mês TRAVADO! Lançamentos no período foram consolidados.', 'success');
-    addAuditLog('Fechamento Mensal', 'FECHAMENTO', `Aprovou o fechamento mensal de ${fechamentoMensal.mesAno} e travou o período`, 'EM_REVISAO', 'FECHADO');
+    addAuditLog('Fechamento Mensal', 'FECHAMENTO', `Aprovou o fechamento mensal de ${mesAno} e travou o período`, closing.status, 'FECHADO');
+    return true;
   };
 
-  const reabrirFechamentoMensal = () => {
+  const reabrirFechamentoMensal = (mesAno: string) => {
     if (!checkAdminPermission('Reabrir Fechamento Mensal')) return;
-    setFechamentoMensal((prev) => ({
-      ...prev,
-      status: 'EM_REVISAO'
+    const closing = fechamentosMensais.find((item) => item.mesAno === mesAno);
+    if (!closing) return;
+    updateFechamentoRecord(mesAno, (record) => ({
+      ...record,
+      status: 'EM_REVISAO',
+      dataFechamento: undefined,
+      fechadoPor: undefined
     }));
     showToast('Período de fechamento reaberto para edições.', 'info');
-    addAuditLog('Fechamento Mensal', 'EDICAO', `Reabriu o fechamento de ${fechamentoMensal.mesAno} para auditoria`, 'FECHADO', 'EM_REVISAO');
+    addAuditLog('Fechamento Mensal', 'EDICAO', `Reabriu o fechamento de ${mesAno} para auditoria`, closing.status, 'EM_REVISAO');
+  };
+
+  const saveDREVersion = (
+    data: Omit<DREVersion, 'id' | 'versao' | 'criadoEm' | 'criadoPor'>
+  ): DREVersion | null => {
+    if (!checkFinancialPermission('Salvar Versão Manual do DRE')) return null;
+    if (!isMonthValue(data.mesAno)) {
+      showToast('Selecione uma competência válida para salvar o DRE.', 'error');
+      return null;
+    }
+    if (isFinance && currentUser && data.unidade !== currentUser.unit) {
+      showToast('O perfil Financeiro só pode salvar o DRE da própria unidade.', 'error');
+      return null;
+    }
+    if (fechamentosMensais.some((item) => item.mesAno === data.mesAno && item.status === 'FECHADO')) {
+      showToast('Reabra a competência antes de salvar uma nova versão do DRE.', 'error');
+      return null;
+    }
+    if (data.valoresBase.some((item) => !Number.isFinite(item.valor))) {
+      showToast('Revise os valores manuais do DRE.', 'error');
+      return null;
+    }
+    const previousVersion = dreVersions
+      .filter((item) => item.mesAno === data.mesAno && item.unidade === data.unidade)
+      .reduce((max, item) => Math.max(max, item.versao), 0);
+    const newVersion: DREVersion = {
+      ...data,
+      id: createEntityId('dre-versao'),
+      versao: previousVersion + 1,
+      criadoEm: new Date().toISOString(),
+      criadoPor: currentUser?.name || 'Usuário'
+    };
+    setDreVersions((prev) => [newVersion, ...prev]);
+    addAuditLog(
+      'DRE Gerencial',
+      'EDICAO',
+      `Salvou a versão ${newVersion.versao} do DRE de ${data.mesAno} — ${data.unidade}`,
+      previousVersion ? `Versão ${previousVersion}` : 'Cálculo automático',
+      `Versão ${newVersion.versao}`
+    );
+    showToast(`Versão ${newVersion.versao} do DRE preparada para salvar.`, 'success');
+    return newVersion;
   };
 
   // --- Regras ---
@@ -2216,9 +2401,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         documentosOCR,
         sessaoCaixa,
         fechamentoMensal,
+        fechamentosMensais,
         auditLogs,
         regrasAutomacao,
         dreData,
+        dreVersions,
         users,
         toasts,
         showToast,
@@ -2261,9 +2448,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         rejeitarDocumentoOCR,
         registrarMovimentacaoCaixa,
         ajustarSaldoCaixa,
+        iniciarFechamentoMensal,
         toggleChecklistItemFechamento,
+        atualizarObservacoesFechamento,
         travarFechamentoMensal,
         reabrirFechamentoMensal,
+        saveDREVersion,
         addAuditLog,
         toggleRegraAutomacao,
         addRegraAutomacao,

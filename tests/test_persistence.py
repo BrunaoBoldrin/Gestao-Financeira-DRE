@@ -84,6 +84,8 @@ class PersistenceValidationTests(unittest.TestCase):
                     "lancamentoGeradoId": "ocr-1",
                 }
             ],
+            dreVersions=[{"id": "dre-v1", "mesAno": "2026-08", "versao": 1}],
+            fechamentosMensais=[{"id": "fech-2026-08", "mesAno": "2026-08", "status": "EM_REVISAO"}],
         )
 
         revision = save_application_state(state, expected_revision=12, updated_by="user-1")
@@ -96,6 +98,8 @@ class PersistenceValidationTests(unittest.TestCase):
                 inserted[rows[0][0]] = rows
         self.assertEqual([row[1] for row in inserted["lancamentos"]], ["manual-1", "ocr-1"])
         self.assertEqual([row[1] for row in inserted["documentosOCR"]], ["documento-1"])
+        self.assertEqual([row[1] for row in inserted["dreVersions"]], ["dre-v1"])
+        self.assertEqual([row[1] for row in inserted["fechamentosMensais"]], ["fech-2026-08"])
         cursor.execute.assert_any_call(
             unittest.mock.ANY,
             (13, "user-1"),
@@ -125,7 +129,16 @@ class RequestedCleanupTests(unittest.TestCase):
     def test_cleanup_scope_preserves_master_data_and_login(self):
         self.assertEqual(
             set(OPERATIONAL_COLLECTIONS_TO_DELETE),
-            {"units", "bancos", "lancamentos", "parcelamentos", "documentosOCR", "auditLogs"},
+            {
+                "units",
+                "bancos",
+                "lancamentos",
+                "parcelamentos",
+                "documentosOCR",
+                "auditLogs",
+                "dreVersions",
+                "fechamentosMensais",
+            },
         )
         self.assertTrue(
             {"categorias", "centrosCusto", "fornecedores", "condicoesPagamento", "users", "regrasAutomacao", "dreData"}.isdisjoint(

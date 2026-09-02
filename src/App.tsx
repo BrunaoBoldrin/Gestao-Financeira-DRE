@@ -8,7 +8,6 @@ import { AuthScreen } from './components/auth/AuthScreen';
 // Modals
 import { NovoLancamentoModal } from './components/modals/NovoLancamentoModal';
 import { UploadOCRModal } from './components/modals/UploadOCRModal';
-import { NovoParcelamentoModal } from './components/modals/NovoParcelamentoModal';
 
 // Views
 import { OverviewView } from './components/views/OverviewView';
@@ -16,7 +15,6 @@ import { InboxView } from './components/views/InboxView';
 import { PendingReviewView } from './components/views/PendingReviewView';
 import { ReceitasView } from './components/views/ReceitasView';
 import { DespesasView } from './components/views/DespesasView';
-import { ParcelamentosView } from './components/views/ParcelamentosView';
 import { CaixaFisicoView } from './components/views/CaixaFisicoView';
 import { FluxoCaixaView } from './components/views/FluxoCaixaView';
 import { DREGerencialView } from './components/views/DREGerencialView';
@@ -34,12 +32,10 @@ const MainAppContent: React.FC = () => {
 
   const [isNovoLancamentoOpen, setIsNovoLancamentoOpen] = useState(false);
   const [isUploadOCROpen, setIsUploadOCROpen] = useState(false);
-  const [isNovoParcelamentoOpen, setIsNovoParcelamentoOpen] = useState(false);
 
   useEffect(() => {
     setIsNovoLancamentoOpen(false);
     setIsUploadOCROpen(false);
-    setIsNovoParcelamentoOpen(false);
   }, [currentUser?.id]);
 
   if (!currentUser) {
@@ -64,12 +60,6 @@ const MainAppContent: React.FC = () => {
         return (
           <DespesasView
             onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)}
-          />
-        );
-      case 'parcelamentos':
-        return (
-          <ParcelamentosView
-            onOpenNovoParcelamentoModal={() => setIsNovoParcelamentoOpen(true)}
           />
         );
       case 'caixa_fisico':
@@ -140,10 +130,6 @@ const MainAppContent: React.FC = () => {
         onClose={() => setIsUploadOCROpen(false)}
       />
 
-      <NovoParcelamentoModal
-        isOpen={isNovoParcelamentoOpen}
-        onClose={() => setIsNovoParcelamentoOpen(false)}
-      />
     </div>
   );
 };

@@ -103,6 +103,12 @@ const buildChildren = (
   });
 };
 
+const editableAccounts = [
+  ['1', 'Receita bruta'], ['2', 'Deduções da receita'], ['4', 'Custos dos produtos e serviços'],
+  ['6', 'Despesas com vendas'], ['7', 'Despesas administrativas'], ['8', 'Outras receitas/despesas'],
+  ['10', 'Depreciação e amortização'], ['12', 'Resultado financeiro'], ['14', 'IRPJ e CSLL']
+] as const;
+
 export const DREGerencialView: React.FC = () => {
   const {
     dreData,
@@ -112,7 +118,8 @@ export const DREGerencialView: React.FC = () => {
     units,
     currentUser,
     isFinance,
-    fechamentoMensal,
+    fechamentoMensal, fechamentosMensais, dreVersions, saveDREVersion,
+    canExecuteFinancialActions, flushPersistence,
     showToast
   } = useApp();
 
@@ -139,6 +146,10 @@ export const DREGerencialView: React.FC = () => {
   const [unidadeDre, setUnidadeDre] = useState(
     isFinance && currentUser ? currentUser.unit : selectedUnit
   );
+  const [selectedVersionId, setSelectedVersionId] = useState('AUTO');
+  const [editing, setEditing] = useState(false);
+  const [manualValues, setManualValues] = useState<Record<string, string>>({});
+  const [versionNote, setVersionNote] = useState('');
   const comparisonMonth = previousMonth(selectedMonth);
   useEffect(() => {
     if (!isMonthValue(selectedMonth)) setSelectedMonth(currentReferenceMonth);
@@ -157,43 +168,53 @@ export const DREGerencialView: React.FC = () => {
     return Array.from(months).sort((a, b) => b.localeCompare(a));
   }, [currentReferenceMonth, lancamentos, selectedMonth]);
 
+  const versionsForScope = useMemo(() => dreVersions
+    .filter((item) => item.mesAno === selectedMonth && item.unidade === unidadeDre)
+    .sort((a, b) => b.versao - a.versao), [dreVersions, selectedMonth, unidadeDre]);
+  const selectedVersion = selectedVersionId === 'AUTO' ? undefined : versionsForScope.find((item) => item.id === selectedVersionId);
+  const previousVersion = useMemo(() => dreVersions
+    .filter((item) => item.mesAno === comparisonMonth && item.unidade === unidadeDre)
+    .sort((a, b) => b.versao - a.versao)[0], [dreVersions, comparisonMonth, unidadeDre]);
+  useEffect(() => setSelectedVersionId('AUTO'), [selectedMonth, unidadeDre]);
+
   const calculatedDre = useMemo<DREItem[]>(() => {
     const current = summarizeMonth(lancamentos, categorias, selectedMonth, unidadeDre);
     const previous = summarizeMonth(lancamentos, categorias, comparisonMonth, unidadeDre);
     const budget = (code: string) => dreData.find((item) => item.codigo === code)?.orcado || 0;
 
-    const receitaBruta = sumValues(current.RECEITA_BRUTA);
-    const receitaBrutaAnterior = sumValues(previous.RECEITA_BRUTA);
-    const deducoes = sumValues(current.DEDUCAO_RECEITA);
-    const deducoesAnterior = sumValues(previous.DEDUCAO_RECEITA);
+    const versionValue = (code: string, fallback: number, version = selectedVersion) => version?.valoresBase.find((item) => item.codigo === code)?.valor ?? fallback;
+    const receitaBruta = versionValue('1', sumValues(current.RECEITA_BRUTA));
+    const receitaBrutaAnterior = versionValue('1', sumValues(previous.RECEITA_BRUTA), previousVersion);
+    const deducoes = versionValue('2', sumValues(current.DEDUCAO_RECEITA));
+    const deducoesAnterior = versionValue('2', sumValues(previous.DEDUCAO_RECEITA), previousVersion);
     const receitaLiquida = receitaBruta + deducoes;
     const receitaLiquidaAnterior = receitaBrutaAnterior + deducoesAnterior;
-    const custos = sumValues(current.CUSTO_SERVICO_PRODUTO);
-    const custosAnterior = sumValues(previous.CUSTO_SERVICO_PRODUTO);
+    const custos = versionValue('4', sumValues(current.CUSTO_SERVICO_PRODUTO));
+    const custosAnterior = versionValue('4', sumValues(previous.CUSTO_SERVICO_PRODUTO), previousVersion);
     const lucroBruto = receitaLiquida + custos;
     const lucroBrutoAnterior = receitaLiquidaAnterior + custosAnterior;
-    const despesasVendas = sumValues(current.DESPESA_VENDAS);
-    const despesasVendasAnterior = sumValues(previous.DESPESA_VENDAS);
-    const despesasAdministrativas = sumValues(current.DESPESA_ADMINISTRATIVA);
-    const despesasAdministrativasAnterior = sumValues(previous.DESPESA_ADMINISTRATIVA);
-    const outrasOperacionais = sumValues(current.OUTRA_RECEITA_OPERACIONAL) + sumValues(current.OUTRA_DESPESA_OPERACIONAL);
-    const outrasOperacionaisAnterior = sumValues(previous.OUTRA_RECEITA_OPERACIONAL) + sumValues(previous.OUTRA_DESPESA_OPERACIONAL);
+    const despesasVendas = versionValue('6', sumValues(current.DESPESA_VENDAS));
+    const despesasVendasAnterior = versionValue('6', sumValues(previous.DESPESA_VENDAS), previousVersion);
+    const despesasAdministrativas = versionValue('7', sumValues(current.DESPESA_ADMINISTRATIVA));
+    const despesasAdministrativasAnterior = versionValue('7', sumValues(previous.DESPESA_ADMINISTRATIVA), previousVersion);
+    const outrasOperacionais = versionValue('8', sumValues(current.OUTRA_RECEITA_OPERACIONAL) + sumValues(current.OUTRA_DESPESA_OPERACIONAL));
+    const outrasOperacionaisAnterior = versionValue('8', sumValues(previous.OUTRA_RECEITA_OPERACIONAL) + sumValues(previous.OUTRA_DESPESA_OPERACIONAL), previousVersion);
     const ebitda = lucroBruto + despesasVendas + despesasAdministrativas + outrasOperacionais;
     const ebitdaAnterior = lucroBrutoAnterior + despesasVendasAnterior + despesasAdministrativasAnterior + outrasOperacionaisAnterior;
-    const depreciacao = sumValues(current.DEPRECIACAO_AMORTIZACAO);
-    const depreciacaoAnterior = sumValues(previous.DEPRECIACAO_AMORTIZACAO);
+    const depreciacao = versionValue('10', sumValues(current.DEPRECIACAO_AMORTIZACAO));
+    const depreciacaoAnterior = versionValue('10', sumValues(previous.DEPRECIACAO_AMORTIZACAO), previousVersion);
     const ebit = ebitda + depreciacao;
     const ebitAnterior = ebitdaAnterior + depreciacaoAnterior;
-    const financeiro = sumValues(current.RECEITA_FINANCEIRA) + sumValues(current.DESPESA_FINANCEIRA);
-    const financeiroAnterior = sumValues(previous.RECEITA_FINANCEIRA) + sumValues(previous.DESPESA_FINANCEIRA);
+    const financeiro = versionValue('12', sumValues(current.RECEITA_FINANCEIRA) + sumValues(current.DESPESA_FINANCEIRA));
+    const financeiroAnterior = versionValue('12', sumValues(previous.RECEITA_FINANCEIRA) + sumValues(previous.DESPESA_FINANCEIRA), previousVersion);
     const resultadoAntesTributos = ebit + financeiro;
     const resultadoAntesTributosAnterior = ebitAnterior + financeiroAnterior;
-    const tributosLucro = sumValues(current.TRIBUTO_LUCRO);
-    const tributosLucroAnterior = sumValues(previous.TRIBUTO_LUCRO);
+    const tributosLucro = versionValue('14', sumValues(current.TRIBUTO_LUCRO));
+    const tributosLucroAnterior = versionValue('14', sumValues(previous.TRIBUTO_LUCRO), previousVersion);
     const resultadoFinal = resultadoAntesTributos + tributosLucro;
     const resultadoFinalAnterior = resultadoAntesTributosAnterior + tributosLucroAnterior;
 
-    return [
+    const rows: DREItem[] = [
       {
         codigo: '1', descricao: 'RECEITA BRUTA DE VENDAS E SERVIÇOS', tipo: 'TOTAL', nivel: 1,
         mesAtual: receitaBruta, mesAnterior: receitaBrutaAnterior, orcado: budget('1'),
@@ -258,7 +279,51 @@ export const DREGerencialView: React.FC = () => {
       },
       { codigo: '15', descricao: '(=) LUCRO OU PREJUÍZO LÍQUIDO DO PERÍODO', tipo: 'TOTAL', nivel: 1, mesAtual: resultadoFinal, mesAnterior: resultadoFinalAnterior, orcado: budget('15') }
     ];
-  }, [categorias, comparisonMonth, dreData, lancamentos, selectedMonth, unidadeDre]);
+    return rows.map((row) => {
+      if (!row.filhos?.length || (!selectedVersion && !previousVersion)) return row;
+      const childCurrent = row.filhos.reduce((total, child) => total + child.mesAtual, 0);
+      const childPrevious = row.filhos.reduce((total, child) => total + child.mesAnterior, 0);
+      const currentAdjustment = selectedVersion ? row.mesAtual - childCurrent : 0;
+      const previousAdjustment = previousVersion ? row.mesAnterior - childPrevious : 0;
+      if (Math.abs(currentAdjustment) < 0.005 && Math.abs(previousAdjustment) < 0.005) return row;
+      return {
+        ...row,
+        filhos: [...row.filhos, {
+          codigo: `${row.codigo}.AJ`, descricao: 'Ajuste manual da versão', tipo: 'CONTA', nivel: 2,
+          mesAtual: currentAdjustment, mesAnterior: previousAdjustment, orcado: 0
+        }]
+      };
+    });
+  }, [categorias, comparisonMonth, dreData, lancamentos, previousVersion, selectedMonth, selectedVersion, unidadeDre]);
+
+  const openEditor = () => {
+    setManualValues(Object.fromEntries(editableAccounts.map(([code]) => [
+      code,
+      String(calculatedDre.find((item) => item.codigo === code)?.mesAtual || 0)
+    ])));
+    setVersionNote('');
+    setEditing(true);
+  };
+
+  const saveVersion = async () => {
+    const expenseCodes = new Set(['2', '4', '6', '7', '10', '14']);
+    const valoresBase = editableAccounts.map(([codigo]) => {
+      const parsed = Number((manualValues[codigo] || '0').replace(',', '.'));
+      return { codigo, valor: expenseCodes.has(codigo) ? -Math.abs(parsed) : parsed };
+    });
+    if (valoresBase.some((item) => !Number.isFinite(item.valor))) {
+      showToast('Revise os valores: todos precisam ser numéricos.', 'error');
+      return;
+    }
+    const version = saveDREVersion({ mesAno: selectedMonth, unidade: unidadeDre, valoresBase, observacoes: versionNote.trim() });
+    if (!version) return;
+    const saved = await flushPersistence();
+    if (saved) {
+      setSelectedVersionId(version.id);
+      setEditing(false);
+      showToast(`Versão ${version.versao} do DRE salva no banco de dados.`, 'success');
+    } else showToast('A versão ainda não foi confirmada pelo banco de dados.', 'error');
+  };
 
   const toggleExpand = (code: string) => {
     setExpandedNodes((prev) => ({ ...prev, [code]: !prev[code] }));
@@ -383,6 +448,11 @@ export const DREGerencialView: React.FC = () => {
               .filter((unit) => unit.ativa && (!isFinance || unit.nome === currentUser?.unit))
               .map((unit) => <option key={unit.id} value={unit.nome}>{unit.nome}</option>)}
           </select>
+          <select value={selectedVersionId} onChange={(event) => setSelectedVersionId(event.target.value)} className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold bg-white" aria-label="Versão do DRE">
+            <option value="AUTO">Cálculo automático</option>
+            {versionsForScope.map((version) => <option key={version.id} value={version.id}>Versão {version.versao} — {new Date(version.criadoEm).toLocaleDateString('pt-BR')}</option>)}
+          </select>
+          {canExecuteFinancialActions && <button disabled={fechamentosMensais.some((item) => item.mesAno === selectedMonth && item.status === 'FECHADO')} onClick={openEditor} className="px-4 py-2 bg-[#C5A059] text-white rounded-lg text-xs font-bold disabled:bg-gray-300 flex items-center gap-1"><span className="material-symbols-outlined text-base">edit</span>Editar DRE</button>}
           <select
             value={selectedMonth}
             onChange={(event) => setSelectedMonth(event.target.value)}
@@ -449,6 +519,8 @@ export const DREGerencialView: React.FC = () => {
           </table>
         </div>
       </div>
+      {versionsForScope.length > 0 && <div className="bg-white rounded-xl border p-4"><h3 className="text-xs font-bold uppercase mb-3">Versões salvas</h3><div className="space-y-2">{versionsForScope.map((version) => <button key={version.id} onClick={() => setSelectedVersionId(version.id)} className="w-full text-left text-xs border rounded-lg p-3 hover:bg-gray-50"><strong>Versão {version.versao}</strong> • {new Date(version.criadoEm).toLocaleString('pt-BR')} • {version.criadoPor}{version.observacoes ? <span className="block text-gray-500 mt-1">{version.observacoes}</span> : null}</button>)}</div></div>}
+      {editing && <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4"><div className="bg-white rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto"><div className="p-5 border-b"><h3 className="font-black">Salvar nova versão do DRE</h3><p className="text-xs text-gray-500">Valores manuais não alteram as transações; eles criam uma versão auditável desta competência.</p></div><div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">{editableAccounts.map(([code, label]) => <label key={code} className="text-xs font-bold">{code} — {label}<input inputMode="decimal" value={manualValues[code] || ''} onChange={(event) => setManualValues((current) => ({ ...current, [code]: event.target.value }))} className="mt-1 w-full border rounded-lg px-3 py-2" /><span className="text-[10px] font-normal text-gray-500">{['2','4','6','7','10','14'].includes(code) ? 'Informe o valor positivo; será tratado como dedução/despesa.' : 'Pode ser positivo ou negativo.'}</span></label>)}<label className="sm:col-span-2 text-xs font-bold">Observações da versão<textarea rows={3} value={versionNote} onChange={(event) => setVersionNote(event.target.value)} className="mt-1 w-full border rounded-lg p-3" /></label></div><div className="p-5 border-t flex justify-end gap-2"><button onClick={() => setEditing(false)} className="px-4 py-2 text-xs font-bold">Cancelar</button><button onClick={saveVersion} className="px-5 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold">Salvar nova versão</button></div></div></div>}
     </div>
   );
 };
