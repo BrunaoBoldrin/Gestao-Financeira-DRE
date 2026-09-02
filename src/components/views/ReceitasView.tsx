@@ -16,6 +16,7 @@ interface ReceitasViewProps {
 export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamentoModal }) => {
   const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, isAuditor, flushPersistence, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'TODOS' | 'RECEITA' | 'DESPESA'>('TODOS');
   const [statusFilter, setStatusFilter] = useState<string>('TODOS');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
   const [costCenterFilter, setCostCenterFilter] = useState('TODOS');
@@ -28,20 +29,20 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
   const [lancamentoLiquidacao, setLancamentoLiquidacao] = useState<Lancamento | null>(null);
   const [lancamentoEdicao, setLancamentoEdicao] = useState<Lancamento | null>(null);
 
-  const receitas = filteredLancamentos.filter((l) => l.tipo === 'RECEITA');
+  const receitas = filteredLancamentos.filter((item) => typeFilter === 'TODOS' || item.tipo === typeFilter);
 
   const availableMonths = useMemo(() => Array.from(new Set<string>([
     currentMonth,
     ...filteredLancamentos
-      .filter((l) => l.tipo === 'RECEITA')
+      .filter((item) => typeFilter === 'TODOS' || item.tipo === typeFilter)
       .map((l) => normalizeDateValue(l.dataVencimento).substring(0, 7))
       .filter(Boolean)
-  ])).sort((a, b) => b.localeCompare(a)), [currentMonth, filteredLancamentos]);
+  ])).sort((a, b) => b.localeCompare(a)), [currentMonth, filteredLancamentos, typeFilter]);
 
   const availableCategories = useMemo(() => Array.from(new Set<string>([
-    ...categorias.filter((categoria) => categoria.tipo === 'RECEITA').map((categoria) => categoria.nome),
-    ...filteredLancamentos.filter((l) => l.tipo === 'RECEITA').map((l) => l.categoria)
-  ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')), [categorias, filteredLancamentos]);
+    ...categorias.filter((categoria) => typeFilter === 'TODOS' || categoria.tipo === typeFilter).map((categoria) => categoria.nome),
+    ...filteredLancamentos.filter((item) => typeFilter === 'TODOS' || item.tipo === typeFilter).map((item) => item.categoria)
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR')), [categorias, filteredLancamentos, typeFilter]);
   const availableCenters = useMemo(() => Array.from(new Set(receitas.map((item) => item.centroCusto).filter(Boolean))).sort(), [receitas]);
   const availableAccounts = useMemo(() => Array.from(new Set(receitas.map((item) => item.contaBancaria).filter(Boolean))).sort(), [receitas]);
 
@@ -68,8 +69,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
 
   const { sortedItems: sortedReceitas, sortConfig, requestSort } = useSortableData(filteredReceitas);
 
-  const totalPago = filteredReceitas.filter((r) => r.status === 'PAGO').reduce((a, b) => a + b.valor, 0);
-  const totalPendente = filteredReceitas.filter((r) => r.status === 'PENDENTE').reduce((a, b) => a + b.valor, 0);
+  const totalReceitas = filteredReceitas.filter((item) => item.tipo === 'RECEITA' && item.status !== 'CANCELADO').reduce((total, item) => total + item.valor, 0);
+  const totalDespesas = filteredReceitas.filter((item) => item.tipo === 'DESPESA' && item.status !== 'CANCELADO').reduce((total, item) => total + item.valor, 0);
 
   return (
     <div className="space-y-6">
@@ -78,10 +79,10 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
         <div>
           <h2 className="text-lg font-bold text-[#0b1c30] flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-600">trending_up</span>
-            Controle de Receitas & Entradas
+            Receitas e Despesas
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Gestão de faturamento de procedimentos, vendas de dermocosméticos e recebimentos.
+            Consulte, filtre e edite todas as movimentações financeiras em uma única página.
           </p>
         </div>
 
@@ -102,18 +103,18 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           }`}
         >
           <span className="material-symbols-outlined text-base">add_circle</span>
-          Nova Receita
+          Novo Lançamento
         </button>}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
-              Receitas Realizadas (Pagas)
+              Total de Receitas
             </p>
             <p className="text-2xl font-black text-emerald-950 mt-1">
-              R$ {totalPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {totalReceitas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
           </div>
           <span className="material-symbols-outlined text-emerald-600 text-3xl">check_circle</span>
@@ -122,14 +123,15 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">
-              A Receber / Pendente
+              Total de Despesas
             </p>
             <p className="text-2xl font-black text-amber-950 mt-1">
-              R$ {totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {totalDespesas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </p>
           </div>
-          <span className="material-symbols-outlined text-amber-600 text-3xl">hourglass_empty</span>
+          <span className="material-symbols-outlined text-amber-600 text-3xl">trending_down</span>
         </div>
+        <div className={`${totalReceitas - totalDespesas >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-rose-50 border-rose-200'} border p-4 rounded-xl flex items-center justify-between`}><div><p className="text-xs font-bold uppercase tracking-wider">Resultado filtrado</p><p className="text-2xl font-black mt-1">R$ {(totalReceitas - totalDespesas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></div><span className="material-symbols-outlined text-blue-600 text-3xl">account_balance_wallet</span></div>
       </div>
 
       {/* Filters & Table */}
@@ -149,6 +151,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500 font-semibold">Tipo:</span>
+            <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value as typeof typeFilter); setCategoryFilter('TODAS'); }} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs font-semibold"><option value="TODOS">Receitas e despesas</option><option value="RECEITA">Somente receitas</option><option value="DESPESA">Somente despesas</option></select>
             <span className="text-xs text-gray-500 font-semibold">Categoria:</span>
             <select
               value={categoryFilter}
@@ -171,6 +175,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
               <option value="TODOS">Todos os Status</option>
               <option value="PAGO">Pago</option>
               <option value="PENDENTE">Pendente</option>
+              <option value="ATRASADO">Atrasado</option>
+              <option value="CANCELADO">Cancelado</option>
             </select>
           </div>
         </div>
@@ -208,11 +214,12 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
                 <SortableTableHeader label="Data Venc." sortKey="vencimento" accessor={(item) => normalizeDateValue(item.dataVencimento)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
-                <SortableTableHeader label="Paciente / Cliente" sortKey="cliente" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
-                <SortableTableHeader label="Descrição do Procedimento" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Fornecedor / Cliente" sortKey="cliente" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Descrição" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Categoria / Centro" sortKey="categoria" accessor={(item) => `${item.categoria} ${item.centroCusto}`} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Forma Pgto" sortKey="forma" accessor={(item) => item.formaPagamento} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
-                <SortableTableHeader label="Conta Destino" sortKey="conta" accessor={(item) => item.contaBancaria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Conta Bancária" sortKey="conta" accessor={(item) => item.contaBancaria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Anexo" sortKey="anexo" accessor={(item) => Boolean(item.comprovanteUrl)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Valor (R$)" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />
                 <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-center" />
@@ -223,6 +230,7 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
               {sortedReceitas.map((r) => (
                 <tr key={r.id} className="hover:bg-gray-50 transition">
                   <td className="p-3 font-semibold text-gray-600">{r.dataVencimento}</td>
+                  <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.tipo === 'RECEITA' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>{r.tipo}</span></td>
                   <td className="p-3 font-bold text-[#0b1c30]">{r.fornecedorCliente}</td>
                   <td className="p-3 font-medium text-gray-800">{r.descricao}</td>
                   <td className="p-3 text-gray-600"><div>{r.categoria}</div><div className="text-[10px] text-gray-400">{r.centroCusto}</div></td>
@@ -244,13 +252,16 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
                       <span className="text-gray-400 text-[10px] italic">Sem anexo</span>
                     )}
                   </td>
-                  <td className="p-3 text-right font-black text-emerald-700">
-                    R$ {r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  <td className={`p-3 text-right font-black ${r.tipo === 'RECEITA' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {r.tipo === 'RECEITA' ? '+' : '−'} R$ {r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </td>
                   <td className="p-3 text-center">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        r.status === 'PAGO' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        r.status === 'PAGO' ? 'bg-emerald-100 text-emerald-800'
+                          : r.status === 'CANCELADO' ? 'bg-gray-200 text-gray-700'
+                            : r.status === 'ATRASADO' ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-800'
                       }`}
                     >
                       {r.status}
@@ -275,7 +286,7 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
                           }`}
                           title={isAuditor ? 'Perfil Auditoria não pode liquidar' : 'Marcar como Pago'}
                         >
-                          Liquidar
+                          {r.tipo === 'RECEITA' ? 'Receber' : 'Pagar'}
                         </button>
                       )}
                       <button onClick={() => setLancamentoEdicao(r)} className="p-1 text-blue-600 hover:text-blue-800" title="Editar transação"><span className="material-symbols-outlined text-base">edit</span></button>
@@ -301,8 +312,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
               ))}
               {sortedReceitas.length === 0 && (
                 <tr>
-                  <td colSpan={isAuditor ? 9 : 10} className="p-8 text-center text-gray-500">
-                    Nenhuma receita encontrada para os filtros selecionados.
+                  <td colSpan={isAuditor ? 10 : 11} className="p-8 text-center text-gray-500">
+                    Nenhuma movimentação encontrada para os filtros selecionados.
                   </td>
                 </tr>
               )}
@@ -326,8 +337,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           const saved = await flushPersistence();
           showToast(
             saved
-              ? 'Recebimento confirmado e salvo no Neon.'
-              : 'O recebimento ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+              ? `${lancamentoLiquidacao.tipo === 'RECEITA' ? 'Recebimento' : 'Pagamento'} confirmado e salvo no Neon.`
+              : 'A liquidação ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
             saved ? 'success' : 'error'
           );
           setLancamentoLiquidacao(null);

@@ -14,7 +14,6 @@ import { OverviewView } from './components/views/OverviewView';
 import { InboxView } from './components/views/InboxView';
 import { PendingReviewView } from './components/views/PendingReviewView';
 import { ReceitasView } from './components/views/ReceitasView';
-import { DespesasView } from './components/views/DespesasView';
 import { CaixaFisicoView } from './components/views/CaixaFisicoView';
 import { FluxoCaixaView } from './components/views/FluxoCaixaView';
 import { DREGerencialView } from './components/views/DREGerencialView';
@@ -57,11 +56,7 @@ const MainAppContent: React.FC = () => {
       case 'receitas':
         return <ReceitasView onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)} />;
       case 'despesas':
-        return (
-          <DespesasView
-            onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)}
-          />
-        );
+        return <ReceitasView onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)} />;
       case 'caixa_fisico':
         return <CaixaFisicoView />;
       case 'fluxo_caixa':
