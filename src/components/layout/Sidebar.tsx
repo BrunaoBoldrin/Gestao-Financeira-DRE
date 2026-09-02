@@ -39,7 +39,6 @@ export const Sidebar: React.FC = () => {
       items: [
         { key: 'receitas', label: 'Receitas', icon: 'trending_up' },
         { key: 'despesas', label: 'Despesas', icon: 'trending_down' },
-        { key: 'parcelamentos', label: 'Parcelamentos', icon: 'view_kanban' },
         { key: 'caixa_fisico', label: 'Caixa Físico', icon: 'point_of_sale' }
       ]
     },

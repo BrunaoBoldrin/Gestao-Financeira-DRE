@@ -6,7 +6,6 @@ export type ViewKey =
   | 'pending_review'
   | 'receitas'
   | 'despesas'
-  | 'parcelamentos'
   | 'caixa_fisico'
   | 'fluxo_caixa'
   | 'dre'
@@ -238,6 +237,24 @@ export interface FechamentoMensal {
   observacoes?: string;
 }
 
+export interface FechamentoCompetencia extends FechamentoMensal {
+  id: string;
+}
+
+export interface DREVersion {
+  id: string;
+  mesAno: string;
+  unidade: string;
+  versao: number;
+  criadoEm: string;
+  criadoPor: string;
+  observacoes?: string;
+  valoresBase: {
+    codigo: string;
+    valor: number;
+  }[];
+}
+
 export interface AuditLog {
   id: string;
   dataHora: string;
@@ -336,9 +353,11 @@ export interface ApplicationStateSnapshot {
   documentosOCR: DocumentoOCR[];
   sessaoCaixa: SessaoCaixaFisico;
   fechamentoMensal: FechamentoMensal;
+  fechamentosMensais: FechamentoCompetencia[];
   auditLogs: AuditLog[];
   regrasAutomacao: RegraAutomacao[];
   dreData: DREItem[];
+  dreVersions: DREVersion[];
 }
 
 export type PersistenceStatus =

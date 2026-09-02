@@ -1,167 +1,50 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { getMonthValue, resolveReferenceMonth } from '../../utils/dateRange';
 
 export const FechamentoMensalView: React.FC = () => {
-  const {
-    fechamentoMensal,
-    toggleChecklistItemFechamento,
-    travarFechamentoMensal,
-    reabrirFechamentoMensal,
-    isAdmin,
-    canExecuteFinancialActions
-  } = useApp();
+  const app = useApp();
+  const referenceMonth = resolveReferenceMonth(app.lancamentos.map((item) => item.dataCompetencia || item.dataVencimento));
+  const [month, setMonth] = useState(referenceMonth);
+  const [confirmLock, setConfirmLock] = useState(false);
+  const months = useMemo(() => Array.from(new Set([
+    referenceMonth,
+    ...app.lancamentos.map((item) => getMonthValue(item.dataCompetencia || item.dataVencimento)),
+    ...app.fechamentosMensais.map((item) => item.mesAno)
+  ].filter(Boolean))).sort((a, b) => b.localeCompare(a)), [referenceMonth, app.lancamentos, app.fechamentosMensais]);
+  const closing = app.fechamentosMensais.find((item) => item.mesAno === month);
+  const entries = app.lancamentos.filter((item) => getMonthValue(item.dataCompetencia || item.dataVencimento) === month);
+  const done = closing?.checklist.filter((item) => item.concluido).length || 0;
+  const total = closing?.checklist.length || 0;
+  const progress = total ? Math.round(done / total * 100) : 0;
+  const persist = async (message: string) => {
+    const saved = await app.flushPersistence();
+    app.showToast(saved ? message : 'A alteração ainda não foi confirmada pelo banco de dados.', saved ? 'success' : 'error');
+  };
 
-  const [mostrarConfirmacaoTrava, setMostrarConfirmacaoTrava] = useState(false);
-
-  const totalConcluido = fechamentoMensal.checklist.filter((c) => c.concluido).length;
-  const totalItens = fechamentoMensal.checklist.length;
-  const progressoChecklistPct = Math.round((totalConcluido / totalItens) * 100);
-
-  return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                fechamentoMensal.status === 'FECHADO'
-                  ? 'bg-rose-100 text-rose-800'
-                  : 'bg-amber-100 text-amber-800'
-              }`}
-            >
-              Status Competência {fechamentoMensal.mesAno}: {fechamentoMensal.status}
-            </span>
-            {fechamentoMensal.fechadoPor && (
-              <span className="text-xs text-gray-500">• Travado por {fechamentoMensal.fechadoPor}</span>
-            )}
-          </div>
-          <h2 className="text-lg font-bold text-[#0b1c30] flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#131b2e]">lock_clock</span>
-            Fechamento Mensal
-          </h2>
-        </div>
-
-        {isAdmin && (fechamentoMensal.status !== 'FECHADO' ? (
-          <button
-            onClick={() => setMostrarConfirmacaoTrava(true)}
-            disabled={progressoChecklistPct < 100}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              progressoChecklistPct === 100
-                ? 'bg-[#131b2e] text-white hover:bg-[#0b1c30] shadow-md'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            <span className="material-symbols-outlined text-base">lock</span>
-            Aprovar & Travar Período
-          </button>
-        ) : (
-          <button
-            onClick={reabrirFechamentoMensal}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition shadow-xs flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-base">lock_open</span>
-            Reabrir Competência para Edição
-          </button>
-        ))}
-      </div>
-
-      {/* Checklist Grid */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* Verification Checklist */}
-        <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-            <div>
-              <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
-                Checklist Obrigatório de Validação ({totalConcluido}/{totalItens})
-              </h3>
-              <p className="text-[11px] text-gray-500">
-                Todos os itens devem ser conferidos antes de travar o mês.
-              </p>
-            </div>
-            <span className="text-xs font-black text-[#131b2e] bg-[#eff4ff] px-2.5 py-1 rounded">
-              {progressoChecklistPct}% Concluído
-            </span>
-          </div>
-
-          <div className="space-y-2.5">
-            {fechamentoMensal.checklist.map((chk) => (
-              <div
-                key={chk.id}
-                onClick={() =>
-                  canExecuteFinancialActions && fechamentoMensal.status !== 'FECHADO' && toggleChecklistItemFechamento(chk.id)
-                }
-                className={`p-3.5 rounded-xl border transition flex items-center justify-between gap-3 ${
-                  canExecuteFinancialActions && fechamentoMensal.status !== 'FECHADO' ? 'cursor-pointer' : 'cursor-default'
-                } ${
-                  chk.concluido
-                    ? 'bg-emerald-50/60 border-emerald-200'
-                    : 'bg-white border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-md flex items-center justify-center font-bold text-xs ${
-                      chk.concluido ? 'bg-emerald-600 text-white' : 'border border-gray-300 bg-white'
-                    }`}
-                  >
-                    {chk.concluido && <span className="material-symbols-outlined text-sm">check</span>}
-                  </div>
-                  <span
-                    className={`text-xs font-semibold ${
-                      chk.concluido ? 'text-emerald-950 line-through' : 'text-[#0b1c30]'
-                    }`}
-                  >
-                    {chk.item}
-                  </span>
-                </div>
-
-                {chk.responsavel && (
-                  <span className="text-[10px] text-gray-500 font-medium">{chk.responsavel}</span>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
-            <strong>Atenção:</strong> Ao travar a competência, nenhum usuário poderá criar, editar ou excluir lançamentos financeiros com data do mês de {fechamentoMensal.mesAno}.
-          </div>
-        </div>
-      </div>
-
-      {/* Confirmation Modal */}
-      {mostrarConfirmacaoTrava && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden p-6 space-y-4">
-            <div className="flex items-center gap-3 text-rose-700">
-              <span className="material-symbols-outlined text-3xl">lock</span>
-              <h3 className="font-bold text-base text-[#0b1c30]">Confirmar Trava do Mês?</h3>
-            </div>
-
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Você está prestes a congelar e travar o mês de <strong>{fechamentoMensal.mesAno}</strong>. Todas as receitas, despesas e relatórios financeiros serão consolidados.
-            </p>
-
-            <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
-              <button
-                onClick={() => setMostrarConfirmacaoTrava(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-xs font-semibold text-gray-700"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  travarFechamentoMensal();
-                  setMostrarConfirmacaoTrava(false);
-                }}
-                className="px-5 py-2 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30]"
-              >
-                Sim, Travar Período
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+  return <div className="space-y-6">
+    <div className="bg-white p-5 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div><h2 className="text-lg font-bold flex items-center gap-2"><span className="material-symbols-outlined">lock_clock</span>Fechamentos Mensais</h2><p className="text-xs text-gray-500">Checklist e trava independentes para cada competência.</p></div>
+      <label className="text-xs font-bold">Competência <select value={month} onChange={(event) => setMonth(event.target.value)} className="ml-2 px-3 py-2 border rounded-lg bg-white">{months.map((value) => <option key={value} value={value}>{value.split('-').reverse().join('/')}</option>)}</select></label>
     </div>
-  );
+
+    {!closing ? <div className="bg-white rounded-xl border p-8 text-center">
+      <span className="material-symbols-outlined text-4xl text-gray-400">event_available</span><h3 className="font-bold mt-2">Fechamento ainda não iniciado</h3><p className="text-xs text-gray-500 mt-1">Há {entries.length} lançamento(s) nesta competência.</p>
+      {app.canExecuteFinancialActions && <button onClick={async () => { app.iniciarFechamentoMensal(month); await persist('Fechamento iniciado e salvo.'); }} className="mt-4 px-4 py-2 rounded-lg bg-[#131b2e] text-white text-xs font-bold">Iniciar fechamento</button>}
+    </div> : <>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[['Status', closing.status], ['Lançamentos', String(entries.length)], ['Checklist', `${done}/${total} — ${progress}%`]].map(([label, value]) => <div key={label} className="bg-white border rounded-xl p-4"><p className="text-[10px] uppercase font-bold text-gray-500">{label}</p><p className="font-black mt-1">{value}</p></div>)}
+      </div>
+      <div className="bg-white rounded-xl border p-5 space-y-4">
+        <div className="flex justify-between"><div><h3 className="text-xs font-bold uppercase">Checklist obrigatório</h3><p className="text-[11px] text-gray-500">Todos os itens precisam ser concluídos.</p></div><span className="font-black text-sm">{progress}%</span></div>
+        <div className="h-2 bg-gray-100 rounded-full"><div className="h-full bg-emerald-600 rounded-full" style={{ width: `${progress}%` }} /></div>
+        {closing.checklist.map((item) => <button type="button" key={item.id} disabled={!app.canExecuteFinancialActions || closing.status === 'FECHADO'} onClick={() => app.toggleChecklistItemFechamento(month, item.id)} className={`w-full p-3 rounded-xl border text-left flex gap-3 items-center disabled:cursor-default ${item.concluido ? 'bg-emerald-50 border-emerald-200' : 'bg-white'}`}><span className="material-symbols-outlined">{item.concluido ? 'check_box' : 'check_box_outline_blank'}</span><span className="text-xs font-semibold flex-1">{item.item}</span><span className="text-[10px] text-gray-500">{item.responsavel}</span></button>)}
+        <label className="text-xs font-bold block">Observações<textarea key={closing.id} defaultValue={closing.observacoes || ''} disabled={!app.canExecuteFinancialActions || closing.status === 'FECHADO'} onBlur={(event) => app.atualizarObservacoesFechamento(month, event.target.value)} className="mt-1 w-full border rounded-lg p-3 font-normal" rows={3} /></label>
+        {app.isAdmin && <div className="flex justify-end">{closing.status === 'FECHADO' ? <button onClick={async () => { app.reabrirFechamentoMensal(month); await persist('Competência reaberta e salva.'); }} className="px-4 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold">Reabrir competência</button> : <button disabled={progress < 100} onClick={() => setConfirmLock(true)} className="px-4 py-2 rounded-lg bg-[#131b2e] text-white text-xs font-bold disabled:bg-gray-200 disabled:text-gray-400">Aprovar e travar período</button>}</div>}
+      </div>
+    </>}
+
+    {app.fechamentosMensais.length > 0 && <div className="bg-white rounded-xl border overflow-hidden"><div className="p-4 border-b text-xs font-bold uppercase">Histórico de competências</div>{[...app.fechamentosMensais].sort((a, b) => b.mesAno.localeCompare(a.mesAno)).map((item) => <div key={item.id} className="px-4 py-3 border-b last:border-0 flex justify-between text-xs"><span className="font-bold">{item.mesAno.split('-').reverse().join('/')}</span><span>{item.status}{item.fechadoPor ? ` • ${item.fechadoPor}` : ''}</span></div>)}</div>}
+    {confirmLock && <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-xl p-6 max-w-md"><h3 className="font-bold">Travar {month.split('-').reverse().join('/')}?</h3><p className="text-xs text-gray-600 mt-2">Criações, edições, exclusões e liquidações nessa competência ficarão bloqueadas.</p><div className="flex justify-end gap-2 mt-5"><button onClick={() => setConfirmLock(false)} className="px-4 py-2 text-xs font-bold">Cancelar</button><button onClick={async () => { if (app.travarFechamentoMensal(month)) await persist('Competência travada e salva.'); setConfirmLock(false); }} className="px-4 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold">Confirmar trava</button></div></div></div>}
+  </div>;
 };

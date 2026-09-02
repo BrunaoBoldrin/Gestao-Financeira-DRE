@@ -21,6 +21,8 @@ class ApplicationState(BaseModel):
     auditLogs: list[dict[str, Any]] = Field(default_factory=list)
     regrasAutomacao: list[dict[str, Any]] = Field(default_factory=list)
     dreData: list[dict[str, Any]] = Field(default_factory=list)
+    dreVersions: list[dict[str, Any]] = Field(default_factory=list)
+    fechamentosMensais: list[dict[str, Any]] = Field(default_factory=list)
     sessaoCaixa: dict[str, Any] = Field(default_factory=dict)
     fechamentoMensal: dict[str, Any] = Field(default_factory=dict)
 

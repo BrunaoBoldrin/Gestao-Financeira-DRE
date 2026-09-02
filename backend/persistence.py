@@ -26,6 +26,8 @@ COLLECTIONS = (
     "auditLogs",
     "regrasAutomacao",
     "dreData",
+    "dreVersions",
+    "fechamentosMensais",
 )
 SINGLETONS = ("sessaoCaixa", "fechamentoMensal")
 OPERATIONAL_CLEANUP_VERSION = 2
@@ -36,6 +38,8 @@ OPERATIONAL_COLLECTIONS_TO_DELETE = (
     "parcelamentos",
     "documentosOCR",
     "auditLogs",
+    "dreVersions",
+    "fechamentosMensais",
 )
 EMPTY_OPERATIONAL_SINGLETONS: dict[str, dict[str, Any]] = {
     "sessaoCaixa": {

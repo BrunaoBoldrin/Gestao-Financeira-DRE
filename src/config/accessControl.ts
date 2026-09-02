@@ -12,7 +12,6 @@ export const VIEW_PERMISSIONS: Record<ViewKey, readonly UserRole[]> = {
   import_excel: FINANCIAL_ROLES,
   receitas: ALL_ROLES,
   despesas: ALL_ROLES,
-  parcelamentos: ALL_ROLES,
   caixa_fisico: ALL_ROLES,
   fluxo_caixa: ALL_ROLES,
   dre: ALL_ROLES,
