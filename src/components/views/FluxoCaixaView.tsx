@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { getDateRangeBounds, isDateInRange, isMonthValue, normalizeDateValue, resolveReferenceMonth } from '../../utils/dateRange';
+import { getCurrentMonthValue, getDateRangeBounds, isDateInRange, isMonthValue, normalizeDateValue, resolveReferenceMonth } from '../../utils/dateRange';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import type { Lancamento } from '../../types';
@@ -94,15 +94,9 @@ const FluxoTooltip = ({ active, payload, label }: any) => {
 };
 
 export const FluxoCaixaView: React.FC = () => {
-  const { lancamentos, bancos, units, selectedUnit, fechamentoMensal, isFinance, currentUser } = useApp();
+  const { lancamentos, bancos, units, selectedUnit, isFinance, currentUser } = useApp();
   const [unidadeFluxo, setUnidadeFluxo] = useState(isFinance && currentUser ? currentUser.unit : selectedUnit);
-  const referenciaCalendario = useMemo(
-    () => resolveReferenceMonth(
-      lancamentos.map((item) => item.dataVencimento),
-      fechamentoMensal.mesAno
-    ),
-    [fechamentoMensal.mesAno, lancamentos]
-  );
+  const referenciaCalendario = getCurrentMonthValue();
   const competenciaAbertaRange = useMemo(() => getCompetenciaRange(referenciaCalendario), [referenciaCalendario]);
   const [dataInicioInput, setDataInicioInput] = useState(competenciaAbertaRange.inicio);
   const [dataFimInput, setDataFimInput] = useState(competenciaAbertaRange.fim);

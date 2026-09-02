@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { LancamentosPeriodFilter } from '../common/LancamentosPeriodFilter';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
-import { isDateInRange, normalizeDateValue } from '../../utils/dateRange';
+import { getCurrentMonthValue, isDateInRange, normalizeDateValue } from '../../utils/dateRange';
 import { normalizeText } from '../../utils/text';
 import { LiquidacaoModal } from '../modals/LiquidacaoModal';
 import { EditarLancamentoModal } from '../modals/EditarLancamentoModal';
@@ -20,7 +20,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
   const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
   const [costCenterFilter, setCostCenterFilter] = useState('TODOS');
   const [accountFilter, setAccountFilter] = useState('TODAS');
-  const [competencia, setCompetencia] = useState('TODOS');
+  const currentMonth = getCurrentMonthValue();
+  const [competencia, setCompetencia] = useState(currentMonth);
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
@@ -29,12 +30,13 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
 
   const receitas = filteredLancamentos.filter((l) => l.tipo === 'RECEITA');
 
-  const availableMonths = useMemo(() => Array.from(new Set<string>(
-    filteredLancamentos
+  const availableMonths = useMemo(() => Array.from(new Set<string>([
+    currentMonth,
+    ...filteredLancamentos
       .filter((l) => l.tipo === 'RECEITA')
       .map((l) => normalizeDateValue(l.dataVencimento).substring(0, 7))
       .filter(Boolean)
-  )).sort((a, b) => b.localeCompare(a)), [filteredLancamentos]);
+  ])).sort((a, b) => b.localeCompare(a)), [currentMonth, filteredLancamentos]);
 
   const availableCategories = useMemo(() => Array.from(new Set<string>([
     ...categorias.filter((categoria) => categoria.tipo === 'RECEITA').map((categoria) => categoria.nome),

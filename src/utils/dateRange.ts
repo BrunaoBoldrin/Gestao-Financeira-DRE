@@ -50,6 +50,9 @@ export const getMonthValue = (value?: string | null) => {
   return normalizedDate ? normalizedDate.substring(0, 7) : '';
 };
 
+export const getCurrentMonthValue = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
 export const resolveReferenceMonth = (
   values: Array<string | undefined | null>,
   preferredMonth?: string | null,
