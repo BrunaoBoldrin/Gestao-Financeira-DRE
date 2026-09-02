@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Lancamento } from '../../types';
+import { getMonthValue, isMonthValue, resolveReferenceMonth } from '../../utils/dateRange';
 
 interface CompetenciaSelectProps {
   value: string;
@@ -12,6 +13,7 @@ interface CompetenciaSelectProps {
 }
 
 export const formatCompetencia = (month: string) => {
+  if (!isMonthValue(month)) return 'Competência inválida';
   const [year, monthNumber] = month.split('-').map(Number);
   const label = new Date(year, monthNumber - 1, 1).toLocaleDateString('pt-BR', {
     month: 'long',
@@ -30,15 +32,21 @@ export const CompetenciaSelect: React.FC<CompetenciaSelectProps> = ({
   className = ''
 }) => {
   const availableMonths = useMemo(() => {
-    const months = new Set<string>(lancamentos.map((item) => item.dataVencimento.substring(0, 7)));
-    const [referenceYear, referenceMonthNumber] = referenceMonth.split('-').map(Number);
+    const months = new Set<string>(
+      lancamentos.map((item) => getMonthValue(item.dataVencimento)).filter(isMonthValue)
+    );
+    const safeReferenceMonth = resolveReferenceMonth(
+      lancamentos.map((item) => item.dataVencimento),
+      referenceMonth
+    );
+    const [referenceYear, referenceMonthNumber] = safeReferenceMonth.split('-').map(Number);
 
     for (let index = 0; index < 12; index += 1) {
       const date = new Date(referenceYear, referenceMonthNumber - 1 - index, 1);
       months.add(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
     }
 
-    if (value !== 'TODOS') months.add(value);
+    if (isMonthValue(value)) months.add(value);
     return Array.from(months).sort((a, b) => b.localeCompare(a));
   }, [lancamentos, referenceMonth, value]);
 

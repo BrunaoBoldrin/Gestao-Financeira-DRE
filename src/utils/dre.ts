@@ -1,4 +1,5 @@
 import type { CategoriaMaster, GrupoDRE, Lancamento, TipoLancamento } from '../types';
+import { normalizeDateValue } from './dateRange';
 
 export interface GrupoDREOption {
   value: GrupoDRE;
@@ -28,7 +29,7 @@ export const getDefaultGrupoDRE = (tipo: TipoLancamento): GrupoDRE =>
   tipo === 'RECEITA' ? 'RECEITA_BRUTA' : 'DESPESA_ADMINISTRATIVA';
 
 export const getLancamentoCompetencia = (lancamento: Lancamento) =>
-  lancamento.dataCompetencia || lancamento.dataVencimento;
+  normalizeDateValue(lancamento.dataCompetencia) || normalizeDateValue(lancamento.dataVencimento);
 
 export const resolveGrupoDRE = (
   lancamento: Lancamento,
