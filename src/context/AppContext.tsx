@@ -145,7 +145,7 @@ interface AppContextType {
     dataEmissao: string,
     prazosDias: number[],
     primeiroVencimento?: string,
-    options?: { adjustBankBalance?: boolean; notify?: boolean }
+    options?: { adjustBankBalance?: boolean; notify?: boolean; audit?: boolean }
   ) => void;
   addLancamentoComParcelamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>, numeroParcelas: number) => void;
   addTransferencia: (dados: {
@@ -713,7 +713,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     valorNovo?: string
   ) => {
     const newLog: AuditLog = {
-      id: 'log-' + Date.now(),
+      id: createEntityId('log'),
       dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
       usuario: currentUser ? currentUser.name : 'Sistema / OCR',
       acao,
@@ -947,7 +947,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dataEmissao: string,
     prazosDias: number[],
     primeiroVencimento?: string,
-    options?: { adjustBankBalance?: boolean; notify?: boolean }
+    options?: { adjustBankBalance?: boolean; notify?: boolean; audit?: boolean }
   ) => {
     if (!checkFinancialPermission('Lançamento DDL')) return;
     dadosBase = bindLancamentoToBanco({
@@ -1046,11 +1046,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setParcelamentos((prev) => [newParcelamento, ...prev]);
     }
 
-    addAuditLog(
-      'Lancamentos',
-      'CRIACAO',
-      `Lançamento criado com DDL (${prazosDias.join('/')} dias) gerando ${totalParcelas} boleto(s)`
-    );
+    if (options?.audit !== false) {
+      addAuditLog(
+        'Lancamentos',
+        'CRIACAO',
+        `Lançamento criado com DDL (${prazosDias.join('/')} dias) gerando ${totalParcelas} boleto(s)`
+      );
+    }
 
     if (options?.notify !== false) {
       showToast('Lançamento preparado. Aguardando confirmação do Neon...', 'info');

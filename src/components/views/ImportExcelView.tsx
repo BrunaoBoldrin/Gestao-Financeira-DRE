@@ -135,6 +135,7 @@ export const ImportExcelView: React.FC = () => {
     fornecedores,
     bancos,
     flushPersistence,
+    addAuditLog,
     setCurrentView,
     showToast,
     currentUser,
@@ -514,9 +515,15 @@ export const ImportExcelView: React.FC = () => {
           item.dataEmissao,
           item.prazosDias,
           item.dataVencimento,
-          { adjustBankBalance: false, notify: false }
+          { adjustBankBalance: false, notify: false, audit: false }
         );
       });
+
+      addAuditLog(
+        'Importação de Planilha',
+        'CRIACAO',
+        `Importou ${mappedItems.length} registros e gerou ${totalLancamentosGerados} lançamentos da planilha "${fileName}", preservando os saldos bancários atuais.`
+      );
 
       const saved = await flushPersistence();
       if (!saved) {

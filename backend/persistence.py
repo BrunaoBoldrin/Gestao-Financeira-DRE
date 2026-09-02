@@ -69,7 +69,7 @@ class StoredFile:
 def _validated_entities(collection: str, entities: list[dict[str, Any]]) -> list[tuple[str, dict[str, Any]]]:
     seen: set[str] = set()
     validated: list[tuple[str, dict[str, Any]]] = []
-    for entity in entities:
+    for position, entity in enumerate(entities):
         identifier = entity.get("id")
         if collection == "dreData" and not identifier:
             identifier = entity.get("codigo")
@@ -80,7 +80,16 @@ def _validated_entities(collection: str, entities: list[dict[str, Any]]) -> list
                 f'{" ou código" if collection == "dreData" else ""}.'
             )
         if entity_id in seen:
-            raise ValueError(f'ID duplicado em "{collection}": {entity_id}')
+            if collection != "auditLogs":
+                raise ValueError(f'ID duplicado em "{collection}": {entity_id}')
+
+            original_id = entity_id
+            entity_id = f"{original_id}-reparado-{position + 1}"
+            repair_number = 2
+            while entity_id in seen:
+                entity_id = f"{original_id}-reparado-{position + 1}-{repair_number}"
+                repair_number += 1
+            entity = {**entity, "id": entity_id}
         seen.add(entity_id)
         validated.append((entity_id, entity))
     return validated
