@@ -231,6 +231,9 @@ const INITIAL_APPLICATION_STATE: ApplicationStateSnapshot = {
 const persistentUrl = (value?: string) =>
   value && !value.startsWith('blob:') && !value.startsWith('data:') ? value : undefined;
 
+const isPhysicalCashAccount = (account: Pick<BancoMaster, 'banco'>) =>
+  account.banco.trim().toLocaleLowerCase('pt-BR').includes('caixa físico');
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [persistenceStatus, setPersistenceStatus] = useState<PersistenceStatus>('LOADING');
   const [persistenceMessage, setPersistenceMessage] = useState('Conectando ao banco de dados...');
@@ -1083,8 +1086,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Informe um valor de transferência maior que zero.', 'error');
       return;
     }
-    if (origem.saldo < dados.valor) {
-      showToast(`Saldo insuficiente em "${origem.banco}" para concluir a transferência.`, 'error');
+    const origemCaixaFisico = isPhysicalCashAccount(origem);
+    const destinoCaixaFisico = isPhysicalCashAccount(destino);
+    const saldoOrigemApos = origem.saldo - dados.valor;
+    if (origemCaixaFisico && saldoOrigemApos < 0) {
+      showToast(`Saldo insuficiente no Caixa Físico de "${origem.unidade}".`, 'error');
       return;
     }
     if (origem.unidade !== dados.unidade || destino.unidade !== dados.unidade) {
@@ -1100,7 +1106,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    if (origem.banco.toLowerCase().includes('caixa')) {
+    if (origemCaixaFisico) {
       registrarMovimentacaoCaixa(
         'SANGRIA',
         `Transferência para ${destino.banco}: ${dados.descricao}`,
@@ -1117,7 +1123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         true,
         dados.unidade
       );
-    } else if (destino.banco.toLowerCase().includes('caixa')) {
+    } else if (destinoCaixaFisico) {
       registrarMovimentacaoCaixa(
         'SUPRIMENTO',
         `Transferência de ${origem.banco}: ${dados.descricao}`,
@@ -1143,8 +1149,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     showToast(
-      `Transferência de R$ ${dados.valor.toFixed(2)} registrada com sucesso entre contas.`,
-      'success'
+      saldoOrigemApos < 0
+        ? `Transferência registrada. A conta "${origem.banco}" ficou com saldo negativo de ${formatCurrency(saldoOrigemApos)}, indicando uso do limite bancário.`
+        : `Transferência de R$ ${dados.valor.toFixed(2)} registrada com sucesso entre contas.`,
+      saldoOrigemApos < 0 ? 'info' : 'success'
     );
   };
 
@@ -1712,7 +1720,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (banco) =>
         banco.unidade === unidade &&
         banco.ativo &&
-        banco.banco.toLocaleLowerCase('pt-BR').includes('caixa')
+        isPhysicalCashAccount(banco)
     );
     if (!caixaBanco && !skipBankBalance) {
       showToast(`Cadastre uma conta do tipo Caixa Físico para a unidade "${unidade}".`, 'error');
