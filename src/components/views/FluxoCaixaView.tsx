@@ -110,27 +110,40 @@ export const FluxoCaixaView: React.FC = () => {
   const periodoInputCompleto = Boolean(dataInicioInput && dataFimInput);
   const periodoAplicadoAtivo = Boolean(periodoAplicado.inicio && periodoAplicado.fim);
 
-  const lancamentosDaUnidade = useMemo(
-    () => lancamentos.filter((item) =>
-      item.status !== 'CANCELADO' &&
-      (unidadeFluxo === 'Todas as Unidades' || item.unidade === unidadeFluxo)
-    ),
-    [lancamentos, unidadeFluxo]
+  const lancamentosAtivos = useMemo(
+    () => lancamentos.filter((item) => item.status !== 'CANCELADO'),
+    [lancamentos]
+  );
+  const unidadeContaPorBanco = useMemo(
+    () => new Map(bancos.map((banco) => [banco.id, banco.unidade])),
+    [bancos]
   );
 
   const periodoDisponivel = useMemo(
-    () => getDateRangeBounds(lancamentosDaUnidade.flatMap((item) => [item.dataVencimento, item.dataPagamento])),
-    [lancamentosDaUnidade]
+    () => getDateRangeBounds(lancamentosAtivos.flatMap((item) => {
+      const unidadeConta = item.unidadeConta || unidadeContaPorBanco.get(item.bancoId || '') || item.unidade;
+      const datas: (string | undefined)[] = [];
+      if (unidadeFluxo === 'Todas as Unidades' || item.unidade === unidadeFluxo) datas.push(item.dataVencimento);
+      if (item.status === 'PAGO' && (unidadeFluxo === 'Todas as Unidades' || unidadeConta === unidadeFluxo)) {
+        datas.push(item.dataPagamento || item.dataVencimento);
+      }
+      return datas;
+    })),
+    [lancamentosAtivos, unidadeContaPorBanco, unidadeFluxo]
   );
 
   const eventosNoPeriodo = useMemo(() => {
     if (!periodoAplicadoAtivo) return null;
-    return lancamentosDaUnidade.reduce((total, item) => {
-      const previsto = isDateInRange(item.dataVencimento, periodoAplicado) ? 1 : 0;
-      const realizado = item.status === 'PAGO' && isDateInRange(item.dataPagamento || item.dataVencimento, periodoAplicado) ? 1 : 0;
+    return lancamentosAtivos.reduce((total, item) => {
+      const unidadeConta = item.unidadeConta || unidadeContaPorBanco.get(item.bancoId || '') || item.unidade;
+      const previsto = (unidadeFluxo === 'Todas as Unidades' || item.unidade === unidadeFluxo) &&
+        isDateInRange(item.dataVencimento, periodoAplicado) ? 1 : 0;
+      const realizado = item.status === 'PAGO' &&
+        (unidadeFluxo === 'Todas as Unidades' || unidadeConta === unidadeFluxo) &&
+        isDateInRange(item.dataPagamento || item.dataVencimento, periodoAplicado) ? 1 : 0;
       return total + previsto + realizado;
     }, 0);
-  }, [lancamentosDaUnidade, periodoAplicado, periodoAplicadoAtivo]);
+  }, [lancamentosAtivos, periodoAplicado, periodoAplicadoAtivo, unidadeContaPorBanco, unidadeFluxo]);
 
   const fluxoData = useMemo<FluxoAgrupado[]>(() => {
     const buckets = new Map<string, FluxoAgrupado>();
@@ -144,11 +157,16 @@ export const FluxoCaixaView: React.FC = () => {
       return bucket;
     };
 
-    lancamentosDaUnidade.forEach((item) => {
+    lancamentosAtivos.forEach((item) => {
       const signedValue = item.tipo === 'RECEITA' ? item.valor : -item.valor;
+      const unidadeConta = item.unidadeConta || unidadeContaPorBanco.get(item.bancoId || '') || item.unidade;
       const dueDate = normalizeDateValue(item.dataVencimento);
-      if (dueDate && inScope(dueDate)) ensureBucket(dueDate).Previsto += signedValue;
-      if (item.status === 'PAGO') {
+      if (
+        dueDate &&
+        (unidadeFluxo === 'Todas as Unidades' || item.unidade === unidadeFluxo) &&
+        inScope(dueDate)
+      ) ensureBucket(dueDate).Previsto += signedValue;
+      if (item.status === 'PAGO' && (unidadeFluxo === 'Todas as Unidades' || unidadeConta === unidadeFluxo)) {
         const paymentDate = normalizeDateValue(item.dataPagamento || item.dataVencimento);
         if (paymentDate && inScope(paymentDate)) {
           const bucket = ensureBucket(paymentDate);
@@ -173,12 +191,16 @@ export const FluxoCaixaView: React.FC = () => {
       saldoAcumulado += bucket.Realizado;
       return { ...bucket, SaldoAcumulado: saldoAcumulado };
     });
-  }, [lancamentosDaUnidade, periodoAplicado, periodoAplicadoAtivo]);
+  }, [lancamentosAtivos, periodoAplicado, periodoAplicadoAtivo, unidadeContaPorBanco, unidadeFluxo]);
 
-  const eventosCalendario = useMemo(() => lancamentosDaUnidade.filter((item) => {
+  const eventosCalendario = useMemo(() => lancamentosAtivos.filter((item) => {
+    const unidadeConta = item.unidadeConta || unidadeContaPorBanco.get(item.bancoId || '') || item.unidade;
+    const pertenceAUnidade = item.status === 'PAGO'
+      ? unidadeFluxo === 'Todas as Unidades' || unidadeConta === unidadeFluxo
+      : unidadeFluxo === 'Todas as Unidades' || item.unidade === unidadeFluxo;
     const dataEvento = normalizeDateValue(item.status === 'PAGO' ? item.dataPagamento || item.dataVencimento : item.dataVencimento);
-    return dataEvento.startsWith(mesCalendario);
-  }), [lancamentosDaUnidade, mesCalendario]);
+    return pertenceAUnidade && dataEvento.startsWith(mesCalendario);
+  }), [lancamentosAtivos, mesCalendario, unidadeContaPorBanco, unidadeFluxo]);
 
   const diasCalendario = useMemo<DiaCalendario[]>(() => {
     const [year, month] = mesCalendario.split('-').map(Number);
@@ -263,7 +285,7 @@ export const FluxoCaixaView: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-bold text-[#0b1c30]">Curva de Saldo Acumulado e Entradas/Saídas</h3>
-                <p className="text-[10px] text-gray-500 mt-0.5">Soma todos os lançamentos de {unidadeFluxo}, mesmo quando a unidade possui mais de uma conta; o saldo acumulado do período inicia em zero.</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">O previsto segue a unidade do lançamento; o realizado segue a unidade da conta movimentada. O saldo acumulado do período inicia em zero.</p>
               </div>
               <span className="text-xs font-bold text-[#775a19] bg-[#ffdea5] px-2.5 py-1 rounded">Visão diária · {periodoAplicadoLabel}</span>
             </div>
@@ -333,7 +355,7 @@ export const FluxoCaixaView: React.FC = () => {
           {detalheDia && (
             <div className="bg-white rounded-xl border border-[#e5eeff] p-5">
               <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-[#0b1c30]">Movimentações de {formatDate(detalheDia.data)}</h3><p className="text-[11px] text-gray-500">{detalheDia.lancamentos.length} lançamento(s) · {unidadeFluxo}</p><p className={`text-[11px] font-black mt-1 ${detalheDia.saldoProjetado >= 0 ? 'text-blue-800' : 'text-rose-800'}`}>Saldo projetado acumulado até o dia: {detalheDia.saldoProjetado >= 0 ? '+' : '−'} {formatCurrency(Math.abs(detalheDia.saldoProjetado))}</p></div><button onClick={() => setDiaSelecionado(null)} className="text-gray-500"><span className="material-symbols-outlined">close</span></button></div>
-              <div className="mt-3 divide-y divide-gray-100">{detalheDia.lancamentos.map((item) => <div key={item.id} className="py-3 flex items-center justify-between gap-4"><div><p className="text-xs font-bold text-[#0b1c30]">{item.descricao}</p><p className="text-[10px] text-gray-500">{item.fornecedorCliente} · {item.status} · {item.unidade}</p></div><p className={`text-xs font-black ${item.tipo === 'RECEITA' ? 'text-emerald-700' : 'text-rose-700'}`}>{item.tipo === 'RECEITA' ? '+' : '−'} {formatCurrency(item.valor)}</p></div>)}{detalheDia.lancamentos.length === 0 && <p className="py-5 text-center text-xs text-gray-500">Nenhum lançamento nesta data.</p>}</div>
+              <div className="mt-3 divide-y divide-gray-100">{detalheDia.lancamentos.map((item) => { const unidadeConta = item.unidadeConta || unidadeContaPorBanco.get(item.bancoId || '') || item.unidade; return <div key={item.id} className="py-3 flex items-center justify-between gap-4"><div><p className="text-xs font-bold text-[#0b1c30]">{item.descricao}</p><p className="text-[10px] text-gray-500">{item.fornecedorCliente} · {item.status} · Unidade do lançamento: {item.unidade}{item.status === 'PAGO' && unidadeConta !== item.unidade ? ` · Conta de: ${unidadeConta}` : ''}</p></div><p className={`text-xs font-black ${item.tipo === 'RECEITA' ? 'text-emerald-700' : 'text-rose-700'}`}>{item.tipo === 'RECEITA' ? '+' : '−'} {formatCurrency(item.valor)}</p></div>; })}{detalheDia.lancamentos.length === 0 && <p className="py-5 text-center text-xs text-gray-500">Nenhum lançamento nesta data.</p>}</div>
             </div>
           )}
         </>

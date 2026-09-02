@@ -164,7 +164,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                         </td>
                         <td className="p-3 text-[10px] text-gray-600">
                           {item.status === 'PAGO'
-                            ? <><span className="block font-bold text-[#0b1c30]">{item.contaBancaria || activeContract.contaBancaria || 'Conta não informada'}</span><span>{item.formaPagamento || 'Forma não informada'}</span></>
+                            ? <><span className="block font-bold text-[#0b1c30]">{item.contaBancaria || activeContract.contaBancaria || 'Conta não informada'}</span><span>{item.unidadeConta ? `${item.unidadeConta} · ` : ''}{item.formaPagamento || 'Forma não informada'}</span></>
                             : <span className="text-gray-400">—</span>}
                         </td>
                         {canExecuteFinancialActions && <td className="p-3 text-center">

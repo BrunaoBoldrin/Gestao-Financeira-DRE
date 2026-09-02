@@ -36,8 +36,12 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
   const [dataPagamento, setDataPagamento] = useState('');
 
   const availableBanks = useMemo(
-    () => bancos.filter((banco) => banco.ativo && banco.unidade === item?.unidade),
-    [bancos, item?.unidade]
+    () => bancos
+      .filter((banco) => banco.ativo)
+      .sort((left, right) =>
+        left.unidade.localeCompare(right.unidade, 'pt-BR') || left.banco.localeCompare(right.banco, 'pt-BR')
+      ),
+    [bancos]
   );
   const selectedBank = availableBanks.find((banco) => banco.id === bancoId);
 
@@ -110,13 +114,13 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
               <option value="">Selecione a conta...</option>
               {availableBanks.map((banco) => (
                 <option key={banco.id} value={banco.id}>
-                  {banco.banco} · Ag. {banco.agencia} · C/C {banco.conta} · Saldo {formatCurrency(banco.saldo)}
+                  {banco.unidade} — {banco.banco} · Ag. {banco.agencia} · C/C {banco.conta} · Saldo {formatCurrency(banco.saldo)}
                 </option>
               ))}
             </select>
             {availableBanks.length === 0 && (
               <p className="mt-1.5 text-[10px] font-bold text-rose-700">
-                Nenhuma conta ativa foi cadastrada para {item.unidade}.
+                Nenhuma conta bancária ou caixa ativo foi cadastrado.
               </p>
             )}
           </div>
@@ -155,6 +159,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
               <div>
                 <p className="text-[9px] font-bold uppercase text-blue-700">Saldo atual</p>
                 <p className="mt-0.5 font-black text-[#0b1c30]">{formatCurrency(selectedBank.saldo)}</p>
+                <p className="mt-0.5 text-[9px] text-blue-700">Conta de {selectedBank.unidade}</p>
               </div>
               <div className="text-right">
                 <p className="text-[9px] font-bold uppercase text-blue-700">Saldo após confirmação</p>
