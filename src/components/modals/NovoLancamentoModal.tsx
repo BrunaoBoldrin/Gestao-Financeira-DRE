@@ -28,6 +28,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     currentUser,
     isFinance,
     persistenceStatus,
+    flushPersistence,
     showToast
   } = useApp();
 
@@ -47,6 +48,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   const [status, setStatus] = useState<StatusLancamento>('PENDENTE');
   const [contaDestinoBancoId, setContaDestinoBancoId] = useState('');
   const [anexo, setAnexo] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleClose = () => {
     setAnexo(null);
@@ -130,13 +132,14 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!descricao || numVal <= 0 || !unidade) return;
+    if (!descricao || numVal <= 0 || !unidade || isSubmitting) return;
 
     const selectedBanco = availableBanks.find((banco) => banco.id === bancoId);
     if (!selectedBanco) {
       showToast(`Cadastre ou selecione uma conta bancária para a unidade "${targetUnit}".`, 'error');
       return;
     }
+    setIsSubmitting(true);
     let comprovanteUrl: string | undefined;
 
     if (anexo) {
@@ -146,6 +149,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
           : (await uploadPersistentFile(anexo)).url;
       } catch {
         showToast('Não foi possível processar o anexo. Tente selecionar o arquivo novamente.', 'error');
+        setIsSubmitting(false);
         return;
       }
     }
@@ -165,6 +169,14 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
         comprovanteUrl,
         documentoRef: anexo?.name
       });
+      const saved = await flushPersistence();
+      showToast(
+        saved
+          ? 'Transferência confirmada e salva no Neon.'
+          : 'A transferência ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+        saved ? 'success' : 'error'
+      );
+      setIsSubmitting(false);
       handleClose();
       return;
     }
@@ -195,6 +207,14 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       addLancamento(payload);
     }
 
+    const saved = await flushPersistence();
+    showToast(
+      saved
+        ? `${tipo === 'RECEITA' ? 'Receita' : 'Despesa'} confirmada e salva no Neon.`
+        : 'O lançamento ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+      saved ? 'success' : 'error'
+    );
+    setIsSubmitting(false);
     handleClose();
   };
 
@@ -506,10 +526,11 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] shadow-xs transition flex items-center gap-1.5"
+              disabled={isSubmitting}
+              className="px-5 py-2 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] disabled:bg-gray-400 disabled:cursor-not-allowed shadow-xs transition flex items-center gap-1.5"
             >
               <span className="material-symbols-outlined text-base">check_circle</span>
-              Salvar Lançamento
+              {isSubmitting ? 'Confirmando no Neon...' : 'Salvar Lançamento'}
             </button>
           </div>
         </form>

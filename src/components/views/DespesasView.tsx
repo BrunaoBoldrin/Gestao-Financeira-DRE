@@ -13,7 +13,7 @@ interface DespesasViewProps {
 }
 
 export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamentoModal }) => {
-  const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, isAuditor, showToast } = useApp();
+  const { filteredLancamentos, categorias, marcarLancamentoComoPago, deleteLancamento, isAuditor, flushPersistence, showToast } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('TODAS');
   const [competencia, setCompetencia] = useState('TODOS');
@@ -297,9 +297,16 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
           unidade: lancamentoLiquidacao.unidade
         } : null}
         onClose={() => setLancamentoLiquidacao(null)}
-        onConfirm={(dados) => {
+        onConfirm={async (dados) => {
           if (!lancamentoLiquidacao) return;
-          marcarLancamentoComoPago(lancamentoLiquidacao.id, dados);
+          if (!marcarLancamentoComoPago(lancamentoLiquidacao.id, dados)) return;
+          const saved = await flushPersistence();
+          showToast(
+            saved
+              ? 'Pagamento confirmado e salvo no Neon.'
+              : 'O pagamento ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+            saved ? 'success' : 'error'
+          );
           setLancamentoLiquidacao(null);
         }}
       />

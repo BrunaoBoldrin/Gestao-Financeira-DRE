@@ -13,7 +13,7 @@ export interface ItemLiquidacao {
 interface LiquidacaoModalProps {
   item: ItemLiquidacao | null;
   onClose: () => void;
-  onConfirm: (dados: DadosLiquidacao) => void;
+  onConfirm: (dados: DadosLiquidacao) => void | Promise<void>;
 }
 
 const PAYMENT_METHODS: { value: Lancamento['formaPagamento']; label: string }[] = [
@@ -34,6 +34,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
   const [bancoId, setBancoId] = useState('');
   const [formaPagamento, setFormaPagamento] = useState<Lancamento['formaPagamento'] | ''>('');
   const [dataPagamento, setDataPagamento] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const availableBanks = useMemo(
     () => bancos.filter((banco) => banco.ativo && banco.unidade === item?.unidade),
@@ -56,10 +57,15 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
     : 0;
   const canConfirm = Boolean(selectedBank && formaPagamento && dataPagamento);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canConfirm || !formaPagamento) return;
-    onConfirm({ bancoId, formaPagamento, dataPagamento });
+    if (!canConfirm || !formaPagamento || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onConfirm({ bancoId, formaPagamento, dataPagamento });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -172,10 +178,12 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
           </button>
           <button
             type="submit"
-            disabled={!canConfirm}
+            disabled={!canConfirm || isSubmitting}
             className={`rounded-lg px-4 py-2 text-xs font-bold text-white transition disabled:cursor-not-allowed disabled:bg-gray-300 ${isReceipt ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-[#131b2e] hover:bg-[#0b1c30]'}`}
           >
-            {isReceipt ? 'Confirmar recebimento' : 'Confirmar pagamento'}
+            {isSubmitting
+              ? 'Confirmando no Neon...'
+              : isReceipt ? 'Confirmar recebimento' : 'Confirmar pagamento'}
           </button>
         </div>
       </form>

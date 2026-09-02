@@ -26,7 +26,8 @@ export const PendingReviewView: React.FC = () => {
     units,
     currentUser,
     isFinance,
-    lancamentos
+    lancamentos,
+    flushPersistence
   } = useApp();
 
   const pendingDocs = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO');
@@ -54,6 +55,7 @@ export const PendingReviewView: React.FC = () => {
   const [acaoFinanceira, setAcaoFinanceira] = useState<'A_CONFIRMAR' | 'CRIAR_NOVO' | 'VINCULAR_EXISTENTE' | 'SOMENTE_ARQUIVAR'>('CRIAR_NOVO');
   const [lancamentoSelecionadoId, setLancamentoSelecionadoId] = useState('');
   const [justificativaNovo, setJustificativaNovo] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const itensSort = useSortableData(currentDoc?.dadosExtraidos.itens || []);
 
   useEffect(() => {
@@ -187,7 +189,10 @@ export const PendingReviewView: React.FC = () => {
     }
   };
 
-  const handleAprovar = () => {
+  const handleAprovar = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
     if (!dataEmissao || !dataCompetencia || !dataVencimento) {
       showToast('Informe emissão, competência e vencimento antes de aprovar.', 'error');
       return;
@@ -200,10 +205,12 @@ export const PendingReviewView: React.FC = () => {
       showToast('Confirme o sentido, o impacto no DRE e a finalidade financeira.', 'error');
       return;
     }
-    if (
-      impactoDRE !== 'NAO_AFETA' &&
-      !categorias.some((item) => item.ativa && item.tipo === impactoDRE && item.nome === categoria)
-    ) {
+    const launchType = impactoDRE === 'RECEITA'
+      ? 'RECEITA'
+      : impactoDRE === 'DESPESA'
+        ? 'DESPESA'
+        : sentido === 'ENTRADA' ? 'RECEITA' : 'DESPESA';
+    if (!categorias.some((item) => item.ativa && item.tipo === launchType && item.nome === categoria)) {
       showToast('Selecione uma categoria ativa compatível com o impacto no DRE.', 'error');
       return;
     }
@@ -262,19 +269,31 @@ export const PendingReviewView: React.FC = () => {
         banco.id,
         justificativaNovo
       );
-      advanceToNextDoc();
+      const saved = await flushPersistence();
+      showToast(
+        saved
+          ? 'Documento conciliado e salvo no Neon.'
+          : 'A conciliação ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+        saved ? 'success' : 'error'
+      );
+      if (saved) advanceToNextDoc();
       return;
     }
 
     aprovarDocumentoOCR(currentDoc.id, dadosFinais);
-    if (acaoFinanceira === 'SOMENTE_ARQUIVAR' || impactoDRE === 'NAO_AFETA') {
-      showToast('Documento aprovado sem criar receita ou despesa no DRE.', 'success');
-      advanceToNextDoc();
+    if (acaoFinanceira === 'SOMENTE_ARQUIVAR') {
+      const saved = await flushPersistence();
+      showToast(
+        saved
+          ? 'Documento arquivado e salvo no Neon, sem gerar movimentação financeira.'
+          : 'O documento ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+        saved ? 'success' : 'error'
+      );
+      if (saved) advanceToNextDoc();
       return;
     }
 
     const isRealizedDocument = ['COMPROVANTE', 'RECIBO', 'EXTRATO'].includes(currentDoc.tipo);
-    const launchType = impactoDRE === 'RECEITA' ? 'RECEITA' : 'DESPESA';
     const baseLaunch = {
       descricao: `${currentDoc.nomeArquivo} - ${fornecedor}`,
       tipo: launchType as 'RECEITA' | 'DESPESA',
@@ -297,7 +316,7 @@ export const PendingReviewView: React.FC = () => {
       linhaDigitavel: currentDoc.dadosExtraidos.linhaDigitavel,
       chaveDocumento: currentDoc.dadosExtraidos.chaveDocumento,
       identificadorTransacao: currentDoc.dadosExtraidos.identificadorTransacao,
-      impactoDRE: impactoDRE as 'RECEITA' | 'DESPESA',
+      impactoDRE: impactoDRE as Exclude<ImpactoDRE, 'A_CONFIRMAR'>,
       finalidadeFinanceira: finalidade as Exclude<FinalidadeFinanceira, 'A_CONFIRMAR'>,
       documentoConciliadoId: currentDoc.id,
       numeroParcela: currentDoc.totalEntidadesDocumento && currentDoc.entidadeNumero
@@ -310,18 +329,40 @@ export const PendingReviewView: React.FC = () => {
       ['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo) &&
       !currentDoc.totalEntidadesDocumento
     ) {
-      addLancamentoComDDL(baseLaunch, dataEmissao, prazos, dataVencimento);
+      addLancamentoComDDL(baseLaunch, dataEmissao, prazos, dataVencimento, { notify: false });
     } else {
       addLancamento(baseLaunch);
     }
 
-    advanceToNextDoc();
+    const saved = await flushPersistence();
+    showToast(
+      saved
+        ? 'Documento aprovado e lançamento financeiro salvos no Neon.'
+        : 'A aprovação ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+      saved ? 'success' : 'error'
+    );
+    if (saved) advanceToNextDoc();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleRejeitar = () => {
-    rejeitarDocumentoOCR(currentDoc.id);
-    showToast(`Documento "${currentDoc.nomeArquivo}" rejeitado e removido da fila.`, 'info');
-    advanceToNextDoc();
+  const handleRejeitar = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      rejeitarDocumentoOCR(currentDoc.id);
+      const saved = await flushPersistence();
+      showToast(
+        saved
+          ? `Documento "${currentDoc.nomeArquivo}" rejeitado e salvo no Neon.`
+          : 'A rejeição ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+        saved ? 'success' : 'error'
+      );
+      if (saved) advanceToNextDoc();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -861,7 +902,8 @@ export const PendingReviewView: React.FC = () => {
           <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
             <button
               onClick={handleRejeitar}
-              className="px-4 py-2 border border-rose-300 text-rose-700 rounded-md text-xs font-bold hover:bg-rose-50 transition flex items-center gap-1"
+              disabled={isSaving}
+              className="px-4 py-2 border border-rose-300 text-rose-700 rounded-md text-xs font-bold hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-1"
             >
               <span className="material-symbols-outlined text-base">cancel</span>
               Rejeitar Documento
@@ -869,10 +911,13 @@ export const PendingReviewView: React.FC = () => {
 
             <button
               onClick={handleAprovar}
-              className="px-6 py-2.5 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] transition flex items-center gap-1.5 shadow-md"
+              disabled={isSaving}
+              className="px-6 py-2.5 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] disabled:bg-gray-400 disabled:cursor-not-allowed transition flex items-center gap-1.5 shadow-md"
             >
               <span className="material-symbols-outlined text-base">task_alt</span>
-              {acaoFinanceira === 'A_CONFIRMAR'
+              {isSaving
+                ? 'Confirmando no Neon...'
+                : acaoFinanceira === 'A_CONFIRMAR'
                 ? 'Confirme a ação financeira'
                 : acaoFinanceira === 'VINCULAR_EXISTENTE'
                   ? 'Confirmar vínculo e conciliar'

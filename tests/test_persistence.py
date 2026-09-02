@@ -4,9 +4,12 @@ from unittest.mock import MagicMock, patch
 from backend.persistence import (
     EMPTY_OPERATIONAL_SINGLETONS,
     OPERATIONAL_COLLECTIONS_TO_DELETE,
+    StateConflictError,
     _apply_requested_operational_cleanup,
     _validated_entities,
+    save_application_state,
 )
+from backend.state_models import ApplicationState
 
 
 class PersistenceValidationTests(unittest.TestCase):
@@ -29,6 +32,73 @@ class PersistenceValidationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, 'ID duplicado em "dreData": 1'):
             _validated_entities("dreData", rows)
+
+    @patch("backend.persistence.ensure_schema")
+    @patch("backend.persistence.transaction")
+    @patch("backend.persistence.encrypt_json")
+    def test_manual_and_ocr_launches_are_written_in_the_same_revision(
+        self,
+        encrypt_mock,
+        transaction_mock,
+        _ensure_schema_mock,
+    ):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {"revision": 12}
+        connection = MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        transaction_mock.return_value.__enter__.return_value = connection
+        encrypt_mock.return_value = (b"nonce", b"ciphertext", 1)
+        state = ApplicationState(
+            lancamentos=[
+                {"id": "manual-1", "descricao": "Lançamento manual"},
+                {
+                    "id": "ocr-1",
+                    "descricao": "Lançamento aprovado pelo OCR",
+                    "documentoConciliadoId": "documento-1",
+                },
+            ],
+            documentosOCR=[
+                {
+                    "id": "documento-1",
+                    "status": "APROVADO",
+                    "lancamentoGeradoId": "ocr-1",
+                }
+            ],
+        )
+
+        revision = save_application_state(state, expected_revision=12, updated_by="user-1")
+
+        self.assertEqual(revision, 13)
+        inserted = {}
+        for call in cursor.executemany.call_args_list:
+            rows = call.args[1]
+            if rows:
+                inserted[rows[0][0]] = rows
+        self.assertEqual([row[1] for row in inserted["lancamentos"]], ["manual-1", "ocr-1"])
+        self.assertEqual([row[1] for row in inserted["documentosOCR"]], ["documento-1"])
+        cursor.execute.assert_any_call(
+            unittest.mock.ANY,
+            (13, "user-1"),
+        )
+
+    @patch("backend.persistence.ensure_schema")
+    @patch("backend.persistence.transaction")
+    def test_stale_revision_is_rejected_before_any_collection_is_deleted(
+        self,
+        transaction_mock,
+        _ensure_schema_mock,
+    ):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = {"revision": 9}
+        connection = MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        transaction_mock.return_value.__enter__.return_value = connection
+
+        with self.assertRaisesRegex(StateConflictError, "outra sessão"):
+            save_application_state(ApplicationState(), expected_revision=8, updated_by="user-1")
+
+        executed_sql = [" ".join(call.args[0].split()) for call in cursor.execute.call_args_list]
+        self.assertFalse(any(sql.startswith("DELETE FROM app_entities") for sql in executed_sql))
 
 
 class RequestedCleanupTests(unittest.TestCase):

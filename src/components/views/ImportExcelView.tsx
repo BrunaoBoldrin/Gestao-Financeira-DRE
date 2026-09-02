@@ -134,6 +134,7 @@ export const ImportExcelView: React.FC = () => {
     centrosCusto,
     fornecedores,
     bancos,
+    flushPersistence,
     setCurrentView,
     showToast,
     currentUser,
@@ -478,7 +479,7 @@ export const ImportExcelView: React.FC = () => {
   );
 
   // Execute Batch Import
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     if (mappedItems.length === 0) return;
     if (invalidItems.length > 0) {
       showToast(`Corrija ${invalidItems.length} linha(s) com erro antes de importar.`, 'error');
@@ -508,11 +509,24 @@ export const ImportExcelView: React.FC = () => {
           impactoDRE: item.tipo
         };
 
-        addLancamentoComDDL(payload, item.dataEmissao, item.prazosDias, item.dataVencimento);
+        addLancamentoComDDL(
+          payload,
+          item.dataEmissao,
+          item.prazosDias,
+          item.dataVencimento,
+          { adjustBankBalance: false, notify: false }
+        );
       });
 
+      const saved = await flushPersistence();
+      if (!saved) {
+        showToast('A importação foi preparada, mas ainda não foi confirmada pelo Neon. Não importe o arquivo novamente; use “Tentar salvar”.', 'error');
+        setCurrentView('despesas');
+        return;
+      }
+
       showToast(
-        `Sucesso! ${mappedItems.length} registros processados e ${totalLancamentosGerados} lançamentos gerados da planilha "${fileName}".`,
+        `${mappedItems.length} registros e ${totalLancamentosGerados} lançamentos salvos no Neon. Os saldos bancários atuais foram preservados.`,
         'success'
       );
       setCurrentView('despesas');
@@ -859,6 +873,9 @@ export const ImportExcelView: React.FC = () => {
               <h3 className="text-sm font-bold text-[#0b1c30]">Pré-visualização da Importação</h3>
               <p className="text-xs text-gray-500">
                 <strong>{mappedItems.length}</strong> registros de origem gerarão <strong>{totalLancamentosGerados}</strong> lançamentos, considerando as parcelas DDL.
+              </p>
+              <p className="mt-1 text-[11px] font-semibold text-blue-700">
+                Carga histórica: os saldos atuais das contas bancárias serão preservados.
               </p>
               {invalidItems.length > 0 && <p className="text-[11px] font-bold text-rose-700 mt-1">{invalidItems.length} linha(s) precisam ser corrigidas antes da importação.</p>}
             </div>
