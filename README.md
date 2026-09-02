@@ -54,7 +54,7 @@ Também são obrigatórias:
 - `APP_SETUP_TOKEN`: segredo de uso único para criar o primeiro administrador. Gere outro valor com `openssl rand -base64 32`.
 - `COOKIE_SECURE`: mantenha `true` no Render; use `false` somente no desenvolvimento local sem HTTPS.
 
-No primeiro acesso, a tela solicitará `APP_SETUP_TOKEN`, nome, e-mail e uma senha de no mínimo 12 caracteres. Depois da criação, o formulário muda automaticamente para o login normal de administrador.
+No primeiro acesso, a tela solicitará `APP_SETUP_TOKEN`, nome, e-mail e uma senha de no mínimo 12 caracteres. Depois da criação, o formulário muda automaticamente para o login normal do sistema. O administrador pode criar os acessos dos demais usuários, definindo e-mail, senha, perfil e unidade. Os perfis Financeiro e Auditoria recebem somente as páginas e ações correspondentes às suas permissões.
 
 Nunca salve as chaves em arquivos versionados. Mantenha uma cópia segura de `APP_ENCRYPTION_KEY`: sem ela, os lançamentos e documentos criptografados não podem ser recuperados.
 

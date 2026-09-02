@@ -1,4 +1,4 @@
-import { ApplicationStateSnapshot } from '../types';
+import { ApplicationStateSnapshot, User, UserRole } from '../types';
 
 
 export class PersistenceApiError extends Error {
@@ -30,15 +30,15 @@ export interface PersistenceAuthStatus {
   setupTokenConfigured: boolean;
   setupRequired: boolean;
   authenticated: boolean;
-  user: import('../types').User | null;
+  user: User | null;
   error?: string | null;
 }
 
 export const getPersistenceAuthStatus = () =>
   requestJson<PersistenceAuthStatus>('/api/auth/status');
 
-export const loginAdmin = (email: string, password: string) =>
-  requestJson<{ success: boolean; user: import('../types').User }>('/api/auth/login', {
+export const loginUser = (email: string, password: string) =>
+  requestJson<{ success: boolean; user: User }>('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
@@ -49,14 +49,49 @@ export const setupInitialAdmin = (data: {
   name: string;
   email: string;
   password: string;
-}) => requestJson<{ success: boolean; user: import('../types').User }>('/api/auth/setup', {
+}) => requestJson<{ success: boolean; user: User }>('/api/auth/setup', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(data)
 });
 
-export const logoutAdmin = () =>
+export const logoutUser = () =>
   requestJson<{ success: boolean }>('/api/auth/logout', { method: 'POST' });
+
+export interface CreateAuthUserInput {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  unit: string;
+  active: boolean;
+}
+
+export type UpdateAuthUserInput = Omit<CreateAuthUserInput, 'password'> & {
+  password?: string;
+};
+
+export const createAuthUser = (data: CreateAuthUserInput) =>
+  requestJson<{ success: boolean; user: User }>('/api/auth/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+
+export const listAuthUsers = () =>
+  requestJson<{ users: User[] }>('/api/auth/users');
+
+export const updateAuthUser = (id: string, data: UpdateAuthUserInput) =>
+  requestJson<{ success: boolean; user: User }>(`/api/auth/users/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+
+export const deleteAuthUser = (id: string) =>
+  requestJson<{ success: boolean }>(`/api/auth/users/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  });
 
 export const loadApplicationState = () =>
   requestJson<{ revision: number; empty: boolean; data: ApplicationStateSnapshot | null }>('/api/state');

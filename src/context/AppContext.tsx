@@ -42,13 +42,17 @@ import {
   INITIAL_CONDICOES_PAGAMENTO
 } from '../data/initialData';
 import {
+  createAuthUser,
+  deleteAuthUser,
   getPersistenceAuthStatus,
-  loginAdmin as loginAdminApi,
+  listAuthUsers,
+  loginUser as loginUserApi,
   loadApplicationState,
-  logoutAdmin as logoutAdminApi,
+  logoutUser as logoutUserApi,
   PersistenceApiError,
   saveApplicationState,
-  setupInitialAdmin as setupInitialAdminApi
+  setupInitialAdmin as setupInitialAdminApi,
+  updateAuthUser
 } from '../services/persistenceApi';
 
 interface Toast {
@@ -60,9 +64,9 @@ interface Toast {
 interface AppContextType {
   persistenceStatus: PersistenceStatus;
   persistenceMessage: string;
-  loginAdmin: (email: string, password: string) => Promise<boolean>;
+  loginUser: (email: string, password: string) => Promise<boolean>;
   setupInitialAdmin: (data: { setupToken: string; name: string; email: string; password: string }) => Promise<boolean>;
-  logoutAdmin: () => Promise<void>;
+  logoutUser: () => Promise<void>;
   retryPersistence: () => void;
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
@@ -193,10 +197,10 @@ interface AppContextType {
   toggleRegraAutomacao: (id: string) => void;
   addRegraAutomacao: (r: Omit<RegraAutomacao, 'id'>) => void;
   
-  addUser: (u: Omit<User, 'id' | 'lastAccess'>) => void;
-  updateUser: (id: string, u: Partial<Omit<User, 'id' | 'lastAccess'>>) => void;
-  toggleUserActive: (id: string) => void;
-  deleteUser: (id: string) => void;
+  addUser: (u: Omit<User, 'id' | 'lastAccess'> & { password: string }) => Promise<boolean>;
+  updateUser: (id: string, u: Partial<Omit<User, 'id' | 'lastAccess'>> & { password?: string }) => Promise<boolean>;
+  toggleUserActive: (id: string) => Promise<boolean>;
+  deleteUser: (id: string) => Promise<boolean>;
 
   exportBackupJSON: () => string;
 }
@@ -334,14 +338,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const applyPersistentSnapshot = useCallback((snapshot: ApplicationStateSnapshot) => {
     skipNextSaveRef.current = true;
     const authenticatedUser = authenticatedUserRef.current;
-    const effectiveUsers = authenticatedUser
+    const storedAuthenticatedUser = authenticatedUser
+      ? snapshot.users.find(
+          (user) => user.id === authenticatedUser.id || user.email.toLocaleLowerCase('pt-BR') === authenticatedUser.email.toLocaleLowerCase('pt-BR')
+        )
+      : undefined;
+    const effectiveAuthenticatedUser = authenticatedUser
+      ? { ...storedAuthenticatedUser, ...authenticatedUser, avatarUrl: storedAuthenticatedUser?.avatarUrl }
+      : null;
+    const effectiveUsers = effectiveAuthenticatedUser
       ? [
-          authenticatedUser,
+          effectiveAuthenticatedUser,
           ...snapshot.users.filter(
-            (user) => user.id !== authenticatedUser.id && user.email.toLocaleLowerCase('pt-BR') !== authenticatedUser.email.toLocaleLowerCase('pt-BR')
+            (user) => user.id !== effectiveAuthenticatedUser.id && user.email.toLocaleLowerCase('pt-BR') !== effectiveAuthenticatedUser.email.toLocaleLowerCase('pt-BR')
           )
         ]
       : snapshot.users;
+    authenticatedUserRef.current = effectiveAuthenticatedUser;
     setUnits(snapshot.units);
     setCategorias(snapshot.categorias);
     setCentrosCusto(snapshot.centrosCusto);
@@ -357,7 +370,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuditLogs(snapshot.auditLogs);
     setRegrasAutomacao(snapshot.regrasAutomacao);
     setDreData(snapshot.dreData);
-    setCurrentUserState(authenticatedUser || null);
+    setCurrentUserState(effectiveAuthenticatedUser);
+    setCurrentViewState(effectiveAuthenticatedUser ? ROLE_DEFAULT_VIEW[effectiveAuthenticatedUser.role] : 'overview');
+    setSelectedUnitState(
+      effectiveAuthenticatedUser && !canAccessAllUnits(effectiveAuthenticatedUser.role)
+        ? effectiveAuthenticatedUser.unit
+        : 'Todas as Unidades'
+    );
     setSelectedDocumentForReviewId(
       snapshot.documentosOCR.find((document) => document.status === 'PENDENTE_REVISAO')?.id || null
     );
@@ -433,36 +452,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (!auth.authenticated || !auth.user) {
         setPersistenceStatus('AUTH_REQUIRED');
-        setPersistenceMessage('Entre com o e-mail e a senha do administrador.');
+        setPersistenceMessage('Informe seu e-mail e senha.');
         return;
       }
       authenticatedUserRef.current = auth.user;
 
       const stored = await loadApplicationState();
       revisionRef.current = stored.revision;
+      let stateToApply: ApplicationStateSnapshot;
       if (stored.empty || !stored.data) {
-        const seededState: ApplicationStateSnapshot = {
+        stateToApply = {
           ...INITIAL_APPLICATION_STATE,
           users: [auth.user]
         };
         const seeded = await saveApplicationState(
           stored.revision,
-          seededState
+          stateToApply
         );
         revisionRef.current = seeded.revision;
-        applyPersistentSnapshot(seededState);
-        latestSnapshotRef.current = seededState;
       } else {
-        applyPersistentSnapshot(stored.data);
-        latestSnapshotRef.current = stored.data;
+        stateToApply = stored.data;
       }
+      if (auth.user.role === 'ADMIN') {
+        const { users: authUsers } = await listAuthUsers();
+        const legacyUsers = stateToApply.users.filter((storedUser) => !authUsers.some(
+          (authUser) => authUser.id === storedUser.id || authUser.email.toLocaleLowerCase('pt-BR') === storedUser.email.toLocaleLowerCase('pt-BR')
+        ));
+        stateToApply = {
+          ...stateToApply,
+          users: [
+            ...authUsers.map((authUser) => {
+              const storedUser = stateToApply.users.find(
+                (candidate) => candidate.id === authUser.id || candidate.email.toLocaleLowerCase('pt-BR') === authUser.email.toLocaleLowerCase('pt-BR')
+              );
+              return { ...storedUser, ...authUser, avatarUrl: storedUser?.avatarUrl };
+            }),
+            ...legacyUsers
+          ]
+        };
+      }
+      applyPersistentSnapshot(stateToApply);
+      latestSnapshotRef.current = stateToApply;
       hydratedRef.current = true;
       setPersistenceStatus('CONNECTED');
       setPersistenceMessage(`Conectado ao Neon · revisão ${revisionRef.current}`);
     } catch (error) {
       if (error instanceof PersistenceApiError && error.status === 401) {
         setPersistenceStatus('AUTH_REQUIRED');
-        setPersistenceMessage('Entre com o e-mail e a senha do administrador.');
+        setPersistenceMessage('Informe seu e-mail e senha.');
         return;
       }
       setPersistenceStatus('ERROR');
@@ -470,9 +507,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [applyPersistentSnapshot]);
 
-  const loginAdmin = useCallback(async (email: string, password: string) => {
+  const loginUser = useCallback(async (email: string, password: string) => {
     try {
-      const result = await loginAdminApi(email, password);
+      const result = await loginUserApi(email, password);
       authenticatedUserRef.current = result.user;
       await hydratePersistence();
       return true;
@@ -501,9 +538,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [hydratePersistence]);
 
-  const logoutAdmin = useCallback(async () => {
+  const logoutUser = useCallback(async () => {
     try {
-      await logoutAdminApi();
+      await logoutUserApi();
     } finally {
       hydratedRef.current = false;
       authenticatedUserRef.current = null;
@@ -1939,61 +1976,136 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // --- Users ---
-  const addUser = (u: Omit<User, 'id' | 'lastAccess'>) => {
-    if (!checkAdminPermission('Cadastrar Usuário')) return;
+  const addUser = async (u: Omit<User, 'id' | 'lastAccess'> & { password: string }) => {
+    if (!checkAdminPermission('Cadastrar Usuário')) return false;
     if (users.some((user) => user.email.toLowerCase() === u.email.toLowerCase())) {
       showToast('Já existe um usuário cadastrado com este e-mail.', 'error');
-      return;
+      return false;
     }
-    const newU: User = {
-      ...u,
-      id: createEntityId('user'),
-      lastAccess: 'Nunca acessou'
-    };
-    setUsers((prev) => [...prev, newU]);
-    showToast('Novo usuário adicionado!', 'success');
+    const { password, avatarUrl, ...profile } = u;
+    try {
+      const result = await createAuthUser({ ...profile, password });
+      setUsers((prev) => [...prev, { ...result.user, avatarUrl }]);
+      showToast('Usuário e acesso criados com sucesso!', 'success');
+      addAuditLog('Usuários', 'CRIACAO', `Criou o acesso do usuário "${result.user.name}"`);
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Não foi possível criar o usuário.', 'error');
+      return false;
+    }
   };
 
-  const updateUser = (id: string, changes: Partial<Omit<User, 'id' | 'lastAccess'>>) => {
-    if (!checkAdminPermission('Editar Usuário')) return;
+  const updateUser = async (
+    id: string,
+    changes: Partial<Omit<User, 'id' | 'lastAccess'>> & { password?: string }
+  ) => {
+    if (!checkAdminPermission('Editar Usuário')) return false;
     if (currentUser?.id === id) {
-      showToast('Os dados de acesso do administrador autenticado não podem ser alterados nesta etapa.', 'error');
-      return;
+      showToast('Não é possível alterar o próprio usuário nesta tela.', 'error');
+      return false;
     }
     if (changes.email && users.some((user) => user.id !== id && user.email.toLowerCase() === changes.email!.toLowerCase())) {
       showToast('Já existe outro usuário cadastrado com este e-mail.', 'error');
-      return;
+      return false;
     }
     const existing = users.find((user) => user.id === id);
-    if (!existing) return;
-    setUsers((prev) => prev.map((user) => (user.id === id ? { ...user, ...changes } : user)));
-    showToast('Usuário atualizado com sucesso!', 'success');
-    addAuditLog('Usuários', 'EDICAO', `Atualizou o cadastro do usuário ID ${id}`);
+    if (!existing) return false;
+    const { password, ...profileChanges } = changes;
+    const updated = { ...existing, ...profileChanges };
+    const avatarUrl = Object.prototype.hasOwnProperty.call(profileChanges, 'avatarUrl')
+      ? profileChanges.avatarUrl
+      : existing.avatarUrl;
+
+    try {
+      let result;
+      try {
+        result = await updateAuthUser(id, {
+          name: updated.name,
+          email: updated.email,
+          role: updated.role,
+          unit: updated.unit,
+          active: updated.active,
+          ...(password ? { password } : {})
+        });
+      } catch (error) {
+        if (!(error instanceof PersistenceApiError) || error.status !== 404) throw error;
+        if (!password) {
+          showToast('Defina uma senha para liberar o acesso deste cadastro antigo.', 'error');
+          return false;
+        }
+        result = await createAuthUser({
+          name: updated.name,
+          email: updated.email,
+          password,
+          role: updated.role,
+          unit: updated.unit,
+          active: updated.active
+        });
+      }
+
+      setUsers((prev) => prev.map((user) => (
+        user.id === id ? { ...result.user, avatarUrl } : user
+      )));
+      showToast('Usuário atualizado com sucesso!', 'success');
+      addAuditLog('Usuários', 'EDICAO', `Atualizou o cadastro do usuário "${updated.name}"`);
+      return true;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Não foi possível atualizar o usuário.', 'error');
+      return false;
+    }
   };
 
-  const toggleUserActive = (id: string) => {
-    if (!checkAdminPermission('Alterar Status de Usuário')) return;
+  const toggleUserActive = async (id: string) => {
+    if (!checkAdminPermission('Alterar Status de Usuário')) return false;
     const user = users.find((item) => item.id === id);
     if (currentUser?.id === id && user?.active) {
       showToast('Não é possível desativar o próprio usuário durante a sessão.', 'error');
-      return;
+      return false;
     }
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, active: !u.active } : u))
-    );
+    if (!user) return false;
+    try {
+      const result = await updateAuthUser(id, {
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        unit: user.unit,
+        active: !user.active
+      });
+      setUsers((prev) => prev.map((item) => (
+        item.id === id ? { ...result.user, avatarUrl: item.avatarUrl } : item
+      )));
+      showToast(result.user.active ? 'Usuário ativado.' : 'Usuário desativado.', 'success');
+      addAuditLog('Usuários', 'EDICAO', `${result.user.active ? 'Ativou' : 'Desativou'} o usuário "${user.name}"`);
+      return true;
+    } catch (error) {
+      const message = error instanceof PersistenceApiError && error.status === 404
+        ? 'Edite este cadastro e defina uma senha antes de liberar o acesso.'
+        : error instanceof Error ? error.message : 'Não foi possível alterar o usuário.';
+      showToast(message, 'error');
+      return false;
+    }
   };
 
-  const deleteUser = (id: string) => {
-    if (!checkAdminPermission('Excluir Usuário')) return;
+  const deleteUser = async (id: string) => {
+    if (!checkAdminPermission('Excluir Usuário')) return false;
     if (currentUser?.id === id) {
       showToast('Não é possível excluir o próprio usuário durante a sessão.', 'error');
-      return;
+      return false;
     }
 
     const user = users.find((item) => item.id === id);
+    try {
+      await deleteAuthUser(id);
+    } catch (error) {
+      if (!(error instanceof PersistenceApiError) || error.status !== 404) {
+        showToast(error instanceof Error ? error.message : 'Não foi possível excluir o usuário.', 'error');
+        return false;
+      }
+    }
     setUsers((prev) => prev.filter((item) => item.id !== id));
     showToast('Usuário excluído com sucesso.', 'success');
     addAuditLog('Usuários', 'EXCLUSAO', `Excluiu o usuário "${user?.name || id}"`);
+    return true;
   };
 
   return (
@@ -2001,9 +2113,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         persistenceStatus,
         persistenceMessage,
-        loginAdmin,
+        loginUser,
         setupInitialAdmin,
-        logoutAdmin,
+        logoutUser,
         retryPersistence,
         currentUser,
         setCurrentUser,

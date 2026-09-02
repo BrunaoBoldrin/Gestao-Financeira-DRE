@@ -6,7 +6,7 @@ export const AuthScreen: React.FC = () => {
   const {
     persistenceStatus,
     persistenceMessage,
-    loginAdmin,
+    loginUser,
     setupInitialAdmin,
     retryPersistence
   } = useApp();
@@ -31,7 +31,7 @@ export const AuthScreen: React.FC = () => {
     setSubmitting(true);
     const success = isSetup
       ? await setupInitialAdmin({ setupToken, name, email, password })
-      : await loginAdmin(email, password);
+      : await loginUser(email, password);
     if (!success) setLocalError('Confira os dados informados e tente novamente.');
     setSubmitting(false);
   };
@@ -41,7 +41,7 @@ export const AuthScreen: React.FC = () => {
       <div className="min-h-screen bg-[#081728] flex items-center justify-center p-6 text-white">
         <div className="text-center">
           <div className="w-12 h-12 mx-auto rounded-2xl border-2 border-[#C5A059] border-t-transparent animate-spin" />
-          <p className="mt-4 text-sm font-semibold text-gray-200">Validando sessão e banco de dados...</p>
+          <p className="mt-4 text-sm font-semibold text-gray-200">Carregando...</p>
         </div>
       </div>
     );
@@ -54,7 +54,7 @@ export const AuthScreen: React.FC = () => {
           <div className="w-12 h-12 mx-auto rounded-full bg-rose-50 text-rose-700 flex items-center justify-center">
             <span className="material-symbols-outlined">database_off</span>
           </div>
-          <h1 className="mt-4 text-lg font-black text-[#0b1c30]">Banco protegido indisponível</h1>
+          <h1 className="mt-4 text-lg font-black text-[#0b1c30]">Sistema indisponível</h1>
           <p className="mt-2 text-xs text-gray-600">{persistenceMessage}</p>
           <button onClick={retryPersistence} className="mt-5 px-4 py-2.5 bg-[#131b2e] text-white rounded-lg text-xs font-bold">
             Tentar novamente
@@ -73,16 +73,15 @@ export const AuthScreen: React.FC = () => {
         <div className="text-center mb-6">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-[#C5A059] text-[#081728] flex items-center justify-center text-lg font-black shadow-lg">RF</div>
           <h1 className="mt-4 text-2xl font-black text-white tracking-tight">Gestão Financeira & DRE</h1>
-          <p className="mt-1 text-xs text-blue-100/70">Dados empresariais protegidos e criptografados</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-2xl border border-white/20 p-7 space-y-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9b762a]">
-              {isSetup ? 'Configuração inicial' : 'Acesso administrativo'}
+              {isSetup ? 'Configuração inicial' : 'Acesso ao sistema'}
             </p>
             <h2 className="mt-1 text-lg font-black text-[#0b1c30]">
-              {isSetup ? 'Criar administrador' : 'Entrar no sistema'}
+              {isSetup ? 'Criar administrador' : 'Entrar'}
             </h2>
             <p className="mt-1 text-xs text-gray-500">{persistenceMessage}</p>
           </div>
@@ -131,11 +130,9 @@ export const AuthScreen: React.FC = () => {
 
           <button type="submit" disabled={submitting} className="w-full py-3 bg-[#131b2e] hover:bg-[#0b1c30] disabled:bg-gray-400 text-white rounded-lg text-sm font-bold transition shadow-lg flex items-center justify-center gap-2">
             {submitting && <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />}
-            {submitting ? 'Validando...' : isSetup ? 'Criar administrador e entrar' : 'Entrar com segurança'}
+            {submitting ? 'Entrando...' : isSetup ? 'Criar administrador e entrar' : 'Entrar'}
           </button>
         </form>
-
-        <p className="mt-4 text-center text-[10px] text-blue-100/50">Sessão protegida por cookie HTTP-only · Senha não armazenada em texto</p>
       </div>
     </div>
   );
