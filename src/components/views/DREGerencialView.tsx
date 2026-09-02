@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { CategoriaMaster, DREItem, GrupoDRE, Lancamento } from '../../types';
 import { getLancamentoCompetencia, resolveGrupoDRE } from '../../utils/dre';
+import { isMonthValue, resolveReferenceMonth } from '../../utils/dateRange';
 
 type CategoryValues = Map<string, number>;
 type MonthSummary = Record<GrupoDRE, CategoryValues>;
@@ -127,15 +128,26 @@ export const DREGerencialView: React.FC = () => {
     '14': true
   });
 
-  const currentReferenceMonth = fechamentoMensal.mesAno;
+  const currentReferenceMonth = useMemo(
+    () => resolveReferenceMonth(
+      lancamentos.map((item) => getLancamentoCompetencia(item)),
+      fechamentoMensal.mesAno
+    ),
+    [fechamentoMensal.mesAno, lancamentos]
+  );
   const [selectedMonth, setSelectedMonth] = useState(currentReferenceMonth);
   const [unidadeDre, setUnidadeDre] = useState(
     isFinance && currentUser ? currentUser.unit : selectedUnit
   );
   const comparisonMonth = previousMonth(selectedMonth);
+  useEffect(() => {
+    if (!isMonthValue(selectedMonth)) setSelectedMonth(currentReferenceMonth);
+  }, [currentReferenceMonth, selectedMonth]);
 
   const availableMonths = useMemo(() => {
-    const months = new Set<string>(lancamentos.map((item) => getLancamentoCompetencia(item).substring(0, 7)));
+    const months = new Set<string>(
+      lancamentos.map((item) => getLancamentoCompetencia(item).substring(0, 7)).filter(isMonthValue)
+    );
     const [referenceYear, referenceMonth] = currentReferenceMonth.split('-').map(Number);
     for (let index = 0; index < 12; index += 1) {
       const date = new Date(referenceYear, referenceMonth - 1 - index, 1);

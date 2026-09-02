@@ -1,8 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CompetenciaSelect, formatCompetencia } from '../common/CompetenciaSelect';
 import { SortableTableHeader } from '../common/SortableTableHeader';
-import { getDateRangeBounds, isDateInRange, normalizeDateValue } from '../../utils/dateRange';
+import {
+  getDateRangeBounds,
+  getMonthValue,
+  isDateInRange,
+  isMonthValue,
+  normalizeDateValue,
+  resolveReferenceMonth
+} from '../../utils/dateRange';
+import { getLancamentoCompetencia } from '../../utils/dre';
 import { useSortableData } from '../../hooks/useSortableData';
 import {
   BarChart,
@@ -71,9 +79,19 @@ export const OverviewView: React.FC = () => {
     canExecuteFinancialActions
   } = useApp();
 
-  const [competencia, setCompetencia] = useState(fechamentoMensal.mesAno);
+  const dashboardReferenceMonth = useMemo(
+    () => resolveReferenceMonth(
+      filteredLancamentos.map((lancamento) => lancamento.dataVencimento),
+      fechamentoMensal.mesAno
+    ),
+    [fechamentoMensal.mesAno, filteredLancamentos]
+  );
+  const [competencia, setCompetencia] = useState(dashboardReferenceMonth);
   const [periodoRascunho, setPeriodoRascunho] = useState({ inicio: '', fim: '' });
   const [periodoAplicado, setPeriodoAplicado] = useState({ inicio: '', fim: '' });
+  useEffect(() => {
+    if (!isMonthValue(fechamentoMensal.mesAno)) setCompetencia(dashboardReferenceMonth);
+  }, [dashboardReferenceMonth, fechamentoMensal.mesAno]);
   const periodoPersonalizadoAtivo = Boolean(periodoAplicado.inicio && periodoAplicado.fim);
   const caixasFisicosVisiveis = bancos.filter(
     (banco) =>
@@ -121,7 +139,7 @@ export const OverviewView: React.FC = () => {
   const resultadoOperacional = totalReceitas - totalDespesas;
   const margemOperacional = totalReceitas > 0 ? (resultadoOperacional / totalReceitas) * 100 : 0;
   const revenueVariation = useMemo(() => {
-    if (periodoPersonalizadoAtivo || competencia === 'TODOS') return null;
+    if (periodoPersonalizadoAtivo || competencia === 'TODOS' || !isMonthValue(competencia)) return null;
 
     const [competenciaYear, competenciaMonth] = competencia.split('-').map(Number);
     const previousDate = new Date(competenciaYear, competenciaMonth - 2, 1);
@@ -143,37 +161,49 @@ export const OverviewView: React.FC = () => {
   const pendingOCRDocs = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO');
 
   const chartData = useMemo(() => {
-    const year = Number(fechamentoMensal.mesAno.substring(0, 4));
-    return Array.from({ length: 12 }, (_, index) => {
-      const date = new Date(year, index, 1);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const items = lancamentosValidos.filter((item) => normalizeDateValue(item.dataVencimento).startsWith(monthKey));
-      const label = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
-      return {
-        mes: label.charAt(0).toUpperCase() + label.slice(1),
-        Receitas: items.filter((item) => item.tipo === 'RECEITA').reduce((total, item) => total + item.valor, 0),
-        Despesas: items.filter((item) => item.tipo === 'DESPESA').reduce((total, item) => total + item.valor, 0)
-      };
-    });
-  }, [fechamentoMensal.mesAno, lancamentosValidos]);
+    const totals = new Map<string, { Receitas: number; Despesas: number }>();
 
-  const chartYear = fechamentoMensal.mesAno.substring(0, 4);
-  const lancamentosAnoGrafico = useMemo(
-    () => lancamentosValidos.filter((item) => normalizeDateValue(item.dataVencimento).startsWith(chartYear)),
-    [chartYear, lancamentosValidos]
-  );
+    lancamentosValidos.forEach((item) => {
+      const monthKey = getMonthValue(getLancamentoCompetencia(item));
+      if (!isMonthValue(monthKey)) return;
+      const current = totals.get(monthKey) || { Receitas: 0, Despesas: 0 };
+      current[item.tipo === 'RECEITA' ? 'Receitas' : 'Despesas'] += item.valor;
+      totals.set(monthKey, current);
+    });
+
+    return Array.from(totals.entries())
+      .sort(([monthA], [monthB]) => monthA.localeCompare(monthB))
+      .map(([monthKey, values]) => {
+        const [year, month] = monthKey.split('-').map(Number);
+        const label = new Date(year, month - 1, 1)
+          .toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+          .replace('.', '');
+        return { competencia: monthKey, mes: label.charAt(0).toUpperCase() + label.slice(1), ...values };
+      });
+  }, [lancamentosValidos]);
+
+  const chartPeriodLabel = chartData.length > 0
+    ? `${formatCompetencia(chartData[0].competencia)} a ${formatCompetencia(chartData[chartData.length - 1].competencia)} · ${chartData.length} mês(es) com dados`
+    : 'Nenhuma competência com data válida';
 
   const categoryPieData = useMemo(() => {
     const colors = ['#131b2e', '#C5A059', '#003366', '#64748b', '#94a3b8', '#cbd5e1'];
     const totals = new Map<string, number>();
-    lancamentosAnoGrafico
+    lancamentosCards
       .filter((item) => item.tipo === 'DESPESA')
       .forEach((item) => totals.set(item.categoria, (totals.get(item.categoria) || 0) + item.valor));
 
+    const totalDespesasFiltradas = Array.from(totals.values()).reduce((total, value) => total + value, 0);
+
     return Array.from(totals.entries())
       .sort((a, b) => b[1] - a[1])
-      .map(([name, value], index) => ({ name, value, color: colors[index % colors.length] }));
-  }, [lancamentosAnoGrafico]);
+      .map(([name, value], index) => ({
+        name,
+        value,
+        percentage: totalDespesasFiltradas > 0 ? (value / totalDespesasFiltradas) * 100 : 0,
+        color: colors[index % colors.length]
+      }));
+  }, [lancamentosCards]);
 
   const ultimosLancamentos = useMemo(
     () => [...lancamentosValidos]
@@ -229,7 +259,7 @@ export const OverviewView: React.FC = () => {
                   setPeriodoAplicado({ inicio: '', fim: '' });
                 }}
                 lancamentos={filteredLancamentos}
-                referenceMonth={fechamentoMensal.mesAno}
+                referenceMonth={dashboardReferenceMonth}
                 allowAll
               />
             </div>
@@ -271,7 +301,7 @@ export const OverviewView: React.FC = () => {
                 onClick={() => {
                   setPeriodoRascunho({ inicio: '', fim: '' });
                   setPeriodoAplicado({ inicio: '', fim: '' });
-                  setCompetencia(fechamentoMensal.mesAno);
+                  setCompetencia(dashboardReferenceMonth);
                 }}
                 className="px-3 py-2 border border-white/40 text-white rounded-lg text-xs font-bold hover:bg-white/10"
               >
@@ -457,7 +487,7 @@ export const OverviewView: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-sm font-bold text-[#0b1c30]">Evolução Mensal de Receitas vs Despesas</h3>
-              <p className="text-xs text-gray-500">Janeiro a dezembro de {chartYear}, independente do filtro dos cards</p>
+              <p className="text-xs text-gray-500">{chartPeriodLabel} · unidade selecionada</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3">
               <div className="flex items-center gap-3 text-[11px] font-semibold text-gray-600" aria-label="Legenda do gráfico">
@@ -477,6 +507,11 @@ export const OverviewView: React.FC = () => {
           </div>
 
           <div className="h-64 w-full">
+            {chartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-gray-500">
+                Nenhuma receita ou despesa com competência válida para exibir.
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -487,6 +522,7 @@ export const OverviewView: React.FC = () => {
                 <Bar dataKey="Despesas" fill="#C5A059" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -494,7 +530,7 @@ export const OverviewView: React.FC = () => {
         <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-[#0b1c30]">Distribuição de Custos por Categoria</h3>
-            <p className="text-xs text-gray-500 mb-2">Despesas de {chartYear} na unidade selecionada</p>
+            <p className="text-xs text-gray-500 mb-2">{periodoCardsLabel} · unidade selecionada</p>
 
             <div className="h-44 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -512,7 +548,12 @@ export const OverviewView: React.FC = () => {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(val: any) => `R$ ${Number(val).toLocaleString('pt-BR')}`} />
+                  <Tooltip
+                    formatter={(value: any, _name: any, item: any) => [
+                      `${formatTooltipCurrency(Number(value))} (${Number(item?.payload?.percentage || 0).toFixed(1)}%)`,
+                      item?.payload?.name || 'Categoria'
+                    ]}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -525,11 +566,14 @@ export const OverviewView: React.FC = () => {
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }}></span>
                   <span className="text-gray-700 truncate">{cat.name}</span>
                 </div>
-                <span className="font-bold text-[#0b1c30]">
-                  R$ {cat.value.toLocaleString('pt-BR')}
+                <span className="font-bold text-[#0b1c30] whitespace-nowrap">
+                  {formatTooltipCurrency(cat.value)} · {cat.percentage.toFixed(1)}%
                 </span>
               </div>
             ))}
+            {categoryPieData.length === 0 && (
+              <p className="py-3 text-center text-xs text-gray-500">Nenhuma despesa no filtro aplicado.</p>
+            )}
           </div>
         </div>
       </div>

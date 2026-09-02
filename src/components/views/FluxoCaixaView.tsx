@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { getDateRangeBounds, isDateInRange, normalizeDateValue } from '../../utils/dateRange';
+import { getDateRangeBounds, isDateInRange, isMonthValue, normalizeDateValue, resolveReferenceMonth } from '../../utils/dateRange';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import type { Lancamento } from '../../types';
@@ -55,9 +55,10 @@ const getPeriodInfo = (dateValue: string) => {
 };
 
 const getCompetenciaRange = (competencia: string) => {
-  const [year, month] = competencia.split('-').map(Number);
+  const safeCompetencia = resolveReferenceMonth([], competencia);
+  const [year, month] = safeCompetencia.split('-').map(Number);
   const lastDay = new Date(year, month, 0).getDate();
-  return { inicio: `${competencia}-01`, fim: `${competencia}-${String(lastDay).padStart(2, '0')}` };
+  return { inicio: `${safeCompetencia}-01`, fim: `${safeCompetencia}-${String(lastDay).padStart(2, '0')}` };
 };
 
 const monthLabel = (month: string) => {
@@ -95,14 +96,24 @@ const FluxoTooltip = ({ active, payload, label }: any) => {
 export const FluxoCaixaView: React.FC = () => {
   const { lancamentos, bancos, units, selectedUnit, fechamentoMensal, isFinance, currentUser } = useApp();
   const [unidadeFluxo, setUnidadeFluxo] = useState(isFinance && currentUser ? currentUser.unit : selectedUnit);
-  const competenciaAbertaRange = useMemo(() => getCompetenciaRange(fechamentoMensal.mesAno), [fechamentoMensal.mesAno]);
+  const referenciaCalendario = useMemo(
+    () => resolveReferenceMonth(
+      lancamentos.map((item) => item.dataVencimento),
+      fechamentoMensal.mesAno
+    ),
+    [fechamentoMensal.mesAno, lancamentos]
+  );
+  const competenciaAbertaRange = useMemo(() => getCompetenciaRange(referenciaCalendario), [referenciaCalendario]);
   const [dataInicioInput, setDataInicioInput] = useState(competenciaAbertaRange.inicio);
   const [dataFimInput, setDataFimInput] = useState(competenciaAbertaRange.fim);
   const [periodoAplicado, setPeriodoAplicado] = useState(competenciaAbertaRange);
   const [visao, setVisao] = useState<'GRAFICO' | 'CALENDARIO'>('GRAFICO');
-  const [mesCalendario, setMesCalendario] = useState(fechamentoMensal.mesAno);
+  const [mesCalendario, setMesCalendario] = useState(referenciaCalendario);
   const [modoCalendario, setModoCalendario] = useState<ModoCalendario>('COMPARATIVO');
   const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isMonthValue(mesCalendario)) setMesCalendario(referenciaCalendario);
+  }, [mesCalendario, referenciaCalendario]);
 
   const periodoPersonalizadoInvalido = Boolean(
     dataInicioInput && dataFimInput && normalizeDateValue(dataInicioInput) > normalizeDateValue(dataFimInput)

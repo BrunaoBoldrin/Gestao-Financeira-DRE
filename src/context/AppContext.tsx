@@ -24,6 +24,7 @@ import {
 } from '../types';
 import { ROLE_DEFAULT_VIEW, canAccessAllUnits, canAccessView } from '../config/accessControl';
 import { calculateDueDateSchedule } from '../utils/financialDates';
+import { normalizeDateValue, resolveReferenceMonth } from '../utils/dateRange';
 import {
   INITIAL_USERS,
   INITIAL_UNITS,
@@ -232,6 +233,34 @@ const INITIAL_APPLICATION_STATE: ApplicationStateSnapshot = {
   auditLogs: INITIAL_AUDIT_LOGS,
   regrasAutomacao: INITIAL_AUTOMATIONS,
   dreData: INITIAL_DRE
+};
+
+const normalizePersistedFinancialDates = (snapshot: ApplicationStateSnapshot): ApplicationStateSnapshot => {
+  const lancamentos = snapshot.lancamentos.map((item) => {
+    const dataVencimento = normalizeDateValue(item.dataVencimento);
+    const dataCompetencia = normalizeDateValue(item.dataCompetencia) || dataVencimento;
+    const dataPagamento = normalizeDateValue(item.dataPagamento);
+
+    return {
+      ...item,
+      ...(dataVencimento ? { dataVencimento } : {}),
+      ...(dataCompetencia ? { dataCompetencia } : {}),
+      ...(item.dataPagamento && dataPagamento ? { dataPagamento } : {})
+    };
+  });
+  const mesAno = resolveReferenceMonth(
+    lancamentos.map((item) => item.dataCompetencia || item.dataVencimento),
+    snapshot.fechamentoMensal?.mesAno
+  );
+
+  return {
+    ...snapshot,
+    lancamentos,
+    fechamentoMensal: {
+      ...snapshot.fechamentoMensal,
+      mesAno
+    }
+  };
 };
 
 const persistentUrl = (value?: string) =>
@@ -499,6 +528,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         stateToApply = stored.data;
       }
+      stateToApply = normalizePersistedFinancialDates(stateToApply);
       if (auth.user.role === 'ADMIN') {
         const { users: authUsers } = await listAuthUsers();
         const legacyUsers = stateToApply.users.filter((storedUser) => !authUsers.some(
