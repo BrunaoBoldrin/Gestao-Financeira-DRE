@@ -293,6 +293,7 @@ def parse_financial_fields(text: str, file_name: str) -> dict[str, Any]:
     document_number = _extract_document_number(normalized)
     document_key = xml_fields.get("chaveDocumento") or _extract_document_key(normalized)
     direction, dre_impact, purpose = _suggest_financial_classification(normalized, document_type)
+    payment_method = _suggest_payment_method(normalized, document_type)
 
     return {
         "fornecedor": supplier,
@@ -305,6 +306,7 @@ def parse_financial_fields(text: str, file_name: str) -> dict[str, Any]:
         "linhaDigitavel": digit_line,
         "chaveDocumento": document_key,
         "identificadorTransacao": transaction_id,
+        "formaPagamento": payment_method,
         "documentoNumero": document_number,
         "pagador": payer,
         "recebedor": receiver,
@@ -335,7 +337,10 @@ def _extract_financial_entities(extracted: DocumentText, file_name: str) -> list
             for section in sections:
                 section_fields = parse_financial_fields(section, file_name)
                 section_fields["paginaOrigem"] = page_number
-                if float(section_fields.get("valorTotal") or 0) > 0:
+                if (
+                    float(section_fields.get("valorTotal") or 0) > 0
+                    and _has_independent_financial_identity(section, section_fields)
+                ):
                     page_entities.append(section_fields)
 
         for entity in page_entities:
@@ -372,6 +377,34 @@ def _split_financial_sections(text: str) -> list[str]:
         if section:
             sections.append(section)
     return sections or [text]
+
+
+def _has_independent_financial_identity(text: str, fields: dict[str, Any]) -> bool:
+    """Avoid treating fees or instructions as a second payable document."""
+    if any(
+        fields.get(key)
+        for key in ("linhaDigitavel", "identificadorTransacao", "chaveDocumento")
+    ):
+        return True
+
+    amount_label = re.search(
+        r"(?:valor\s*(?:total|do\s*documento|cobrado|a\s*pagar|l[ií]quido)|"
+        r"total\s*(?:da\s*nota|a\s*pagar)?)\D{0,25}"
+        r"(?:\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    date_label = re.search(
+        r"(?:vencimento|vence\s*em|data\s*(?:de|do)?\s*vencimento)\D{0,35}"
+        r"(?:\d{2}[/-]\d{2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return bool(
+        amount_label
+        and date_label
+        and (fields.get("cnpj") or fields.get("documentoNumero"))
+    )
 
 
 def _extract_xml_installments(text: str, file_name: str) -> list[dict[str, Any]]:
@@ -669,6 +702,25 @@ def _suggest_financial_classification(text: str, document_type: str) -> tuple[st
     if document_type in {"COMPROVANTE", "RECIBO"}:
         return "A_CONFIRMAR", "A_CONFIRMAR", "A_CONFIRMAR"
     return "A_CONFIRMAR", "A_CONFIRMAR", "A_CONFIRMAR"
+
+
+def _suggest_payment_method(text: str, document_type: str) -> str:
+    sample = text.casefold()
+    if document_type in {"BOLETO", "DDA"} or _extract_digit_line(text):
+        return "BOLETO"
+    if "pix" in sample or _extract_transaction_identifier(text):
+        return "PIX"
+    if any(term in sample for term in ("cartão de crédito", "cartao de credito")):
+        return "CARTAO_CREDITO"
+    if any(term in sample for term in ("cartão de débito", "cartao de debito")):
+        return "CARTAO_DEBITO"
+    if "carnê" in sample or "carne" in sample:
+        return "CARNE"
+    if any(term in sample for term in ("dinheiro", "espécie", "especie")):
+        return "DINHEIRO"
+    if document_type in {"NFE", "NFSE", "FATURA"}:
+        return "BOLETO"
+    return "TRANSFERENCIA"
 
 
 def _is_supplier_candidate(candidate: str) -> bool:

@@ -12,32 +12,38 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
 
   if (!isOpen) return null;
 
-  const processFile = (file: File) => {
-    const extension = file.name.toLowerCase().split('.').pop();
-    if (!extension || !['pdf', 'png', 'jpg', 'jpeg', 'xml'].includes(extension)) {
-      showToast('Formato inválido. Envie um arquivo PDF, PNG, JPG, JPEG ou XML.', 'error');
-      return;
-    }
-    if (file.size > 15 * 1024 * 1024) {
-      showToast('O documento deve ter no máximo 15 MB.', 'error');
-      return;
-    }
-    uploadDocumentoOCR(file);
+  const processFiles = (files: File[]) => {
+    const validFiles = files.filter((file) => {
+      const extension = file.name.toLowerCase().split('.').pop();
+      if (!extension || !['pdf', 'png', 'jpg', 'jpeg', 'xml'].includes(extension)) {
+        showToast(`Formato inválido em "${file.name}". Envie PDF, PNG, JPG, JPEG ou XML.`, 'error');
+        return false;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        showToast(`O arquivo "${file.name}" deve ter no máximo 15 MB.`, 'error');
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length === 0) return;
+
+    validFiles.forEach((file) => void uploadDocumentoOCR(file));
     onClose();
     setCurrentView('pending_review');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    if (e.target.files?.length) {
+      processFiles(Array.from(e.target.files));
     }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files?.length) {
+      processFiles(Array.from(e.dataTransfer.files));
     }
   };
 
@@ -79,10 +85,11 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
             <p className="text-[11px] text-gray-500 mb-4">Suporta PDF, PNG, JPG e XML até 15 MB</p>
 
             <label className="px-4 py-2 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] cursor-pointer shadow-xs transition">
-              <span>Selecionar Arquivo</span>
+              <span>Selecionar Arquivos</span>
               <input
                 type="file"
                 accept=".pdf,.png,.jpg,.jpeg,.xml"
+                multiple
                 onChange={handleFileChange}
                 className="hidden"
               />

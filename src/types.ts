@@ -160,6 +160,7 @@ export interface DocumentoOCR {
     linhaDigitavel?: string;
     chaveDocumento?: string;
     identificadorTransacao?: string;
+    formaPagamento?: Lancamento['formaPagamento'];
     sentidoSugerido?: SentidoFinanceiro;
     impactoDRESugerido?: ImpactoDRE;
     finalidadeSugerida?: FinalidadeFinanceira;
