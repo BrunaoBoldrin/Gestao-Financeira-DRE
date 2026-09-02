@@ -43,6 +43,7 @@ class OCRApiTests(unittest.TestCase):
         self.assertEqual(payload["motor"], "python-local")
         self.assertEqual(payload["dadosExtraidos"]["fornecedor"], "Galderma Brasil Ltda")
         self.assertEqual(payload["dadosExtraidos"]["valorTotal"], 12850.75)
+        self.assertEqual(payload["dadosExtraidos"]["formaPagamento"], "BOLETO")
         self.assertEqual(len(payload["metadados"]["hashArquivo"]), 64)
         self.assertIn("entidadesFinanceiras", payload)
 

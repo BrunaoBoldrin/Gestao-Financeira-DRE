@@ -67,6 +67,7 @@ def serialize_financial_data(data: dict) -> dict:
         "linhaDigitavel": data.get("linhaDigitavel", ""),
         "chaveDocumento": data.get("chaveDocumento", ""),
         "identificadorTransacao": data.get("identificadorTransacao", ""),
+        "formaPagamento": data.get("formaPagamento", "TRANSFERENCIA"),
         "documentoNumero": data.get("documentoNumero", ""),
         "pagador": data.get("pagador", ""),
         "recebedor": data.get("recebedor", ""),

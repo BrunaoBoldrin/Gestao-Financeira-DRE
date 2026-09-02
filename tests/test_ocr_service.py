@@ -147,6 +147,30 @@ class OCRServiceTests(unittest.TestCase):
         self.assertEqual([item["valorTotal"] for item in entities], [1250.0, 980.5])
         self.assertEqual([item["dataVencimento"] for item in entities], ["2026-08-20", "2026-09-05"])
 
+    def test_does_not_split_boleto_instructions_as_second_document(self):
+        text = """
+        BOLETO BANCÁRIO
+        Beneficiário: Fornecedor Alfa Ltda
+        CNPJ: 11.111.111/0001-11
+        Vencimento: 20/08/2026
+        Valor do documento: R$ 1.250,00
+        00190.00009 01234.567890 12345.678901 1 12340000125000
+
+        Instruções do boleto
+        Beneficiário após o vencimento: Banco Emissor
+        Cobrar juros de R$ 12,50 e multa de 2%.
+        """
+        result = analyze_document(
+            content=text.encode(),
+            mime_type="text/plain",
+            file_name="boleto_com_instrucoes.txt",
+            max_pages=5,
+        )
+
+        self.assertEqual(result["entidadesFinanceiras"], [])
+        self.assertEqual(result["formaPagamento"], "BOLETO")
+        self.assertEqual(result["valorTotal"], 1250.0)
+
     def test_splits_nfe_installments(self):
         xml = """<nfeProc><NFe><infNFe Id="NFe35123456789012345678901234567890123456789012">
         <ide><dhEmi>2026-08-05T10:00:00-03:00</dhEmi></ide>

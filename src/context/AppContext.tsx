@@ -163,7 +163,7 @@ interface AppContextType {
   addParcelamento: (p: Omit<Parcelamento, 'id' | 'parcelasPagas' | 'status' | 'cronograma'>) => void;
   pagarParcela: (parcelamentoId: string, numeroParcela: number, dados: DadosLiquidacao) => void;
   
-  uploadDocumentoOCR: (file: File) => void;
+  uploadDocumentoOCR: (file: File) => Promise<void>;
   aprovarDocumentoOCR: (docId: string, dadosFinal: DocumentoOCR['dadosExtraidos']) => void;
   conciliarDocumentoOCR: (
     docId: string,
@@ -1565,6 +1565,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           linhaDigitavel: extraidos.linhaDigitavel || '',
           chaveDocumento: extraidos.chaveDocumento || '',
           identificadorTransacao: extraidos.identificadorTransacao || '',
+          formaPagamento: extraidos.formaPagamento,
           sentidoSugerido: extraidos.sentidoSugerido || 'A_CONFIRMAR',
           impactoDRESugerido: extraidos.impactoDRESugerido || 'A_CONFIRMAR',
           finalidadeSugerida: extraidos.finalidadeSugerida || 'A_CONFIRMAR',

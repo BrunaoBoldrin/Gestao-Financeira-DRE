@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import { calculateDueDateSchedule } from '../../utils/financialDates';
-import { FinalidadeFinanceira, ImpactoDRE, SentidoFinanceiro } from '../../types';
+import { FinalidadeFinanceira, ImpactoDRE, Lancamento, SentidoFinanceiro } from '../../types';
 import { findDuplicateDocumentByHash, findFinancialMatches } from '../../utils/financialMatching';
 
 export const PendingReviewView: React.FC = () => {
@@ -45,6 +45,7 @@ export const PendingReviewView: React.FC = () => {
   const [centroCusto, setCentroCusto] = useState('');
   const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 dias default
   const [bancoId, setBancoId] = useState('');
+  const [formaPagamento, setFormaPagamento] = useState<Lancamento['formaPagamento']>('BOLETO');
   const [observacoes, setObservacoes] = useState('');
   const [unidade, setUnidade] = useState('');
   const [sentido, setSentido] = useState<SentidoFinanceiro>('A_CONFIRMAR');
@@ -72,6 +73,14 @@ export const PendingReviewView: React.FC = () => {
       setCategoria(currentDoc.dadosExtraidos.categoria || 'Insumos Médicos & Estéticos');
       setCentroCusto(currentDoc.dadosExtraidos.centroCusto || 'Clínica / Atendimento');
       setObservacoes(currentDoc.dadosExtraidos.observacoes || '');
+      setFormaPagamento(
+        currentDoc.dadosExtraidos.formaPagamento ||
+        (['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo)
+          ? 'BOLETO'
+          : currentDoc.dadosExtraidos.identificadorTransacao
+            ? 'PIX'
+            : 'TRANSFERENCIA')
+      );
       setSentido(currentDoc.dadosExtraidos.sentidoSugerido || 'A_CONFIRMAR');
       setImpactoDRE(currentDoc.dadosExtraidos.impactoDRESugerido || 'A_CONFIRMAR');
       setFinalidade(currentDoc.dadosExtraidos.finalidadeSugerida || 'A_CONFIRMAR');
@@ -232,6 +241,7 @@ export const PendingReviewView: React.FC = () => {
       linhaDigitavel: currentDoc.dadosExtraidos.linhaDigitavel,
       chaveDocumento: currentDoc.dadosExtraidos.chaveDocumento,
       identificadorTransacao: currentDoc.dadosExtraidos.identificadorTransacao,
+      formaPagamento,
       sentidoSugerido: sentido,
       impactoDRESugerido: impactoDRE,
       finalidadeSugerida: finalidade,
@@ -279,7 +289,7 @@ export const PendingReviewView: React.FC = () => {
       cpfCnpjContraparte: cnpj,
       bancoId: banco.id,
       contaBancaria: banco.banco,
-      formaPagamento: currentDoc.tipo === 'BOLETO' ? 'BOLETO' as const : currentDoc.dadosExtraidos.identificadorTransacao ? 'PIX' as const : 'TRANSFERENCIA' as const,
+      formaPagamento,
       unidade: unidadeLancamento,
       observacoes: dadosFinais.observacoes || `Processado via OCR V2 (${currentDoc.confiancaOCR}% confiança)`,
       comprovanteUrl: currentDoc.previewUrl,
@@ -493,7 +503,7 @@ export const PendingReviewView: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Unidade / Filial *</label>
                 <select
@@ -523,6 +533,22 @@ export const PendingReviewView: React.FC = () => {
                 {unidadeLancamento && availableBanks.length === 0 && (
                   <p className="text-[10px] text-rose-600 mt-1">Nenhuma conta ativa cadastrada para esta unidade.</p>
                 )}
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Forma de pagamento *</label>
+                <select
+                  value={formaPagamento}
+                  onChange={(e) => setFormaPagamento(e.target.value as Lancamento['formaPagamento'])}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs bg-white font-semibold"
+                >
+                  <option value="PIX">PIX</option>
+                  <option value="BOLETO">Boleto</option>
+                  <option value="CARNE">Carnê</option>
+                  <option value="CARTAO_CREDITO">Cartão de crédito</option>
+                  <option value="CARTAO_DEBITO">Cartão de débito</option>
+                  <option value="DINHEIRO">Dinheiro</option>
+                  <option value="TRANSFERENCIA">Transferência</option>
+                </select>
               </div>
             </div>
 
