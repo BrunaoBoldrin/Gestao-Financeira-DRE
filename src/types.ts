@@ -298,6 +298,7 @@ export interface UnitConfig {
 }
 
 export interface CategoriaMaster {
+  centroCustoId?: string;
   unidadeIds?: string[];
   id: string;
   codigo: string;

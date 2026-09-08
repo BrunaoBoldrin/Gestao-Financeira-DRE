@@ -89,8 +89,12 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="text-xs font-bold">Descrição<input className={fieldClass} value={form.descricao} onChange={(e) => set('descricao', e.target.value)} /></label>
           <label className="text-xs font-bold">Fornecedor / Cliente<input className={fieldClass} value={form.fornecedorCliente} onChange={(e) => set('fornecedorCliente', e.target.value)} /></label>
-          <label className="text-xs font-bold">Categoria<select className={fieldClass} value={form.categoria} onChange={(e) => set('categoria', e.target.value)}>{availableCategories.map((category) => <option key={category.id} value={category.nome}>{category.nome}</option>)}</select></label>
-          <label className="text-xs font-bold">Centro de custo<select className={fieldClass} value={form.centroCusto} onChange={(e) => set('centroCusto', e.target.value)}>{availableCenters.map((center) => <option key={center.id} value={center.nome}>{center.nome}</option>)}</select></label>
+          <label className="text-xs font-bold">Categoria<select className={fieldClass} value={form.categoria} onChange={(e) => {
+            const plan = availableCategories.find((category) => category.nome === e.target.value);
+            const center = availableCenters.find((center) => center.id === plan?.centroCustoId);
+            setForm((current) => ({ ...current, categoria: e.target.value, centroCusto: center?.nome || '' }));
+          }}>{availableCategories.map((category) => <option key={category.id} value={category.nome}>{category.nome}</option>)}</select></label>
+          <label className="text-xs font-bold">Centro de custo do plano<input readOnly className={fieldClass + ' bg-gray-50'} value={form.centroCusto} placeholder="Configure o centro de custo no plano" /></label>
           <label className="text-xs font-bold">Valor (R$)<input className={fieldClass} inputMode="decimal" value={form.valor} onChange={(e) => set('valor', e.target.value)} /></label>
           <label className="text-xs font-bold">Forma de pagamento<select className={fieldClass} value={form.formaPagamento} onChange={(e) => set('formaPagamento', e.target.value)}>{paymentOptions.map((option) => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select></label>
           <label className="text-xs font-bold">Data de competência<input type="date" className={fieldClass} value={form.dataCompetencia} onChange={(e) => set('dataCompetencia', e.target.value)} /></label>
