@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { canAccessView } from '../../config/accessControl';
 import type { ViewKey } from '../../types';
@@ -15,9 +15,16 @@ interface SidebarGroup {
   items: SidebarItem[];
 }
 
-export const Sidebar: React.FC = () => {
+export const Sidebar: React.FC<{ mobileOpen: boolean; onClose: () => void }> = ({ mobileOpen, onClose }) => {
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [mobileOpen, onClose]);
   const { currentView, setCurrentView, documentosOCR, currentUser } = useApp();
   const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => { if (mobileOpen) setCollapsed(false); }, [mobileOpen]);
 
   const pendingOCR = documentosOCR.filter((d) => d.status === 'PENDENTE_REVISAO').length;
 
@@ -71,13 +78,16 @@ export const Sidebar: React.FC = () => {
     .filter((group) => group.items.length > 0);
 
   return (
-    <aside
-      className={`bg-[#0b1c30] text-gray-200 border-r border-[#131b2e] flex flex-col justify-between transition-all duration-300 z-40 select-none ${
-        collapsed ? 'w-16' : 'w-64'
+    <>
+    {mobileOpen && <button aria-label="Fechar menu" onClick={onClose} className="fixed inset-0 bg-black/50 z-40 lg:hidden" />}
+    <aside id="app-navigation" aria-label="Navegação principal"
+      className={`${mobileOpen ? 'flex fixed inset-y-0 left-0 w-72 shadow-xl' : 'hidden'} lg:flex lg:static shrink-0 bg-[#0b1c30] text-gray-200 border-r border-[#131b2e] overflow-y-auto flex-col justify-between transition-all duration-300 z-40 select-none ${
+        collapsed ? 'lg:w-16' : 'lg:w-64'
       }`}
     >
       {/* Brand Header */}
       <div>
+        <button onClick={onClose} className="lg:hidden p-3 text-right" aria-label="Fechar menu"><span className="material-symbols-outlined">close</span></button>
         <div className="h-16 px-4 flex items-center justify-between border-b border-[#1a2e46] bg-[#071322]">
           {!collapsed && (
             <div className="flex items-center gap-2.5">
@@ -102,7 +112,7 @@ export const Sidebar: React.FC = () => {
 
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1 rounded text-gray-400 hover:text-white hover:bg-[#131b2e] transition"
+            className="hidden lg:block p-1 rounded text-gray-400 hover:text-white hover:bg-[#131b2e] transition"
             title={collapsed ? 'Expandir menu' : 'Recolher menu'}
           >
             <span className="material-symbols-outlined text-lg">
@@ -112,7 +122,7 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Navigation List */}
-        <div className="py-3 px-2 overflow-y-auto max-h-[calc(100vh-110px)] space-y-4">
+        <div className="py-3 px-2 overflow-y-auto lg:max-h-[calc(100dvh-110px)] space-y-4">
           {visibleMenuGroups.map((group) => (
             <div key={group.groupName}>
               {!collapsed && (
@@ -126,7 +136,7 @@ export const Sidebar: React.FC = () => {
                   return (
                     <button
                       key={item.key}
-                      onClick={() => setCurrentView(item.key)}
+                      onClick={() => { setCurrentView(item.key); onClose(); }}
                       title={collapsed ? item.label : undefined}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                         isActive
@@ -159,5 +169,6 @@ export const Sidebar: React.FC = () => {
       </div>
 
     </aside>
+    </>
   );
 };

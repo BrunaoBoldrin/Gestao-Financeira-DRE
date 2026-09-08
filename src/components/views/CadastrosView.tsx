@@ -218,7 +218,7 @@ export const CadastrosView: React.FC = () => {
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
               Plano de Contas DRE
             </h3>
-            <div className="border border-gray-200 rounded-lg overflow-hidden text-xs">
+            <div className="border border-gray-200 rounded-lg overflow-x-auto text-xs">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
                   <tr>
@@ -365,7 +365,7 @@ export const CadastrosView: React.FC = () => {
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
               Lista de Fornecedores Cadastrados
             </h3>
-            <div className="border border-gray-200 rounded-lg overflow-hidden text-xs">
+            <div className="border border-gray-200 rounded-lg overflow-x-auto text-xs">
               <table className="w-full text-left">
                 <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
                   <tr>
@@ -500,7 +500,7 @@ export const CadastrosView: React.FC = () => {
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
               Tabela de Condições de Pagamento e Prazos DDL (Dias A/DF)
             </h3>
-            <div className="border border-gray-200 rounded-lg overflow-hidden text-xs">
+            <div className="border border-gray-200 rounded-lg overflow-x-auto text-xs">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
                   <tr>
