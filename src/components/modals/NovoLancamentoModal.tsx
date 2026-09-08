@@ -1,3 +1,4 @@
+import { CadastroSearch } from '../common/CadastroSearch';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -53,20 +54,15 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
   const handleClose = () => {
     setAnexo(null);
+    setDescricao('');
+    setCategoria('');
     onClose();
   };
 
   // Set default selects when lists load
   React.useEffect(() => {
-    const selectedCategoryIsValid = categorias.some(
-      (item) => item.nome === categoria && item.tipo === tipo && item.ativa
-    );
-    if (categorias.length > 0 && !selectedCategoryIsValid) {
-      const match = categorias.find((c) => c.tipo === tipo && c.ativa);
-      if (match) setCategoria(match.nome);
-    }
     if (centrosCusto.length > 0 && !centroCusto) {
-      setCentroCusto(centrosCusto[0].nome);
+      setCentroCusto(centrosCusto.find((item) => item.ativo)?.nome || '');
     }
   }, [categorias, centrosCusto, bancos, tipo]);
 
@@ -134,6 +130,16 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     e.preventDefault();
     if (!descricao || numVal <= 0 || !unidade || isSubmitting) return;
 
+    const selectedCadastro = categorias.find((item) => item.ativa && item.tipo === tipo && item.nome === categoria && item.nome === descricao);
+    if (!selectedCadastro) {
+      showToast('Selecione uma receita ou despesa da lista de cadastros.', 'error');
+      return;
+    }
+    if (!centrosCusto.some((item) => item.ativo && item.nome === centroCusto)) {
+      showToast('Selecione um centro de custo ativo.', 'error');
+      return;
+    }
+
     const selectedBanco = availableBanks.find((banco) => banco.id === bancoId);
     if (!selectedBanco) {
       showToast(`Cadastre ou selecione uma conta bancária para a unidade "${targetUnit}".`, 'error');
@@ -184,8 +190,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     const payload = {
       descricao,
       tipo,
-      categoria: categoria || (tipo === 'RECEITA' ? 'Procedimentos Estéticos' : 'Insumos Médicos & Estéticos'),
-      centroCusto: centroCusto || 'Clínica / Atendimento',
+      categoria: selectedCadastro.nome,
+      centroCusto,
       valor: numVal,
       dataCompetencia: dataCompetencia || dataEmissao,
       dataVencimento: dataVencimento || dataEmissao,
@@ -237,7 +243,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                setTipo('RECEITA');
+                setTipo('RECEITA'); setDescricao(''); setCategoria('');
               }}
               className={`py-2 rounded-md font-bold text-xs flex items-center justify-center gap-1.5 transition ${
                 tipo === 'RECEITA' ? 'bg-emerald-600 text-white shadow-xs' : 'text-gray-600 hover:bg-white'
@@ -249,7 +255,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                setTipo('DESPESA');
+                setTipo('DESPESA'); setDescricao(''); setCategoria('');
               }}
               className={`py-2 rounded-md font-bold text-xs flex items-center justify-center gap-1.5 transition ${
                 tipo === 'DESPESA' ? 'bg-rose-600 text-white shadow-xs' : 'text-gray-600 hover:bg-white'
@@ -260,18 +266,20 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             </button>
           </div>
 
+          <CadastroSearch
+            label={tipo === 'RECEITA' ? 'Receita cadastrada' : 'Despesa cadastrada'}
+            value={descricao}
+            options={categorias.filter((item) => item.ativa && item.tipo === tipo)}
+            onChange={(text) => { setDescricao(text); setCategoria(''); }}
+            onSelect={(item) => { setDescricao(item.nome); setCategoria(item.nome); }}
+          />
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Descrição do Título <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              placeholder={tipo === 'RECEITA' ? 'Ex: Aplicação de Toxina - Paciente Juliana' : 'Ex: Compra Insumos Galderma'}
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
-            />
+            <label htmlFor="manual-centro-custo" className="block text-xs font-semibold text-gray-700 mb-1">Centro de custo *</label>
+            <select id="manual-centro-custo" required value={centroCusto} onChange={(event) => setCentroCusto(event.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              <option value="">Selecione o centro de custo</option>
+              {centrosCusto.filter((item) => item.ativo).map((item) => <option key={item.id} value={item.nome}>{item.nome}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
