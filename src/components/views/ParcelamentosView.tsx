@@ -108,7 +108,7 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
                   {activeContract.titulo}
                 </h3>
                 <p className="text-xs text-gray-500">
-                  Fornecedor: {activeContract.fornecedor} • Categoria: {activeContract.categoria}
+                  Favorecido: {activeContract.fornecedor} • Categoria: {activeContract.categoria}
                 </p>
               </div>
 

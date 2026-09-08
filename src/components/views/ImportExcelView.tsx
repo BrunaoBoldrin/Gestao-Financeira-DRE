@@ -100,7 +100,7 @@ const IMPORT_TEMPLATE_HEADERS = [
   'Data Vencimento / 1º Vencimento (DD-MM-AAAA)',
   'Categoria DRE',
   'Centro de Custo',
-  'Fornecedor / Cliente',
+  'Favorecido / Cliente',
   'Conta Bancária',
   'Forma de Pagamento',
   'Unidade / Filial',
@@ -207,7 +207,7 @@ export const ImportExcelView: React.FC = () => {
         'Data Vencimento / 1º Vencimento (DD-MM-AAAA)': firstDueDateText,
         'Categoria DRE': sampleExpenseCategory,
         'Centro de Custo': sampleCostCenter,
-        'Fornecedor / Cliente': sampleSupplier?.nome || 'Fornecedor do exemplo',
+        'Favorecido / Cliente': sampleSupplier?.nome || 'Favorecido do exemplo',
         'Conta Bancária': '',
         'Forma de Pagamento': 'BOLETO',
         'Unidade / Filial': sampleUnit,
@@ -227,7 +227,7 @@ export const ImportExcelView: React.FC = () => {
         'Data Vencimento / 1º Vencimento (DD-MM-AAAA)': issueDateText,
         'Categoria DRE': sampleRevenueCategory,
         'Centro de Custo': sampleCostCenter,
-        'Fornecedor / Cliente': sampleClient?.nome || 'Cliente do exemplo',
+        'Favorecido / Cliente': sampleClient?.nome || 'Cliente do exemplo',
         'Conta Bancária': sampleBank?.banco || '[CADASTRE UMA CONTA ATIVA PARA IMPORTAR COMO PAGO]',
         'Forma de Pagamento': 'PIX',
         'Unidade / Filial': sampleUnit,
@@ -256,14 +256,14 @@ export const ImportExcelView: React.FC = () => {
       { Campo: 'Data Vencimento / 1º Vencimento', Obrigatório: 'Sim', Regra: 'Use DD-MM-AAAA. Com DDL, representa o primeiro vencimento.', Exemplo: firstDueDateText },
       { Campo: 'Categoria DRE', Obrigatório: 'Sim', Regra: 'Deve ser uma categoria ativa e compatível com o tipo RECEITA ou DESPESA.', Exemplo: sampleExpenseCategory },
       { Campo: 'Centro de Custo', Obrigatório: 'Sim', Regra: 'Deve corresponder exatamente a um centro de custo ativo.', Exemplo: sampleCostCenter },
-      { Campo: 'Fornecedor / Cliente', Obrigatório: 'Sim', Regra: 'Texto livre. Não precisa existir previamente no cadastro de fornecedores.', Exemplo: sampleSupplier?.nome || 'Fornecedor do exemplo' },
+      { Campo: 'Favorecido / Cliente', Obrigatório: 'Sim', Regra: 'Texto livre. Não precisa existir previamente no cadastro de favorecidos.', Exemplo: sampleSupplier?.nome || 'Favorecido do exemplo' },
       { Campo: 'Conta Bancária', Obrigatório: 'Somente se PAGO', Regra: 'Se preenchida, deve ser uma conta ativa pertencente à unidade informada.', Exemplo: sampleBank?.banco || 'Deixe vazio enquanto estiver PENDENTE' },
       { Campo: 'Forma de Pagamento', Obrigatório: 'Sim', Regra: 'Use PIX, BOLETO, CARNE, CARTAO_CREDITO, CARTAO_DEBITO, DINHEIRO ou TRANSFERENCIA.', Exemplo: 'BOLETO' },
       { Campo: 'Unidade / Filial', Obrigatório: 'Sim para Admin', Regra: 'Deve corresponder exatamente a uma unidade ativa. No perfil Financeiro, o sistema usa automaticamente a unidade do usuário.', Exemplo: sampleUnit },
       { Campo: 'Condição DDL', Obrigatório: 'Não', Regra: 'Divide o valor total pelos prazos. Pode usar uma condição ativa ou informar os dias separados por barra.', Exemplo: sampleInstallmentTerm?.nome || '30/60/90' },
       { Campo: 'Status', Obrigatório: 'Não', Regra: 'Aceita PAGO, PENDENTE, ATRASADO ou CANCELADO. Quando vazio, assume PENDENTE.', Exemplo: 'PENDENTE' },
       { Campo: 'Data Pagamento', Obrigatório: 'Somente se PAGO', Regra: 'Use DD-MM-AAAA.', Exemplo: issueDateText },
-      { Campo: 'CPF/CNPJ Contraparte', Obrigatório: 'Não', Regra: 'Identificação opcional do fornecedor ou cliente.', Exemplo: sampleSupplier?.cnpj || '00.000.000/0001-00' },
+      { Campo: 'CPF/CNPJ Contraparte', Obrigatório: 'Não', Regra: 'Identificação opcional do favorecido ou cliente.', Exemplo: sampleSupplier?.cnpj || '00.000.000/0001-00' },
       { Campo: 'Documento / Referência', Obrigatório: 'Não', Regra: 'Use número da NF, boleto, contrato ou identificador externo. Anexos não são importados pela planilha.', Exemplo: 'NF 0001' },
       { Campo: 'Observações', Obrigatório: 'Não', Regra: 'Texto livre para informações complementares.', Exemplo: 'Compra referente ao mês de setembro.' }
     ];
@@ -279,7 +279,7 @@ export const ImportExcelView: React.FC = () => {
     if (activeUnits.length === 0) referenceRows.push(['Unidade / Filial', 'Nenhuma unidade ativa cadastrada', 'Cadastre uma filial antes de importar.']);
     activeCategories.forEach((item) => referenceRows.push(['Categoria DRE', item.nome, `${item.tipo} — código ${item.codigo}`]));
     activeCostCenters.forEach((item) => referenceRows.push(['Centro de Custo', item.nome, `Código ${item.codigo}`]));
-    activeSuppliers.forEach((item) => referenceRows.push(['Fornecedor / Cliente', item.nome, `${item.tipo} — ${item.cnpj || 'sem CPF/CNPJ'}`]));
+    activeSuppliers.forEach((item) => referenceRows.push(['Favorecido / Cliente', item.nome, `${item.tipo} — ${item.cnpj || 'sem CPF/CNPJ'}`]));
     activeBanks.forEach((item) => referenceRows.push(['Conta Bancária', item.banco, `Unidade: ${item.unidade}`]));
     if (activeBanks.length === 0) referenceRows.push(['Conta Bancária', 'Nenhuma conta ativa cadastrada', 'Necessária para importar lançamentos pagos.']);
     activePaymentTerms.forEach((item) => referenceRows.push(['Condição DDL', item.nome, `Prazos: ${item.prazosDias.join('/')} dias`]));
@@ -431,7 +431,7 @@ export const ImportExcelView: React.FC = () => {
       if (!dataVencimento) errors.push('Data de vencimento inválida ou ausente');
       if (!catStr || !categorias.some((item) => item.ativa && categoryBelongsToUnit(item, resolvedUnit, units) && item.nome.toLocaleLowerCase('pt-BR') === catStr.toLocaleLowerCase('pt-BR') && item.tipo === tipo)) errors.push('Plano de contas inativo, incompatível com o tipo ou não vinculado à filial');
       if (!ccStr || !centrosCusto.some((item) => item.ativo && item.nome.toLocaleLowerCase('pt-BR') === ccStr.toLocaleLowerCase('pt-BR'))) errors.push('Centro de custo não cadastrado ou inativo');
-      if (!fornStr) errors.push('Fornecedor ou cliente obrigatório');
+      if (!fornStr) errors.push('Favorecido ou cliente obrigatório');
       if (!unidStr || !matchedUnit) errors.push('Unidade não cadastrada ou inativa');
       if (!formaStr || !/(PIX|CRED|CARTAO|DEB|DINH|ESP|TRANS|TED|BOLETO|CARN)/.test(formaStr)) errors.push('Forma de pagamento inválida');
       const contaValida = bancos.some(
@@ -727,7 +727,7 @@ export const ImportExcelView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Fornecedor ou Cliente *</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Favorecido ou Cliente *</label>
               <select
                 value={mapping.fornecedorCliente}
                 onChange={(e) => setMapping({ ...mapping, fornecedorCliente: e.target.value })}
@@ -939,7 +939,7 @@ export const ImportExcelView: React.FC = () => {
                   <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Status" sortKey="status" accessor={(item) => item.status} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Descrição" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
-                  <SortableTableHeader label="Fornecedor / Cliente" sortKey="fornecedor" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Favorecido / Cliente" sortKey="fornecedor" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Categoria" sortKey="categoria" accessor={(item) => item.categoria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Valor (R$)" sortKey="valor" accessor={(item) => item.valor} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Unidade" sortKey="unidade" accessor={(item) => item.unidade} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
