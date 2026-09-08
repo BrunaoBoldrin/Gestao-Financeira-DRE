@@ -89,7 +89,7 @@ export const InboxView: React.FC<InboxViewProps> = ({ onOpenUploadModal }) => {
             </div>
 
             {/* Card Footer Actions */}
-            <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+            <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between">
               <span className="text-[10px] text-gray-400">ID: {doc.id}</span>
               <button
                 onClick={() => {

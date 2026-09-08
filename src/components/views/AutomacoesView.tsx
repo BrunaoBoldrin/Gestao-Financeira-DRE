@@ -52,7 +52,7 @@ export const AutomacoesView: React.FC = () => {
             {regrasAutomacao.map((regra) => (
               <div
                 key={regra.id}
-                className={`p-4 rounded-xl border transition flex items-center justify-between gap-3 ${
+                className={`p-4 rounded-xl border transition flex flex-wrap items-center justify-between gap-3 ${
                   regra.ativa ? 'bg-white border-[#d3e4fe] shadow-xs' : 'bg-gray-50 border-gray-200 opacity-60'
                 }`}
               >

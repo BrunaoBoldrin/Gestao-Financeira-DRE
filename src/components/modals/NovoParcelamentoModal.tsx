@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 
@@ -62,7 +63,7 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+    <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150">
         <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -89,7 +90,7 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Fornecedor / Credor</label>
               <input
@@ -149,7 +150,7 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Valor Total (R$) <span className="text-red-500">*</span>
@@ -215,6 +216,6 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
           </div>
         </form>
       </div>
-    </div>
+    </ModalOverlay>
   );
 };
