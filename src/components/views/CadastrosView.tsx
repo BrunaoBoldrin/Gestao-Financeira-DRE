@@ -1,3 +1,4 @@
+import { MasterDataExchange } from '../common/MasterDataExchange';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -91,12 +92,11 @@ export const CadastrosView: React.FC = () => {
 
     if (activeTab === 'PLANO_CONTAS') {
       if (!nome || !codigo) return;
-      if (unidadeIds.length === 0) { showToast('Selecione pelo menos uma filial para este plano de contas.', 'error'); return; }
       if (!centrosCusto.some((item) => item.id === planoCentroId && item.ativo)) { showToast('Selecione um centro de custo ativo para o plano de contas.', 'error'); return; }
       if (editingId) {
-        updateCategoria(editingId, { codigo, nome, tipo, grupoDRE, unidadeIds, centroCustoId: planoCentroId });
+        updateCategoria(editingId, { codigo, nome, tipo, grupoDRE, centroCustoId: planoCentroId });
       } else {
-        addCategoria({ codigo, nome, tipo, grupoDRE, unidadeIds, centroCustoId: planoCentroId, ativa: true });
+        addCategoria({ codigo, nome, tipo, grupoDRE, centroCustoId: planoCentroId, ativa: true });
       }
     } else if (activeTab === 'CENTROS_CUSTO') {
       if (!nome || !codigo) return;
@@ -107,10 +107,11 @@ export const CadastrosView: React.FC = () => {
       }
     } else if (activeTab === 'FORNECEDORES') {
       if (!nome) return;
+      if (!unidadeIds.length) { showToast('Selecione pelo menos uma filial para o fornecedor.', 'error'); return; }
       if (editingId) {
-        updateFornecedor(editingId, { nome, cnpj, cidade, planoContaId: fornecedorPlanoId });
+        updateFornecedor(editingId, { nome, cnpj, cidade, planoContaId: fornecedorPlanoId, unidadeIds });
       } else {
-        addFornecedor({ nome, cnpj, cidade, ativo: true, planoContaId: fornecedorPlanoId });
+        addFornecedor({ nome, cnpj, cidade, ativo: true, planoContaId: fornecedorPlanoId, unidadeIds });
       }
     } else if (activeTab === 'BANCOS') {
       if (!nome || !bancoUnidade) return;
@@ -154,7 +155,8 @@ export const CadastrosView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && <MasterDataExchange />}
           <button
             onClick={() => {
               if (!isAdmin) {
@@ -244,7 +246,7 @@ export const CadastrosView: React.FC = () => {
                   {categoriasSort.sortedItems.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="p-3 font-mono font-bold text-[#0b1c30]">{item.codigo}</td>
-                      <td className="p-3 font-semibold text-gray-800">{item.nome}<p className="text-[10px] font-normal text-gray-500 mt-1">{item.unidadeIds === undefined ? 'Todas as filiais' : filiaisCadastradas.filter((unit) => item.unidadeIds?.includes(unit.id)).map((unit) => unit.nome).join(' · ') || 'Sem filiais vinculadas'}</p></td>
+                      <td className="p-3 font-semibold text-gray-800">{item.nome}<p className="text-[10px] font-normal text-gray-500 mt-1">Padrão para todas as filiais</p></td>
                       <td className="p-3">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -277,7 +279,7 @@ export const CadastrosView: React.FC = () => {
                             setTipo(item.tipo);
                             setGrupoDRE(item.grupoDRE);
                             setPlanoCentroId(item.centroCustoId || '');
-                            setUnidadeIds(item.unidadeIds ?? filiaisCadastradas.map((unit) => unit.id));
+
                             setShowFormModal(true);
                           }}
                           disabled={!isAdmin}
@@ -411,6 +413,7 @@ export const CadastrosView: React.FC = () => {
                             setCnpj(f.cnpj || '');
                             setCidade(f.cidade || '');
                             setFornecedorPlanoId(f.planoContaId || '');
+                            setUnidadeIds(f.unidadeIds ?? filiaisCadastradas.map((unit) => unit.id));
                             setShowFormModal(true);
                           }}
                           disabled={!isAdmin}
@@ -623,20 +626,7 @@ export const CadastrosView: React.FC = () => {
                     </select>
                     <p className="text-[11px] text-gray-500 mt-1">Será preenchido automaticamente nos novos lançamentos deste plano.</p>
                   </div>
-                  <fieldset className="rounded-lg border border-[#d3e4fe] p-3 space-y-2">
-                    <legend className="px-1 text-xs font-bold">Filiais deste plano de contas *</legend>
-                    <label className="flex items-center gap-2 min-h-11 text-xs font-semibold">
-                      <input type="checkbox" checked={filiaisCadastradas.length > 0 && filiaisCadastradas.every((unit) => unidadeIds.includes(unit.id))}
-                        onChange={(event) => setUnidadeIds(event.target.checked ? filiaisCadastradas.map((unit) => unit.id) : [])} />
-                      Selecionar todas as filiais cadastradas
-                    </label>
-                    {filiaisCadastradas.map((unit) => <label key={unit.id} className="flex items-center gap-2 min-h-11 text-xs">
-                      <input type="checkbox" checked={unidadeIds.includes(unit.id)}
-                        onChange={(event) => setUnidadeIds((current) => event.target.checked ? [...current, unit.id] : current.filter((id) => id !== unit.id))} />
-                      <span>{unit.nome}{unit.ativa ? '' : ' (inativa)'}</span>
-                    </label>)}
-                    {filiaisCadastradas.length === 0 && <p className="text-xs text-amber-700">Cadastre uma filial antes de criar o plano de contas.</p>}
-                  </fieldset>
+
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Grupo de apresentação na DRE</label>
                     <select
@@ -731,6 +721,20 @@ export const CadastrosView: React.FC = () => {
                     <input readOnly value={centrosCusto.find((item) => item.ativo && item.id === categorias.find((plan) => plan.id === fornecedorPlanoId)?.centroCustoId)?.nome || 'Configure o centro de custo no plano de contas'}
                       className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50" />
                   </div>
+                  <fieldset className="rounded-lg border border-[#d3e4fe] p-3 space-y-2">
+                    <legend className="px-1 text-xs font-bold">Filiais deste fornecedor *</legend>
+                    <label className="flex items-center gap-2 min-h-11 text-xs font-semibold">
+                      <input type="checkbox" checked={filiaisCadastradas.length > 0 && filiaisCadastradas.every((unit) => unidadeIds.includes(unit.id))}
+                        onChange={(event) => setUnidadeIds(event.target.checked ? filiaisCadastradas.map((unit) => unit.id) : [])} />
+                      Selecionar todas as filiais cadastradas
+                    </label>
+                    {filiaisCadastradas.map((unit) => <label key={unit.id} className="flex items-center gap-2 min-h-11 text-xs">
+                      <input type="checkbox" checked={unidadeIds.includes(unit.id)}
+                        onChange={(event) => setUnidadeIds((current) => event.target.checked ? [...current, unit.id] : current.filter((id) => id !== unit.id))} />
+                      <span>{unit.nome}{unit.ativa ? '' : ' (inativa)'}</span>
+                    </label>)}
+                    {filiaisCadastradas.length === 0 && <p className="text-xs text-amber-700">Cadastre uma filial antes de cadastrar o fornecedor.</p>}
+                  </fieldset>
                 </>
               )}
 
