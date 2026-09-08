@@ -53,9 +53,6 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
   if (!item) return null;
 
   const isReceipt = item.tipo === 'RECEITA';
-  const projectedBalance = selectedBank
-    ? selectedBank.saldo + (isReceipt ? item.valor : -item.valor)
-    : 0;
   const canConfirm = Boolean(selectedBank && formaPagamento && dataPagamento);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -117,7 +114,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
               <option value="">Selecione a conta...</option>
               {availableBanks.map((banco) => (
                 <option key={banco.id} value={banco.id}>
-                  {banco.banco} · Ag. {banco.agencia} · C/C {banco.conta} · Saldo {formatCurrency(banco.saldo)}
+                  {banco.banco} · Ag. {banco.agencia} · C/C {banco.conta}
                 </option>
               ))}
             </select>
@@ -157,20 +154,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
             </div>
           </div>
 
-          {selectedBank && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs">
-              <div>
-                <p className="text-[9px] font-bold uppercase text-blue-700">Saldo atual</p>
-                <p className="mt-0.5 font-black text-[#0b1c30]">{formatCurrency(selectedBank.saldo)}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] font-bold uppercase text-blue-700">Saldo após confirmação</p>
-                <p className={`mt-0.5 font-black ${projectedBalance < 0 ? 'text-rose-700' : 'text-emerald-800'}`}>
-                  {formatCurrency(projectedBalance)}
-                </p>
-              </div>
-            </div>
-          )}
+
         </div>
 
         <div className="flex justify-end gap-2 border-t border-[#e5eeff] bg-[#f8f9ff] px-5 py-4">

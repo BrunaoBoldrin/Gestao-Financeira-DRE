@@ -345,7 +345,7 @@ export const CaixaFisicoView: React.FC = () => {
                   <label className="block text-xs font-semibold text-gray-700 mb-1">{modalType === 'SANGRIA' ? 'Conta bancária de destino *' : 'Conta bancária de origem (opcional)'}</label>
                   <select required={modalType === 'SANGRIA'} value={bancoTransferenciaId} onChange={(event) => setBancoTransferenciaId(event.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs bg-white">
                     <option value="">{modalType === 'SUPRIMENTO' ? 'Origem externa / não bancária' : 'Selecione a conta...'}</option>
-                    {contasBancarias.map((banco) => <option key={banco.id} value={banco.id}>{banco.banco} · {formatCurrency(banco.saldo)}</option>)}
+                    {contasBancarias.map((banco) => <option key={banco.id} value={banco.id}>{banco.banco}{banco.agencia ? ' · Ag. ' + banco.agencia : ''}{banco.conta ? ' · C/C ' + banco.conta : ''}</option>)}
                   </select>
                 </div>
               )}

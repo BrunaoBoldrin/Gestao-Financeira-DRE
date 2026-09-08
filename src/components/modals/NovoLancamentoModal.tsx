@@ -477,7 +477,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                 </option>
                 {availableBanks.map((banco) => (
                   <option key={banco.id} value={banco.id}>
-                    {banco.banco} — saldo {banco.saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {banco.banco}{banco.agencia ? ' · Ag. ' + banco.agencia : ''}{banco.conta ? ' · C/C ' + banco.conta : ''}
                   </option>
                 ))}
               </select>
