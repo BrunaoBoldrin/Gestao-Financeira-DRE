@@ -53,8 +53,6 @@ main > *, .grid > * { min-width: 0; }
   button, select, input:not([type="checkbox"]):not([type="radio"]) {
     min-height: 44px;
   }
-  table { min-width: 680px; }
-  th, td { overflow-wrap: anywhere; }
   .fixed.inset-0 { padding: 12px; }
   .fixed.inset-0 > form, .fixed.inset-0 > div:not(.absolute) {
     max-height: calc(100dvh - 24px);
@@ -62,4 +60,41 @@ main > *, .grid > * { min-width: 0; }
   }
   header { padding-top: max(12px, env(safe-area-inset-top)); }
   main { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+}
+
+/* Preserve readable columns instead of squeezing financial data into the viewport. */
+@media (max-width: 1023px) {
+  .overflow-x-auto:has(> table) {
+    overscroll-behavior-x: contain;
+    border-radius: 8px;
+  }
+  .overflow-x-auto > table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .overflow-x-auto > table th,
+  .overflow-x-auto > table td {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    padding: 12px 16px;
+    vertical-align: middle;
+  }
+  .overflow-x-auto > table th {
+    font-size: 11px;
+    letter-spacing: 0.025em;
+  }
+  .overflow-x-auto > table td {
+    font-variant-numeric: tabular-nums;
+  }
+  .overflow-x-auto > table tbody tr:nth-child(even) {
+    background-color: #f8faff;
+  }
+  .overflow-x-auto > table input,
+  .overflow-x-auto > table select {
+    min-width: 140px;
+  }
 }
