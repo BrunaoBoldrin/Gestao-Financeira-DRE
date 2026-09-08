@@ -103,13 +103,12 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
   const handleAnexoChange = (file?: File) => {
     if (!file) {
-      setAnexo(null);
       return;
     }
 
-    const tiposPermitidos = ['application/pdf', 'image/jpeg'];
+    const tiposPermitidos = ['application/pdf', 'image/jpeg', 'image/png'];
     if (!tiposPermitidos.includes(file.type)) {
-      showToast('Formato inválido. Selecione um arquivo PDF, JPG ou JPEG.', 'error');
+      showToast('Formato inválido. Selecione um arquivo PDF, JPG ou PNG.', 'error');
       setAnexo(null);
       return;
     }
@@ -495,14 +494,29 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <label className="flex items-center justify-between gap-3 w-full px-3 py-2.5 border border-dashed border-gray-300 rounded-md text-xs bg-gray-50 hover:bg-gray-100 cursor-pointer transition">
               <span className="flex items-center gap-2 min-w-0 text-gray-700">
                 <span className="material-symbols-outlined text-lg text-[#131b2e]">attach_file</span>
-                <span className="truncate">{anexo ? anexo.name : 'Selecionar PDF, JPG ou JPEG'}</span>
+                <span className="truncate">{anexo ? anexo.name : 'Selecionar PDF, JPG ou PNG'}</span>
               </span>
               <span className="shrink-0 text-[10px] font-bold text-gray-500">Máx. 10 MB</span>
               <input
                 type="file"
-                accept="application/pdf,image/jpeg,.pdf,.jpg,.jpeg"
+                accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                 onChange={(event) => handleAnexoChange(event.target.files?.[0])}
                 className="sr-only"
+              />
+            </label>
+            <label className="mt-2 flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#d3e4fe] bg-[#eff4ff] px-4 py-3 text-xs font-semibold text-[#0b1c30] cursor-pointer focus-within:ring-2 focus-within:ring-[#C5A059]">
+              <span className="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+              Tirar foto
+              <input
+                type="file"
+                accept="image/jpeg,image/png"
+                capture="environment"
+                aria-label="Tirar foto do recibo ou documento"
+                className="sr-only"
+                onChange={(event) => {
+                  handleAnexoChange(event.target.files?.[0]);
+                  event.target.value = '';
+                }}
               />
             </label>
             {anexo && (
