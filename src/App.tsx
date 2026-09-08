@@ -30,12 +30,15 @@ const MainAppContent: React.FC = () => {
   const { currentView, currentUser, persistenceStatus, persistenceMessage, retryPersistence } = useApp();
 
   const [isNovoLancamentoOpen, setIsNovoLancamentoOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isUploadOCROpen, setIsUploadOCROpen] = useState(false);
 
   useEffect(() => {
     setIsNovoLancamentoOpen(false);
     setIsUploadOCROpen(false);
   }, [currentUser?.id]);
+
+  useEffect(() => { setMobileMenuOpen(false); }, [currentView, currentUser?.id]);
 
   if (!currentUser) {
     return <AuthScreen />;
@@ -88,6 +91,8 @@ const MainAppContent: React.FC = () => {
     <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col font-sans antialiased selection:bg-[#ffdea5] selection:text-[#775a19]">
       {/* Header */}
       <Header
+        onOpenMenu={() => setMobileMenuOpen((open) => !open)}
+        menuOpen={mobileMenuOpen}
         onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)}
         onOpenUploadModal={() => setIsUploadOCROpen(true)}
       />
@@ -106,10 +111,10 @@ const MainAppContent: React.FC = () => {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <Sidebar />
+        <Sidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
 
         {/* Main View Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
+        <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
           {renderActiveView()}
         </main>
       </div>

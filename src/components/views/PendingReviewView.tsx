@@ -593,7 +593,7 @@ export const PendingReviewView: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">
                   Contraparte / Cliente / Fornecedor
@@ -626,7 +626,7 @@ export const PendingReviewView: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Valor Total (R$)</label>
                 <input
@@ -750,7 +750,7 @@ export const PendingReviewView: React.FC = () => {
             </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Categoria DRE</label>
                 <select
@@ -870,7 +870,7 @@ export const PendingReviewView: React.FC = () => {
             {currentDoc.dadosExtraidos.itens && currentDoc.dadosExtraidos.itens.length > 0 && (
               <div className="mt-3">
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Itens de Produto Extraídos</label>
-                <div className="border border-gray-200 rounded-lg overflow-hidden text-[11px]">
+                <div className="border border-gray-200 rounded-lg overflow-x-auto text-[11px]">
                   <table className="w-full text-left">
                     <thead className="bg-[#f8f9ff] text-gray-600 font-bold">
                       <tr>

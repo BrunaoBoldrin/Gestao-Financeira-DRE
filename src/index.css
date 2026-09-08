@@ -40,3 +40,26 @@
   background: #94a3b8;
 }
 
+
+/* Keep wide financial tables inside their scroll containers. */
+html, body, #root { min-width: 0; width: 100%; }
+main > *, .grid > * { min-width: 0; }
+.overflow-x-auto { max-width: 100%; -webkit-overflow-scrolling: touch; }
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+    font-size: 16px !important;
+    max-width: 100%;
+  }
+  button, select, input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+  table { min-width: 680px; }
+  th, td { overflow-wrap: anywhere; }
+  .fixed.inset-0 { padding: 12px; }
+  .fixed.inset-0 > form, .fixed.inset-0 > div:not(.absolute) {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+  header { padding-top: max(12px, env(safe-area-inset-top)); }
+  main { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+}
