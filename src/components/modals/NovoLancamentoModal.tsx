@@ -65,13 +65,6 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     onClose();
   };
 
-  // Set default selects when lists load
-  React.useEffect(() => {
-    if (centrosCusto.length > 0 && !centroCusto) {
-      setCentroCusto(centrosCusto.find((item) => item.ativo)?.nome || '');
-    }
-  }, [categorias, centrosCusto, bancos, tipo]);
-
   React.useEffect(() => {
     if (!isOpen) return;
     if (isFinance && currentUser) {
@@ -87,6 +80,12 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       setCategoria(''); setDescricao('');
     }
   }, [targetUnit, units, categorias, categoria, tipo]);
+
+  React.useEffect(() => {
+    const plan = categorias.find((item) => item.nome === categoria && item.tipo === tipo && item.ativa && categoryBelongsToUnit(item, targetUnit, units));
+    const center = centrosCusto.find((item) => item.id === plan?.centroCustoId && item.ativo);
+    setCentroCusto(center?.nome || '');
+  }, [categoria, tipo, targetUnit, categorias, centrosCusto, units]);
 
   const availableBanks = bancos.filter((banco) => banco.ativo && banco.unidade === targetUnit);
 
@@ -147,8 +146,9 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       showToast('Selecione uma receita ou despesa da lista de cadastros.', 'error');
       return;
     }
-    if (!centrosCusto.some((item) => item.ativo && item.nome === centroCusto)) {
-      showToast('Selecione um centro de custo ativo.', 'error');
+    const linkedCenter = centrosCusto.find((item) => item.ativo && item.id === selectedCadastro.centroCustoId);
+    if (!linkedCenter) {
+      showToast('Configure um centro de custo ativo neste plano de contas antes de lançar.', 'error');
       return;
     }
 
@@ -203,7 +203,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       descricao,
       tipo,
       categoria: selectedCadastro.nome,
-      centroCusto,
+      centroCusto: linkedCenter.nome,
       valor: numVal,
       dataCompetencia: dataCompetencia || dataEmissao,
       dataVencimento: dataVencimento || dataEmissao,
@@ -311,7 +311,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                   setFornecedorCliente(supplier?.nome || '');
                   if (!supplier) return;
                   const plan = categorias.find((item) => item.id === supplier.planoContaId && item.ativa && item.tipo === 'DESPESA' && categoryBelongsToUnit(item, targetUnit, units));
-                  const center = centrosCusto.find((item) => item.id === supplier.centroCustoId && item.ativo);
+                  const center = centrosCusto.find((item) => item.id === plan?.centroCustoId && item.ativo);
                   setDescricao(plan?.nome || ''); setCategoria(plan?.nome || '');
                   setCentroCusto(center?.nome || '');
                   if (supplier.planoContaId && !plan) showToast('O plano padrão do fornecedor não está disponível nesta filial. Selecione outro plano.', 'info');
@@ -337,11 +337,10 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
           />
           <div>
             <label htmlFor="manual-centro-custo" className="block text-xs font-semibold text-gray-700 mb-1">Centro de custo *</label>
-            <select id="manual-centro-custo" required value={centroCusto} onChange={(event) => setCentroCusto(event.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-              <option value="">Selecione o centro de custo</option>
-              {centrosCusto.filter((item) => item.ativo).map((item) => <option key={item.id} value={item.nome}>{item.nome}</option>)}
-            </select>
+            <input id="manual-centro-custo" readOnly value={centroCusto}
+              placeholder={categoria ? 'Configure o centro de custo no plano de contas' : 'Selecione primeiro o plano de contas'}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50" />
+
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

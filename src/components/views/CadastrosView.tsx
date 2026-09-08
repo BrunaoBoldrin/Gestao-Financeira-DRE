@@ -51,7 +51,7 @@ export const CadastrosView: React.FC = () => {
   const [grupoDRE, setGrupoDRE] = useState<GrupoDRE>('DESPESA_ADMINISTRATIVA');
   const [responsavel, setResponsavel] = useState('');
   const [fornecedorPlanoId, setFornecedorPlanoId] = useState('');
-  const [fornecedorCentroId, setFornecedorCentroId] = useState('');
+  const [planoCentroId, setPlanoCentroId] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [cidade, setCidade] = useState('');
   const [agencia, setAgencia] = useState('');
@@ -73,7 +73,7 @@ export const CadastrosView: React.FC = () => {
     setResponsavel('');
     setCnpj('');
     setFornecedorPlanoId('');
-    setFornecedorCentroId('');
+    setPlanoCentroId('');
     setCidade('');
     setAgencia('');
     setConta('');
@@ -92,10 +92,11 @@ export const CadastrosView: React.FC = () => {
     if (activeTab === 'PLANO_CONTAS') {
       if (!nome || !codigo) return;
       if (unidadeIds.length === 0) { showToast('Selecione pelo menos uma filial para este plano de contas.', 'error'); return; }
+      if (!centrosCusto.some((item) => item.id === planoCentroId && item.ativo)) { showToast('Selecione um centro de custo ativo para o plano de contas.', 'error'); return; }
       if (editingId) {
-        updateCategoria(editingId, { codigo, nome, tipo, grupoDRE, unidadeIds });
+        updateCategoria(editingId, { codigo, nome, tipo, grupoDRE, unidadeIds, centroCustoId: planoCentroId });
       } else {
-        addCategoria({ codigo, nome, tipo, grupoDRE, unidadeIds, ativa: true });
+        addCategoria({ codigo, nome, tipo, grupoDRE, unidadeIds, centroCustoId: planoCentroId, ativa: true });
       }
     } else if (activeTab === 'CENTROS_CUSTO') {
       if (!nome || !codigo) return;
@@ -107,9 +108,9 @@ export const CadastrosView: React.FC = () => {
     } else if (activeTab === 'FORNECEDORES') {
       if (!nome) return;
       if (editingId) {
-        updateFornecedor(editingId, { nome, cnpj, cidade, planoContaId: fornecedorPlanoId, centroCustoId: fornecedorCentroId });
+        updateFornecedor(editingId, { nome, cnpj, cidade, planoContaId: fornecedorPlanoId });
       } else {
-        addFornecedor({ nome, cnpj, cidade, ativo: true, planoContaId: fornecedorPlanoId, centroCustoId: fornecedorCentroId });
+        addFornecedor({ nome, cnpj, cidade, ativo: true, planoContaId: fornecedorPlanoId });
       }
     } else if (activeTab === 'BANCOS') {
       if (!nome || !bancoUnidade) return;
@@ -275,6 +276,7 @@ export const CadastrosView: React.FC = () => {
                             setNome(item.nome);
                             setTipo(item.tipo);
                             setGrupoDRE(item.grupoDRE);
+                            setPlanoCentroId(item.centroCustoId || '');
                             setUnidadeIds(item.unidadeIds ?? filiaisCadastradas.map((unit) => unit.id));
                             setShowFormModal(true);
                           }}
@@ -389,7 +391,7 @@ export const CadastrosView: React.FC = () => {
                 <tbody className="divide-y divide-gray-100">
                   {fornecedoresSort.sortedItems.map((f) => (
                     <tr key={f.id} className="hover:bg-gray-50">
-                      <td className="p-3 font-bold text-[#0b1c30]">{f.nome}<p className="text-[10px] font-normal text-gray-500 mt-1">{categorias.find((item) => item.id === f.planoContaId)?.nome || 'Sem plano padrão'} · {centrosCusto.find((item) => item.id === f.centroCustoId)?.nome || 'Sem centro padrão'}</p></td>
+                      <td className="p-3 font-bold text-[#0b1c30]">{f.nome}<p className="text-[10px] font-normal text-gray-500 mt-1">{categorias.find((item) => item.id === f.planoContaId)?.nome || 'Sem plano padrão'} · {centrosCusto.find((item) => item.id === categorias.find((plan) => plan.id === f.planoContaId)?.centroCustoId)?.nome || 'Sem centro padrão'}</p></td>
                       <td className="p-3 font-mono text-gray-600">{f.cnpj || '-'}</td>
                       <td className="p-3 text-gray-600">{f.cidade || '-'}</td>
                       <td className="p-3 text-center">
@@ -409,7 +411,6 @@ export const CadastrosView: React.FC = () => {
                             setCnpj(f.cnpj || '');
                             setCidade(f.cidade || '');
                             setFornecedorPlanoId(f.planoContaId || '');
-                            setFornecedorCentroId(f.centroCustoId || '');
                             setShowFormModal(true);
                           }}
                           disabled={!isAdmin}
@@ -614,6 +615,14 @@ export const CadastrosView: React.FC = () => {
                       <option value="DESPESA">DESPESA</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Centro de custo do plano *</label>
+                    <select required value={planoCentroId} onChange={(event) => setPlanoCentroId(event.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                      <option value="">Selecione o centro de custo</option>
+                      {centrosCusto.filter((item) => item.ativo).map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+                    </select>
+                    <p className="text-[11px] text-gray-500 mt-1">Será preenchido automaticamente nos novos lançamentos deste plano.</p>
+                  </div>
                   <fieldset className="rounded-lg border border-[#d3e4fe] p-3 space-y-2">
                     <legend className="px-1 text-xs font-bold">Filiais deste plano de contas *</legend>
                     <label className="flex items-center gap-2 min-h-11 text-xs font-semibold">
@@ -718,12 +727,9 @@ export const CadastrosView: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Centro de custo padrão</label>
-                    <select value={fornecedorCentroId} onChange={(event) => setFornecedorCentroId(event.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                      <option value="">Sem centro de custo padrão</option>
-                      {centrosCusto.filter((item) => item.ativo).map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
-                    </select>
-                    <p className="mt-1 text-[11px] text-gray-500">Sugestões para novos lançamentos; você poderá ajustá-las em cada despesa.</p>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Centro de custo do plano selecionado</label>
+                    <input readOnly value={centrosCusto.find((item) => item.ativo && item.id === categorias.find((plan) => plan.id === fornecedorPlanoId)?.centroCustoId)?.nome || 'Configure o centro de custo no plano de contas'}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50" />
                   </div>
                 </>
               )}

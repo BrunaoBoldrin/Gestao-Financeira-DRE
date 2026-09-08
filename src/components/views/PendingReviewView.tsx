@@ -141,6 +141,11 @@ export const PendingReviewView: React.FC = () => {
     }
   }, [impactoDRE, categorias, categoria, unidadeLancamento, units]);
 
+  useEffect(() => {
+    const plan = categorias.find((item) => item.nome === categoria && item.ativa && categoryBelongsToUnit(item, unidadeLancamento, units));
+    setCentroCusto(centrosCusto.find((item) => item.ativo && item.id === plan?.centroCustoId)?.nome || '');
+  }, [categoria, categorias, centrosCusto, unidadeLancamento, units, currentDoc?.id]);
+
   if (!currentDoc || currentDoc.status !== 'PENDENTE_REVISAO') {
     return (
       <div className="p-12 text-center bg-white rounded-xl border border-[#e5eeff] shadow-xs max-w-lg mx-auto my-10 space-y-4">
@@ -214,6 +219,9 @@ export const PendingReviewView: React.FC = () => {
     if (!categorias.some((item) => item.ativa && categoryBelongsToUnit(item, unidadeLancamento, units) && item.tipo === launchType && item.nome === categoria)) {
       showToast('Selecione uma categoria ativa compatível com o impacto no DRE.', 'error');
       return;
+    }
+    if (acaoFinanceira === 'CRIAR_NOVO' && !centroCusto) {
+      showToast('Configure o centro de custo no plano de contas selecionado.', 'error'); return;
     }
     if (acaoFinanceira === 'A_CONFIRMAR') {
       showToast('Confirme se deseja vincular, registrar como novo ou somente arquivar.', 'error');
@@ -773,15 +781,9 @@ export const PendingReviewView: React.FC = () => {
 
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Centro de Custo</label>
-                <select
-                  value={centroCusto}
-                  onChange={(e) => setCentroCusto(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-semibold"
-                >
-                  {centrosCusto.filter((item) => item.ativo).map((item) => (
-                    <option key={item.id} value={item.nome}>{item.nome}</option>
-                  ))}
-                </select>
+                <input readOnly value={centroCusto} placeholder="Configure o centro de custo no plano"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs bg-gray-50 font-semibold" />
+
               </div>
             </div>
 
