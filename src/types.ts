@@ -298,6 +298,7 @@ export interface UnitConfig {
 }
 
 export interface CategoriaMaster {
+  unidadeIds?: string[];
   id: string;
   codigo: string;
   nome: string;

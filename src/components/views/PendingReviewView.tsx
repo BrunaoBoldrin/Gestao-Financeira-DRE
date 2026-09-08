@@ -1,3 +1,4 @@
+import { categoryBelongsToUnit } from '../../utils/categoryUnits';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
@@ -133,12 +134,12 @@ export const PendingReviewView: React.FC = () => {
   useEffect(() => {
     if (impactoDRE !== 'RECEITA' && impactoDRE !== 'DESPESA') return;
     const categoryIsCompatible = categorias.some(
-      (item) => item.ativa && item.tipo === impactoDRE && item.nome === categoria
+      (item) => item.ativa && categoryBelongsToUnit(item, unidadeLancamento, units) && item.tipo === impactoDRE && item.nome === categoria
     );
     if (!categoryIsCompatible) {
-      setCategoria(categorias.find((item) => item.ativa && item.tipo === impactoDRE)?.nome || '');
+      setCategoria(categorias.find((item) => item.ativa && categoryBelongsToUnit(item, unidadeLancamento, units) && item.tipo === impactoDRE)?.nome || '');
     }
-  }, [impactoDRE, categorias, categoria]);
+  }, [impactoDRE, categorias, categoria, unidadeLancamento, units]);
 
   if (!currentDoc || currentDoc.status !== 'PENDENTE_REVISAO') {
     return (
@@ -210,7 +211,7 @@ export const PendingReviewView: React.FC = () => {
       : impactoDRE === 'DESPESA'
         ? 'DESPESA'
         : sentido === 'ENTRADA' ? 'RECEITA' : 'DESPESA';
-    if (!categorias.some((item) => item.ativa && item.tipo === launchType && item.nome === categoria)) {
+    if (!categorias.some((item) => item.ativa && categoryBelongsToUnit(item, unidadeLancamento, units) && item.tipo === launchType && item.nome === categoria)) {
       showToast('Selecione uma categoria ativa compatível com o impacto no DRE.', 'error');
       return;
     }
@@ -759,7 +760,7 @@ export const PendingReviewView: React.FC = () => {
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-semibold"
                 >
                   {categorias
-                    .filter((item) => item.ativa && (
+                    .filter((item) => item.ativa && categoryBelongsToUnit(item, unidadeLancamento, units) && (
                       impactoDRE === 'A_CONFIRMAR' ||
                       impactoDRE === 'NAO_AFETA' ||
                       item.tipo === impactoDRE

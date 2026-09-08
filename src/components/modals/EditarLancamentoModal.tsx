@@ -1,3 +1,4 @@
+import { categoryBelongsToUnit } from '../../utils/categoryUnits';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -14,7 +15,7 @@ const paymentOptions: Lancamento['formaPagamento'][] = [
 ];
 
 export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
-  const { categorias, centrosCusto, bancos, updateLancamento, flushPersistence, showToast } = useApp();
+  const { units, categorias, centrosCusto, bancos, updateLancamento, flushPersistence, showToast } = useApp();
   const [form, setForm] = useState({
     descricao: '', fornecedorCliente: '', categoria: '', centroCusto: '', valor: '',
     dataCompetencia: '', dataVencimento: '', formaPagamento: 'BOLETO' as Lancamento['formaPagamento'],
@@ -39,8 +40,8 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
   }, [item]);
 
   const availableCategories = useMemo(() => categorias.filter(
-    (category) => category.ativa && category.tipo === item?.tipo
-  ), [categorias, item?.tipo]);
+    (category) => category.ativa && category.tipo === item?.tipo && categoryBelongsToUnit(category, item?.unidade, units)
+  ), [categorias, item?.tipo, item?.unidade, units]);
   const availableCenters = centrosCusto.filter((center) => center.ativo);
   const availableBanks = bancos.filter((bank) => bank.ativo && bank.unidade === item?.unidade);
   if (!item) return null;
@@ -58,6 +59,9 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
     if (item.status === 'PAGO' && !form.bancoId) {
       showToast('Lançamentos pagos precisam permanecer vinculados a uma conta bancária.', 'error');
       return;
+    }
+    if (!availableCategories.some((category) => category.nome === form.categoria)) {
+      showToast('Selecione um plano de contas ativo vinculado à filial deste lançamento.', 'error'); return;
     }
     setSaving(true);
     const changed = updateLancamento(item.id, {

@@ -1,3 +1,4 @@
+import { categoryBelongsToUnit } from '../../utils/categoryUnits';
 import { CadastroSearch } from '../common/CadastroSearch';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
@@ -76,6 +77,12 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   }, [isOpen, isFinance, currentUser?.unit, selectedUnit]);
 
   const targetUnit = isFinance && currentUser ? currentUser.unit : unidade;
+  React.useEffect(() => {
+    if (categoria && !categorias.some((item) => item.nome === categoria && item.ativa && item.tipo === tipo && categoryBelongsToUnit(item, targetUnit, units))) {
+      setCategoria(''); setDescricao('');
+    }
+  }, [targetUnit, units, categorias, categoria, tipo]);
+
   const availableBanks = bancos.filter((banco) => banco.ativo && banco.unidade === targetUnit);
 
   React.useEffect(() => {
@@ -130,7 +137,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     e.preventDefault();
     if (!descricao || numVal <= 0 || !unidade || isSubmitting) return;
 
-    const selectedCadastro = categorias.find((item) => item.ativa && item.tipo === tipo && item.nome === categoria && item.nome === descricao);
+    const selectedCadastro = categorias.find((item) => item.ativa && item.tipo === tipo && categoryBelongsToUnit(item, targetUnit, units) && item.nome === categoria && item.nome === descricao);
     if (!selectedCadastro) {
       showToast('Selecione uma receita ou despesa da lista de cadastros.', 'error');
       return;
@@ -266,10 +273,32 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             </button>
           </div>
 
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Unidade / Filial <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={unidade}
+                onChange={(e) => setUnidade(e.target.value)}
+                required
+                disabled={isFinance}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white ${
+                  isFinance ? 'cursor-not-allowed opacity-75' : ''
+                }`}
+              >
+                <option value="" disabled>Selecione a unidade...</option>
+                {units.filter((unit) => unit.ativa && unit.id !== 'all').map((unit) => (
+                  <option key={unit.id} value={unit.nome}>{unit.nome} ({unit.cidade})</option>
+                ))}
+              </select>
+              {selectedUnit === 'Todas as Unidades' && !isFinance && !unidade && (
+                <p className="text-[10px] text-amber-700 mt-1">Informe a unidade responsável pelo lançamento.</p>
+              )}
+            </div>
           <CadastroSearch
             label={tipo === 'RECEITA' ? 'Receita cadastrada' : 'Despesa cadastrada'}
             value={descricao}
-            options={categorias.filter((item) => item.ativa && item.tipo === tipo)}
+            options={categorias.filter((item) => item.ativa && item.tipo === tipo && categoryBelongsToUnit(item, targetUnit, units))}
             onChange={(text) => { setDescricao(text); setCategoria(''); }}
             onSelect={(item) => { setDescricao(item.nome); setCategoria(item.nome); }}
           />
@@ -410,28 +439,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Unidade / Filial <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={unidade}
-                onChange={(e) => setUnidade(e.target.value)}
-                required
-                disabled={isFinance}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white ${
-                  isFinance ? 'cursor-not-allowed opacity-75' : ''
-                }`}
-              >
-                <option value="" disabled>Selecione a unidade...</option>
-                {units.filter((unit) => unit.ativa && unit.id !== 'all').map((unit) => (
-                  <option key={unit.id} value={unit.nome}>{unit.nome} ({unit.cidade})</option>
-                ))}
-              </select>
-              {selectedUnit === 'Todas as Unidades' && !isFinance && !unidade && (
-                <p className="text-[10px] text-amber-700 mt-1">Informe a unidade responsável pelo lançamento.</p>
-              )}
-            </div>
+
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
