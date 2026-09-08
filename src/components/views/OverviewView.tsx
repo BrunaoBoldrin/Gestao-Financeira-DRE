@@ -220,7 +220,7 @@ export const OverviewView: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-end gap-2 md:justify-end">
+          <div className="flex flex-wrap items-end gap-2 md:justify-end max-w-full [&>div]:min-w-0 [&>div]:max-w-full">
             <div>
               <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Unidade / Filial</label>
               <select
@@ -328,7 +328,7 @@ export const OverviewView: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Receitas */}
         <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
               Receitas Brutas
             </span>
@@ -349,7 +349,7 @@ export const OverviewView: React.FC = () => {
 
         {/* Despesas */}
         <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
               Despesas Operacionais
             </span>
@@ -368,7 +368,7 @@ export const OverviewView: React.FC = () => {
 
         {/* Resultado Operacional / EBITDA */}
         <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
               Resultado do Período
             </span>
@@ -389,7 +389,7 @@ export const OverviewView: React.FC = () => {
 
         {/* Status Caixa Físico */}
         <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
               Caixa Físico Recepção
             </span>
@@ -412,12 +412,12 @@ export const OverviewView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bar Chart: Evolução Receitas x Despesas */}
         <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col items-start gap-3 xl:flex-row xl:justify-between mb-4">
             <div>
               <h3 className="text-sm font-bold text-[#0b1c30]">Evolução Mensal de Receitas vs Despesas</h3>
               <p className="text-xs text-gray-500">{chartPeriodLabel} · unidade selecionada</p>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-3 text-[11px] font-semibold text-gray-600" aria-label="Legenda do gráfico">
                 <span className="inline-flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-sm bg-[#0b1c30]"></span>
@@ -434,7 +434,9 @@ export const OverviewView: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-64 w-full">
+          <p className="text-[11px] text-gray-500 mb-2">Deslize para o lado para ver todos os meses.</p>
+          <div className="overflow-x-auto max-w-full" role="region" aria-label="Evolução mensal de receitas e despesas" tabIndex={0}>
+          <div className="h-72" style={{ width: '100%', minWidth: chartData.length ? chartData.length * 88 + 64 : 0 }}>
             {chartData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-gray-500">
                 Nenhuma receita ou despesa com competência válida para exibir.
@@ -443,7 +445,7 @@ export const OverviewView: React.FC = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#64748b' }} />
+                <XAxis interval={0} minTickGap={0} dataKey="mes" tick={{ fontSize: 11, fill: '#64748b' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
                 <Tooltip content={<MonthlyFinancialTooltip />} />
                 <Bar dataKey="Receitas" fill="#0b1c30" radius={[4, 4, 0, 0]} />
@@ -451,6 +453,7 @@ export const OverviewView: React.FC = () => {
               </BarChart>
             </ResponsiveContainer>
             )}
+          </div>
           </div>
         </div>
 
@@ -489,12 +492,12 @@ export const OverviewView: React.FC = () => {
 
           <div className="space-y-1.5 mt-2 border-t border-gray-100 pt-3">
             {categoryPieData.map((cat, idx) => (
-              <div key={idx} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }}></span>
-                  <span className="text-gray-700 truncate">{cat.name}</span>
+              <div key={idx} className="flex flex-col gap-1 border-b border-gray-100 pb-2 text-xs">
+                <div className="flex items-start gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 mt-0.5 shrink-0 rounded-full" style={{ backgroundColor: cat.color }}></span>
+                  <span className="text-gray-700 break-words min-w-0">{cat.name}</span>
                 </div>
-                <span className="font-bold text-[#0b1c30] whitespace-nowrap">
+                <span className="font-bold text-[#0b1c30] whitespace-nowrap pl-[18px]">
                   {formatTooltipCurrency(cat.value)} · {cat.percentage.toFixed(1)}%
                 </span>
               </div>
