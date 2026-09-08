@@ -43,6 +43,8 @@ export const CadastrosView: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form Fields
+  const [unidadeIds, setUnidadeIds] = useState<string[]>([]);
+  const filiaisCadastradas = units.filter((unit) => unit.id !== 'all');
   const [codigo, setCodigo] = useState('');
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState<'RECEITA' | 'DESPESA'>('DESPESA');
@@ -61,6 +63,7 @@ export const CadastrosView: React.FC = () => {
 
   const openAddModal = () => {
     setEditingId(null);
+    setUnidadeIds([]);
     setCodigo('');
     setNome('');
     setTipo('DESPESA');
@@ -84,10 +87,11 @@ export const CadastrosView: React.FC = () => {
 
     if (activeTab === 'PLANO_CONTAS') {
       if (!nome || !codigo) return;
+      if (unidadeIds.length === 0) { showToast('Selecione pelo menos uma filial para este plano de contas.', 'error'); return; }
       if (editingId) {
-        updateCategoria(editingId, { codigo, nome, tipo, grupoDRE });
+        updateCategoria(editingId, { codigo, nome, tipo, grupoDRE, unidadeIds });
       } else {
-        addCategoria({ codigo, nome, tipo, grupoDRE, ativa: true });
+        addCategoria({ codigo, nome, tipo, grupoDRE, unidadeIds, ativa: true });
       }
     } else if (activeTab === 'CENTROS_CUSTO') {
       if (!nome || !codigo) return;
@@ -235,7 +239,7 @@ export const CadastrosView: React.FC = () => {
                   {categoriasSort.sortedItems.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="p-3 font-mono font-bold text-[#0b1c30]">{item.codigo}</td>
-                      <td className="p-3 font-semibold text-gray-800">{item.nome}</td>
+                      <td className="p-3 font-semibold text-gray-800">{item.nome}<p className="text-[10px] font-normal text-gray-500 mt-1">{item.unidadeIds === undefined ? 'Todas as filiais' : filiaisCadastradas.filter((unit) => item.unidadeIds?.includes(unit.id)).map((unit) => unit.nome).join(' · ') || 'Sem filiais vinculadas'}</p></td>
                       <td className="p-3">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -267,6 +271,7 @@ export const CadastrosView: React.FC = () => {
                             setNome(item.nome);
                             setTipo(item.tipo);
                             setGrupoDRE(item.grupoDRE);
+                            setUnidadeIds(item.unidadeIds ?? filiaisCadastradas.map((unit) => unit.id));
                             setShowFormModal(true);
                           }}
                           disabled={!isAdmin}
@@ -603,6 +608,20 @@ export const CadastrosView: React.FC = () => {
                       <option value="DESPESA">DESPESA</option>
                     </select>
                   </div>
+                  <fieldset className="rounded-lg border border-[#d3e4fe] p-3 space-y-2">
+                    <legend className="px-1 text-xs font-bold">Filiais deste plano de contas *</legend>
+                    <label className="flex items-center gap-2 min-h-11 text-xs font-semibold">
+                      <input type="checkbox" checked={filiaisCadastradas.length > 0 && filiaisCadastradas.every((unit) => unidadeIds.includes(unit.id))}
+                        onChange={(event) => setUnidadeIds(event.target.checked ? filiaisCadastradas.map((unit) => unit.id) : [])} />
+                      Selecionar todas as filiais cadastradas
+                    </label>
+                    {filiaisCadastradas.map((unit) => <label key={unit.id} className="flex items-center gap-2 min-h-11 text-xs">
+                      <input type="checkbox" checked={unidadeIds.includes(unit.id)}
+                        onChange={(event) => setUnidadeIds((current) => event.target.checked ? [...current, unit.id] : current.filter((id) => id !== unit.id))} />
+                      <span>{unit.nome}{unit.ativa ? '' : ' (inativa)'}</span>
+                    </label>)}
+                    {filiaisCadastradas.length === 0 && <p className="text-xs text-amber-700">Cadastre uma filial antes de criar o plano de contas.</p>}
+                  </fieldset>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Grupo de apresentação na DRE</label>
                     <select

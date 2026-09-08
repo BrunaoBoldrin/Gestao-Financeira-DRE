@@ -1,3 +1,4 @@
+import { categoryBelongsToUnit } from '../../utils/categoryUnits';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import * as XLSX from 'xlsx';
@@ -428,7 +429,7 @@ export const ImportExcelView: React.FC = () => {
       if (!descVal) errors.push('Descrição obrigatória');
       if (numValor <= 0) errors.push('Valor deve ser maior que zero');
       if (!dataVencimento) errors.push('Data de vencimento inválida ou ausente');
-      if (!catStr || !categorias.some((item) => item.ativa && item.nome.toLocaleLowerCase('pt-BR') === catStr.toLocaleLowerCase('pt-BR') && item.tipo === tipo)) errors.push('Categoria ativa incompatível com o tipo');
+      if (!catStr || !categorias.some((item) => item.ativa && categoryBelongsToUnit(item, resolvedUnit, units) && item.nome.toLocaleLowerCase('pt-BR') === catStr.toLocaleLowerCase('pt-BR') && item.tipo === tipo)) errors.push('Plano de contas inativo, incompatível com o tipo ou não vinculado à filial');
       if (!ccStr || !centrosCusto.some((item) => item.ativo && item.nome.toLocaleLowerCase('pt-BR') === ccStr.toLocaleLowerCase('pt-BR'))) errors.push('Centro de custo não cadastrado ou inativo');
       if (!fornStr) errors.push('Fornecedor ou cliente obrigatório');
       if (!unidStr || !matchedUnit) errors.push('Unidade não cadastrada ou inativa');
