@@ -35,7 +35,7 @@ export const DocumentosView: React.FC = () => {
           </span>
           <input
             type="text"
-            placeholder="Buscar por arquivo ou fornecedor..."
+            placeholder="Buscar por arquivo ou favorecido..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 bg-[#f8f9ff] border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
@@ -57,7 +57,7 @@ export const DocumentosView: React.FC = () => {
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
                 <SortableTableHeader label="Nome do Arquivo" sortKey="arquivo" accessor={(item) => item.nomeArquivo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
-                <SortableTableHeader label="Fornecedor" sortKey="fornecedor" accessor={(item) => item.dadosExtraidos.fornecedor} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Favorecido" sortKey="fornecedor" accessor={(item) => item.dadosExtraidos.fornecedor} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Data Upload" sortKey="data" accessor={(item) => normalizeDateValue(item.dataUpload)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Hash MD5 Integridade" sortKey="hash" accessor={(item) => item.id} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Valor Extraído" sortKey="valor" accessor={(item) => item.dadosExtraidos.valorTotal} sortConfig={sortConfig} onSort={requestSort} className="p-3 text-right" />

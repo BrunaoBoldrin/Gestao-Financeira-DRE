@@ -11,7 +11,7 @@ const definitions: { key: Key; sheet: string; columns: string[] }[] = [
   { key: 'units', sheet: 'Filiais', columns: ['ID','Nome','CNPJ','RazaoSocial','Cidade','Ativo'] },
   { key: 'centrosCusto', sheet: 'Centros_Custo', columns: ['ID','Codigo','Nome','Responsavel','Ativo'] },
   { key: 'categorias', sheet: 'Planos_Contas', columns: ['ID','Codigo','Nome','Tipo','GrupoDRE','CentroCusto','Ativo'] },
-  { key: 'fornecedores', sheet: 'Fornecedores', columns: ['ID','Nome','CNPJ','Cidade','Tipo','PlanoConta','Filiais','Ativo'] },
+  { key: 'fornecedores', sheet: 'Favorecidos', columns: ['ID','Nome','CNPJ','Cidade','Tipo','PlanoConta','Filiais','Ativo'] },
   { key: 'bancos', sheet: 'Contas_Bancarias', columns: ['ID','Banco','Agencia','Conta','Filial','SaldoInicial','Ativo'] },
   { key: 'condicoesPagamento', sheet: 'Condicoes_Pagamento', columns: ['ID','Nome','PrazosDias','Ativo'] }
 ];
@@ -27,8 +27,8 @@ export function exportMasters(data: Masters): XLSX.WorkBook {
     ['Não exclui registros: linhas ausentes são preservadas. Use Ativo = NÃO para desativar.'],
     ['CentroCusto e PlanoConta aceitam ID, código ou nome exato e único. Podem referenciar novos registros da mesma planilha.'],
     ['Filiais aceita IDs ou nomes separados por ponto e vírgula. * significa todas, inclusive futuras.'],
-    ['Planos novos exigem CentroCusto e são comuns a todas as filiais. Filiais pertence ao fornecedor, que herda o centro do plano.'],
-    ['Ativo: SIM ou NÃO. Tipo: RECEITA/DESPESA nos planos; FORNECEDOR/CLIENTE nos fornecedores.'],
+    ['Planos novos exigem CentroCusto e são comuns a todas as filiais. Filiais pertence ao favorecido, que herda o centro do plano.'],
+    ['Ativo: SIM ou NÃO. Tipo: RECEITA/DESPESA nos planos; FORNECEDOR/CLIENTE nos favorecidos.'],
     ['SaldoInicial é usado somente ao criar uma conta bancária. Saldos existentes são preservados.'],
     ['PrazosDias: dias inteiros separados por ponto e vírgula, por exemplo 30;60;90.'],
     ['Não renomeie filiais, planos ou centros existentes nesta carga: há registros históricos vinculados aos nomes.'],
@@ -57,6 +57,12 @@ export function planMasterImport(wb: XLSX.WorkBook, current: Masters): MasterImp
   const next: Masters = JSON.parse(JSON.stringify(current));
   const errors: string[] = [], changes: MasterChange[] = [];
   const staged: {key: Key; row: Row; index: number; sheet: string; item: any; old?: any}[] = [];
+  // Accept workbooks exported before the tab was renamed.
+  if (wb.Sheets.Fornecedores) {
+    if (wb.Sheets.Favorecidos) errors.push('Use apenas uma aba de favorecidos: Favorecidos ou Fornecedores.');
+    else wb = { ...wb, SheetNames: wb.SheetNames.map(name => name === 'Fornecedores' ? 'Favorecidos' : name),
+      Sheets: { ...wb.Sheets, Favorecidos: wb.Sheets.Fornecedores } };
+  }
   let recognized = 0;
   for (const sheet of wb.SheetNames) if (!definitions.some(d=>d.sheet===sheet) && !['Instrucoes','Grupos_DRE'].includes(sheet)) errors.push('Aba desconhecida: '+sheet);
   const resolve = (items: any[], value: string, label: string, optional = false): any => {
@@ -152,7 +158,7 @@ export function planMasterImport(wb: XLSX.WorkBook, current: Masters): MasterImp
       }
       if(key==='fornecedores') {
         const plan=resolve(next.categorias,row.PlanoConta,'Plano de contas',true);
-        if(plan && (plan.tipo!=='DESPESA' || (!plan.ativa && plan.id!==old?.planoContaId))) throw Error('Plano do fornecedor deve ser uma despesa ativa');
+        if(plan && (plan.tipo!=='DESPESA' || (!plan.ativa && plan.id!==old?.planoContaId))) throw Error('Plano do favorecido deve ser uma despesa ativa');
         item.planoContaId=plan?.id;
         if(row.Filiais==='*') delete item.unidadeIds;
         else {

@@ -29,7 +29,7 @@ test('new records in same file resolve codes and names across tabs',()=>{
  const data=fixture(), wb=exportMasters(data);
  edit(wb,'Centros_Custo',r=>r.push(['','CC2','Administrativo','','SIM']));
  edit(wb,'Planos_Contas',r=>r.push(['','7.01','Aluguel','DESPESA','DESPESA_ADMINISTRATIVA','CC2','SIM']));
- edit(wb,'Fornecedores',r=>r.push(['','Locador','003','SP','FORNECEDOR','7.01','Rio Claro','SIM']));
+ edit(wb,'Favorecidos',r=>r.push(['','Locador','003','SP','FORNECEDOR','7.01','Rio Claro','SIM']));
  const p=planMasterImport(wb,data);assert.deepEqual(p.errors,[]);
  const plan=p.next.categorias.find(x=>x.codigo==='7.01');
  assert.equal(plan.centroCustoId,p.next.centrosCusto.find(x=>x.codigo==='CC2').id);
@@ -37,7 +37,7 @@ test('new records in same file resolve codes and names across tabs',()=>{
 });
 test('ID updates supplier and omitted rows remain',()=>{
  const data=fixture(),wb=exportMasters(data);
- edit(wb,'Fornecedores',r=>{r[1][1]='Novo nome';r[1][3]='RJ';});
+ edit(wb,'Favorecidos',r=>{r[1][1]='Novo nome';r[1][3]='RJ';});
  delete wb.Sheets.Centros_Custo;wb.SheetNames=wb.SheetNames.filter(x=>x!=='Centros_Custo');
  const p=planMasterImport(wb,data);assert.deepEqual(p.errors,[]);
  assert.equal(p.next.fornecedores.length,1);assert.equal(p.next.fornecedores[0].nome,'Novo nome');
@@ -54,7 +54,7 @@ test('duplicate rows, unknown IDs and invalid links block the preview',()=>{
   r=>{r[1][5]='missing-plan';}
  ]) {
   const data=fixture(),before=masterFingerprint(data),wb=exportMasters(data);
-  edit(wb,'Fornecedores',change);const p=planMasterImport(wb,data);
+  edit(wb,'Favorecidos',change);const p=planMasterImport(wb,data);
   assert.ok(p.errors.length);assert.equal(masterFingerprint(data),before);
  }
 });
@@ -75,4 +75,16 @@ test('new plan without cost center and invalid headers are rejected',()=>{
 test('preview fingerprint changes when a master changes',()=>{
  const data=fixture(),p=planMasterImport(exportMasters(data),data);data.centrosCusto[0].responsavel='Outra';
  assert.notEqual(p.base,masterFingerprint(data));
+});
+
+test('old Fornecedores workbook tab remains supported', () => {
+ const data=fixture(),wb=exportMasters(data);
+ wb.Sheets.Fornecedores=wb.Sheets.Favorecidos;delete wb.Sheets.Favorecidos;
+ wb.SheetNames=wb.SheetNames.map(name=>name==='Favorecidos'?'Fornecedores':name);
+ assert.deepEqual(planMasterImport(wb,data).errors,[]);
+});
+test('duplicate old and new supplier tabs are rejected', () => {
+ const data=fixture(),wb=exportMasters(data);
+ wb.Sheets.Fornecedores=wb.Sheets.Favorecidos;wb.SheetNames.push('Fornecedores');
+ assert.ok(planMasterImport(wb,data).errors.length);
 });

@@ -64,7 +64,7 @@ export const InboxView: React.FC<InboxViewProps> = ({ onOpenUploadModal }) => {
               {/* Extracted Data Box */}
               <div className="bg-[#f8f9ff] p-3 rounded-lg border border-[#d3e4fe] space-y-1.5 text-xs mb-4">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Fornecedor:</span>
+                  <span className="text-gray-500">Favorecido:</span>
                   <span className="font-bold text-[#0b1c30] truncate max-w-[150px]">
                     {doc.dadosExtraidos.fornecedor}
                   </span>

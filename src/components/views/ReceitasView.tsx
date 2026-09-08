@@ -215,7 +215,7 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
                 <SortableTableHeader label="Data Venc." sortKey="vencimento" accessor={(item) => normalizeDateValue(item.dataVencimento)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Tipo" sortKey="tipo" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
-                <SortableTableHeader label="Fornecedor / Cliente" sortKey="cliente" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Favorecido / Cliente" sortKey="cliente" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Descrição" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Categoria / Centro" sortKey="categoria" accessor={(item) => `${item.categoria} ${item.centroCusto}`} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Forma Pgto" sortKey="forma" accessor={(item) => item.formaPagamento} sortConfig={sortConfig} onSort={requestSort} className="p-3" />

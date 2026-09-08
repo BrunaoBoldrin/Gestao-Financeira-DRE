@@ -313,7 +313,7 @@ export const PendingReviewView: React.FC = () => {
       dataVencimento: dataVencimento || dataEmissao,
       dataPagamento: isRealizedDocument ? dataEmissao : undefined,
       status: isRealizedDocument ? 'PAGO' as const : 'PENDENTE' as const,
-      fornecedorCliente: fornecedor || (launchType === 'RECEITA' ? 'Cliente Diverso' : 'Fornecedor Diverso'),
+      fornecedorCliente: fornecedor || (launchType === 'RECEITA' ? 'Cliente Diverso' : 'Favorecido Diverso'),
       cpfCnpjContraparte: cnpj,
       bancoId: banco.id,
       contaBancaria: banco.banco,
@@ -539,7 +539,7 @@ export const PendingReviewView: React.FC = () => {
                   <select value={finalidade} onChange={(e) => setFinalidade(e.target.value as FinalidadeFinanceira)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
                     <option value="A_CONFIRMAR">Confirmar...</option>
                     <option value="RECEBIMENTO_CLIENTE">Recebimento de cliente</option>
-                    <option value="PAGAMENTO_FORNECEDOR">Pagamento de fornecedor</option>
+                    <option value="PAGAMENTO_FORNECEDOR">Pagamento de favorecido</option>
                     <option value="TRANSFERENCIA_INTERNA">Transferência interna</option>
                     <option value="EMPRESTIMO">Empréstimo</option>
                     <option value="APORTE_SOCIO">Aporte de sócio</option>
@@ -605,7 +605,7 @@ export const PendingReviewView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Contraparte / Cliente / Fornecedor
+                  Contraparte / Cliente / Favorecido
                 </label>
                 <input
                   type="text"
@@ -849,7 +849,7 @@ export const PendingReviewView: React.FC = () => {
                 {acaoFinanceira === 'CRIAR_NOVO' && (duplicateDocument || financialMatches.some((match) => match.nivel !== 'COINCIDENCIA_VALOR')) && (
                   <div>
                     <label className="block text-[10px] font-bold text-amber-900 mb-1">Justificativa para registrar como novo *</label>
-                    <input value={justificativaNovo} onChange={(e) => setJustificativaNovo(e.target.value)} className="w-full px-2.5 py-1.5 border border-amber-300 rounded text-xs bg-white" placeholder="Ex.: fornecedor diferente; cobrança referente a outro serviço..." />
+                    <input value={justificativaNovo} onChange={(e) => setJustificativaNovo(e.target.value)} className="w-full px-2.5 py-1.5 border border-amber-300 rounded text-xs bg-white" placeholder="Ex.: favorecido diferente; cobrança referente a outro serviço..." />
                   </div>
                 )}
               </div>

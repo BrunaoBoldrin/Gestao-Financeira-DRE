@@ -88,7 +88,7 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
         </div>
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="text-xs font-bold">Descrição<input className={fieldClass} value={form.descricao} onChange={(e) => set('descricao', e.target.value)} /></label>
-          <label className="text-xs font-bold">Fornecedor / Cliente<input className={fieldClass} value={form.fornecedorCliente} onChange={(e) => set('fornecedorCliente', e.target.value)} /></label>
+          <label className="text-xs font-bold">Favorecido / Cliente<input className={fieldClass} value={form.fornecedorCliente} onChange={(e) => set('fornecedorCliente', e.target.value)} /></label>
           <label className="text-xs font-bold">Categoria<select className={fieldClass} value={form.categoria} onChange={(e) => {
             const plan = availableCategories.find((category) => category.nome === e.target.value);
             const center = availableCenters.find((center) => center.id === plan?.centroCustoId);

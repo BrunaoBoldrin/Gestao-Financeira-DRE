@@ -107,7 +107,7 @@ export const CadastrosView: React.FC = () => {
       }
     } else if (activeTab === 'FORNECEDORES') {
       if (!nome) return;
-      if (!unidadeIds.length) { showToast('Selecione pelo menos uma filial para o fornecedor.', 'error'); return; }
+      if (!unidadeIds.length) { showToast('Selecione pelo menos uma filial para o favorecido.', 'error'); return; }
       if (editingId) {
         updateFornecedor(editingId, { nome, cnpj, cidade, planoContaId: fornecedorPlanoId, unidadeIds });
       } else {
@@ -151,7 +151,7 @@ export const CadastrosView: React.FC = () => {
             Cadastros Auxiliares e Tabelas do Sistema
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Manutenção do plano de contas DRE, centros de custo, lista de fornecedores e contas bancárias.
+            Manutenção do plano de contas DRE, centros de custo, lista de favorecidos e contas bancárias.
           </p>
         </div>
 
@@ -203,7 +203,7 @@ export const CadastrosView: React.FC = () => {
             activeTab === 'FORNECEDORES' ? 'bg-[#131b2e] text-white shadow-xs' : 'text-gray-600 hover:bg-[#f8f9ff]'
           }`}
         >
-          Fornecedores ({fornecedores.length})
+          Favorecidos ({fornecedores.length})
         </button>
         <button
           onClick={() => setActiveTab('BANCOS')}
@@ -377,8 +377,9 @@ export const CadastrosView: React.FC = () => {
         {activeTab === 'FORNECEDORES' && (
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
-              Lista de Fornecedores Cadastrados
+              Favorecidos cadastrados
             </h3>
+            <p className="text-xs text-gray-500">Fornecedores, funcionários, prestadores de serviços e contas fixas, como água, luz e internet.</p>
             <div className="border border-gray-200 rounded-lg overflow-x-auto text-xs">
               <table className="w-full text-left">
                 <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
@@ -722,7 +723,7 @@ export const CadastrosView: React.FC = () => {
                       className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50" />
                   </div>
                   <fieldset className="rounded-lg border border-[#d3e4fe] p-3 space-y-2">
-                    <legend className="px-1 text-xs font-bold">Filiais deste fornecedor *</legend>
+                    <legend className="px-1 text-xs font-bold">Filiais deste favorecido *</legend>
                     <label className="flex items-center gap-2 min-h-11 text-xs font-semibold">
                       <input type="checkbox" checked={filiaisCadastradas.length > 0 && filiaisCadastradas.every((unit) => unidadeIds.includes(unit.id))}
                         onChange={(event) => setUnidadeIds(event.target.checked ? filiaisCadastradas.map((unit) => unit.id) : [])} />
@@ -733,7 +734,7 @@ export const CadastrosView: React.FC = () => {
                         onChange={(event) => setUnidadeIds((current) => event.target.checked ? [...current, unit.id] : current.filter((id) => id !== unit.id))} />
                       <span>{unit.nome}{unit.ativa ? '' : ' (inativa)'}</span>
                     </label>)}
-                    {filiaisCadastradas.length === 0 && <p className="text-xs text-amber-700">Cadastre uma filial antes de cadastrar o fornecedor.</p>}
+                    {filiaisCadastradas.length === 0 && <p className="text-xs text-amber-700">Cadastre uma filial antes de cadastrar o favorecido.</p>}
                   </fieldset>
                 </>
               )}

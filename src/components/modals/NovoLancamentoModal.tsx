@@ -150,7 +150,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     if (!descricao || numVal <= 0 || !unidade || isSubmitting) return;
 
     if (tipo === 'DESPESA' && !fornecedores.some((item) => item.id === selectedFornecedorId && item.ativo && item.nome === fornecedorCliente && supplierBelongsToUnit(item, targetUnit, units))) {
-      showToast('Selecione um fornecedor cadastrado na lista.', 'error'); return;
+      showToast('Selecione um favorecido cadastrado na lista.', 'error'); return;
     }
     const selectedCadastro = categorias.find((item) => item.ativa && item.tipo === tipo && categoryBelongsToUnit(item, targetUnit, units) && item.nome === categoria && item.nome === descricao);
     if (!selectedCadastro) {
@@ -221,7 +221,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       dataPagamento: status === 'PAGO' ? dataEmissao : undefined,
       status,
       observacoes: observacoes.trim() || undefined,
-      fornecedorCliente: fornecedorCliente || (tipo === 'RECEITA' ? 'Cliente Diverso' : 'Fornecedor Diverso'),
+      fornecedorCliente: fornecedorCliente || (tipo === 'RECEITA' ? 'Cliente Diverso' : 'Favorecido Diverso'),
       bancoId: selectedBanco.id,
       contaBancaria: selectedBanco.banco,
       formaPagamento,
@@ -313,9 +313,9 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               )}
             </div>
           {tipo === 'DESPESA' ? (
-            <CadastroSearch label="Fornecedor" value={fornecedorCliente}
-              placeholder="Digite o nome ou CNPJ do fornecedor"
-              emptyMessage="Nenhum fornecedor ativo disponível nesta filial. Selecione a filial e confira o vínculo do fornecedor."
+            <CadastroSearch label="Favorecido" value={fornecedorCliente}
+              placeholder="Digite o nome ou CNPJ do favorecido"
+              emptyMessage="Nenhum favorecido ativo disponível nesta filial. Selecione a filial e confira o vínculo do favorecido."
               options={fornecedores.filter((item) => item.ativo && item.tipo !== 'CLIENTE' && supplierBelongsToUnit(item, targetUnit, units)).map((item) => ({ id: item.id, nome: item.nome, codigo: item.cnpj || '' }))}
               onChange={(text) => { setFornecedorCliente(text); setSelectedFornecedorId(''); setDescricao(''); setCategoria(''); }}
               onSelect={(item) => { setSelectedFornecedorId(item.id); setFornecedorCliente(item.nome); }}
@@ -330,10 +330,10 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
           {tipo === 'DESPESA' ? (
             <div>
               <label htmlFor="manual-despesa" className="block text-xs font-semibold text-gray-700 mb-1">Despesa cadastrada</label>
-              <input id="manual-despesa" readOnly value={descricao} placeholder="Preenchida pelo fornecedor selecionado"
+              <input id="manual-despesa" readOnly value={descricao} placeholder="Preenchida pelo favorecido selecionado"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50" />
               {selectedFornecedorId && !categoria && <p className="mt-1 text-xs text-amber-700">
-                O fornecedor precisa de um plano de despesa ativo. Atualize o cadastro do fornecedor ou do plano de contas.
+                O favorecido precisa de um plano de despesa ativo. Atualize o cadastro do favorecido ou do plano de contas.
               </p>}
             </div>
           ) : (

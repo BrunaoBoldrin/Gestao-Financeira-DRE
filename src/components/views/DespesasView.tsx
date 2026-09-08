@@ -81,7 +81,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
             Controle de Despesas & Saídas
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Apuração de insumos médicos, custos operacionais, aluguéis e compras de fornecedores.
+            Apuração de insumos médicos, custos operacionais, aluguéis e compras de favorecidos.
           </p>
         </div>
 
@@ -143,7 +143,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
             </span>
             <input
               type="text"
-              placeholder="Buscar por fornecedor ou despesa..."
+              placeholder="Buscar por favorecido ou despesa..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
@@ -201,7 +201,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
                 <SortableTableHeader label="Vencimento" sortKey="vencimento" accessor={(item) => normalizeDateValue(item.dataVencimento)} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
-                <SortableTableHeader label="Fornecedor" sortKey="fornecedor" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Favorecido" sortKey="fornecedor" accessor={(item) => item.fornecedorCliente} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Descrição" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Categoria" sortKey="categoria" accessor={(item) => item.categoria} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Centro / Conta" sortKey="centro" accessor={(item) => `${item.centroCusto} ${item.contaBancaria}`} sortConfig={sortConfig} onSort={requestSort} className="p-3" />

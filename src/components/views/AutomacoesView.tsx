@@ -96,7 +96,7 @@ export const AutomacoesView: React.FC = () => {
               <input
                 type="text"
                 required
-                placeholder="Ex: Fornecedor Galderma"
+                placeholder="Ex: Favorecido Galderma"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
