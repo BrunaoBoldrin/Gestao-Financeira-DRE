@@ -317,6 +317,7 @@ export interface CentroCustoMaster {
 }
 
 export interface FornecedorMaster {
+  unidadeIds?: string[];
   planoContaId?: string;
   centroCustoId?: string;
   id: string;

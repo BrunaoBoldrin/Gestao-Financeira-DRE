@@ -1,3 +1,4 @@
+import { masterFingerprint, type MasterImport } from '../utils/masterWorkbook';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   User,
@@ -112,6 +113,8 @@ interface AppContextType {
   canExecuteFinancialActions: boolean;
   canManageAdminSettings: boolean;
   
+  applyMasterImport: (plan: MasterImport) => boolean;
+
   // Master CRUDs
   addUnit: (u: Omit<UnitConfig, 'id'>) => void;
   updateUnit: (id: string, u: Partial<UnitConfig>) => void;
@@ -904,6 +907,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Categorias CRUD
+  const applyMasterImport = (plan: MasterImport): boolean => {
+    if (!checkAdminPermission('Importar Cadastros')) return false;
+    if (plan.errors.length || plan.base !== masterFingerprint({ units, categorias, centrosCusto, fornecedores, bancos, condicoesPagamento })) {
+      showToast('Os cadastros mudaram ou a planilha contém erros. Importe novamente para revisar.', 'error');
+      return false;
+    }
+    setUnits(plan.next.units);
+    setCategorias(plan.next.categorias);
+    setCentrosCusto(plan.next.centrosCusto);
+    setFornecedores(plan.next.fornecedores);
+    setBancos(plan.next.bancos);
+    setCondicoesPagamento(plan.next.condicoesPagamento);
+    addAuditLog('Cadastros', 'EDICAO', `Importou cadastros: ${plan.changes.filter(item => item.acao === 'Criar').length} criações e ${plan.changes.filter(item => item.acao === 'Atualizar').length} atualizações.`);
+    return true;
+  };
+
   const addCategoria = (c: Omit<CategoriaMaster, 'id'>) => {
     if (!checkAdminPermission('Cadastrar Categoria')) return;
     const newC: CategoriaMaster = { ...c, id: 'cat-' + Date.now() };
@@ -2415,6 +2434,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateUnit,
         toggleUnitActive,
         deleteUnit,
+        applyMasterImport,
         addCategoria,
         updateCategoria,
         toggleCategoriaActive,

@@ -1,4 +1,4 @@
-import { categoryBelongsToUnit } from '../../utils/categoryUnits';
+import { categoryBelongsToUnit, supplierBelongsToUnit } from '../../utils/categoryUnits';
 import { CadastroSearch } from '../common/CadastroSearch';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
@@ -89,7 +89,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
   React.useEffect(() => {
     if (tipo !== 'DESPESA') return;
-    const supplier = fornecedores.find((item) => item.id === selectedFornecedorId && item.ativo && item.tipo !== 'CLIENTE');
+    const supplier = fornecedores.find((item) => item.id === selectedFornecedorId && item.ativo && item.tipo !== 'CLIENTE' && supplierBelongsToUnit(item, targetUnit, units));
+    if (selectedFornecedorId && !supplier) { setSelectedFornecedorId(''); setFornecedorCliente(''); }
     const plan = categorias.find((item) => item.id === supplier?.planoContaId && item.ativa && item.tipo === 'DESPESA' && categoryBelongsToUnit(item, targetUnit, units));
     setDescricao(plan?.nome || ''); setCategoria(plan?.nome || '');
   }, [tipo, selectedFornecedorId, fornecedores, categorias, targetUnit, units]);
@@ -148,7 +149,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     e.preventDefault();
     if (!descricao || numVal <= 0 || !unidade || isSubmitting) return;
 
-    if (tipo === 'DESPESA' && !fornecedores.some((item) => item.id === selectedFornecedorId && item.ativo && item.nome === fornecedorCliente)) {
+    if (tipo === 'DESPESA' && !fornecedores.some((item) => item.id === selectedFornecedorId && item.ativo && item.nome === fornecedorCliente && supplierBelongsToUnit(item, targetUnit, units))) {
       showToast('Selecione um fornecedor cadastrado na lista.', 'error'); return;
     }
     const selectedCadastro = categorias.find((item) => item.ativa && item.tipo === tipo && categoryBelongsToUnit(item, targetUnit, units) && item.nome === categoria && item.nome === descricao);
@@ -314,8 +315,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
           {tipo === 'DESPESA' ? (
             <CadastroSearch label="Fornecedor" value={fornecedorCliente}
               placeholder="Digite o nome ou CNPJ do fornecedor"
-              emptyMessage="Nenhum fornecedor ativo encontrado. Cadastre o fornecedor ou solicite ao administrador."
-              options={fornecedores.filter((item) => item.ativo && item.tipo !== 'CLIENTE').map((item) => ({ id: item.id, nome: item.nome, codigo: item.cnpj || '' }))}
+              emptyMessage="Nenhum fornecedor ativo disponível nesta filial. Selecione a filial e confira o vínculo do fornecedor."
+              options={fornecedores.filter((item) => item.ativo && item.tipo !== 'CLIENTE' && supplierBelongsToUnit(item, targetUnit, units)).map((item) => ({ id: item.id, nome: item.nome, codigo: item.cnpj || '' }))}
               onChange={(text) => { setFornecedorCliente(text); setSelectedFornecedorId(''); setDescricao(''); setCategoria(''); }}
               onSelect={(item) => { setSelectedFornecedorId(item.id); setFornecedorCliente(item.nome); }}
             />
@@ -332,7 +333,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               <input id="manual-despesa" readOnly value={descricao} placeholder="Preenchida pelo fornecedor selecionado"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50" />
               {selectedFornecedorId && !categoria && <p className="mt-1 text-xs text-amber-700">
-                O fornecedor precisa de um plano de despesa ativo vinculado a esta filial. Atualize o cadastro do fornecedor ou do plano de contas.
+                O fornecedor precisa de um plano de despesa ativo. Atualize o cadastro do fornecedor ou do plano de contas.
               </p>}
             </div>
           ) : (
