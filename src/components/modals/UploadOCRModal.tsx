@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 
@@ -48,7 +49,7 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+    <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150">
         <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -104,6 +105,6 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 };

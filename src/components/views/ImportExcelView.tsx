@@ -633,7 +633,7 @@ export const ImportExcelView: React.FC = () => {
       {/* STEP 2: MAPPING */}
       {step === 'mapping' && (
         <div className="bg-white p-6 rounded-xl border border-[#e5eeff] shadow-xs space-y-6">
-          <div className="flex items-center justify-between border-b pb-4">
+          <div className="flex flex-wrap items-center justify-between border-b pb-4">
             <div>
               <h3 className="text-sm font-bold text-[#0b1c30]">Mapeamento das Colunas da Planilha</h3>
               <p className="text-xs text-gray-500">Arquivo: <strong>{fileName}</strong> ({rawRows.length} linhas detectadas)</p>
@@ -906,7 +906,7 @@ export const ImportExcelView: React.FC = () => {
           </div>
 
           {/* KPI Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
               <span className="text-[11px] font-semibold text-emerald-800 uppercase block">Total Receitas Importadas</span>
               <span className="text-lg font-black text-emerald-950">R$ {totalReceitasImport.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>

@@ -107,8 +107,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
         </button>}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex items-center justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex flex-wrap items-center justify-between">
           <div>
             <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
               Total de Receitas
@@ -120,7 +120,7 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           <span className="material-symbols-outlined text-emerald-600 text-3xl">check_circle</span>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex flex-wrap items-center justify-between">
           <div>
             <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">
               Total de Despesas
@@ -131,7 +131,7 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           </div>
           <span className="material-symbols-outlined text-amber-600 text-3xl">trending_down</span>
         </div>
-        <div className={`${totalReceitas - totalDespesas >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-rose-50 border-rose-200'} border p-4 rounded-xl flex items-center justify-between`}><div><p className="text-xs font-bold uppercase tracking-wider">Resultado filtrado</p><p className="text-2xl font-black mt-1">R$ {(totalReceitas - totalDespesas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></div><span className="material-symbols-outlined text-blue-600 text-3xl">account_balance_wallet</span></div>
+        <div className={`${totalReceitas - totalDespesas >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-rose-50 border-rose-200'} border p-4 rounded-xl flex flex-wrap items-center justify-between`}><div><p className="text-xs font-bold uppercase tracking-wider">Resultado filtrado</p><p className="text-2xl font-black mt-1">R$ {(totalReceitas - totalDespesas).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></div><span className="material-symbols-outlined text-blue-600 text-3xl">account_balance_wallet</span></div>
       </div>
 
       {/* Filters & Table */}

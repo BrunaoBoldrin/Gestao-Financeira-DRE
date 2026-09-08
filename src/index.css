@@ -53,11 +53,6 @@ main > *, .grid > * { min-width: 0; }
   button, select, input:not([type="checkbox"]):not([type="radio"]) {
     min-height: 44px;
   }
-  .fixed.inset-0 { padding: 12px; }
-  .fixed.inset-0 > form, .fixed.inset-0 > div:not(.absolute) {
-    max-height: calc(100dvh - 24px);
-    overflow-y: auto;
-  }
   header { padding-top: max(12px, env(safe-area-inset-top)); }
   main { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 }
@@ -96,5 +91,51 @@ main > *, .grid > * { min-width: 0; }
   .overflow-x-auto > table input,
   .overflow-x-auto > table select {
     min-width: 140px;
+  }
+}
+
+/* Shared dialog geometry: one scrolling panel, sized to the visible viewport. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.modal-overlay > * {
+  min-width: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.modal-overlay > * > form {
+  max-height: none;
+  overflow: visible;
+}
+@media (max-width: 1023px) {
+  main .flex > div, .modal-overlay .flex > div { min-width: 0; }
+  main input, main select, main textarea,
+  .modal-overlay input, .modal-overlay select, .modal-overlay textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+@media (max-width: 639px) {
+  .modal-overlay .p-6 { padding: 16px; }
+  .modal-overlay .px-6 { padding-left: 16px; padding-right: 16px; }
+  .modal-overlay .flex.justify-end { flex-wrap: wrap; }
+}
+
+@media (max-width: 1023px) {
+  main .flex.flex-wrap.justify-between { row-gap: 8px; }
+  main .rounded-xl > .text-2xl,
+  main .rounded-xl .font-black.text-2xl {
+    font-size: clamp(18px, 3vw, 24px);
+    overflow-wrap: break-word;
+    font-variant-numeric: tabular-nums;
   }
 }

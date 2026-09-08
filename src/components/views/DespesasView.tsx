@@ -109,7 +109,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex items-center justify-between">
+        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex flex-wrap items-center justify-between">
           <div>
             <p className="text-xs font-bold text-rose-800 uppercase tracking-wider">
               Despesas Pagas (Liquidadas)
@@ -121,7 +121,7 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
           <span className="material-symbols-outlined text-rose-600 text-3xl">task_alt</span>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center justify-between">
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex flex-wrap items-center justify-between">
           <div>
             <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">
               A Pagar (A Vencer / Pendente)

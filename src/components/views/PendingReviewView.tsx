@@ -413,7 +413,7 @@ export const PendingReviewView: React.FC = () => {
         {/* Left Column: Image/PDF Viewer */}
         <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+            <div className="flex flex-wrap items-center justify-between border-b border-gray-100 pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-gray-500">visibility</span>
                 <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
@@ -469,7 +469,7 @@ export const PendingReviewView: React.FC = () => {
         {/* Right Column: Extracted Form Data for Review */}
         <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs flex flex-col justify-between">
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div className="flex flex-wrap items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#C5A059]">edit_note</span>
                 <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
@@ -488,7 +488,7 @@ export const PendingReviewView: React.FC = () => {
             </div>
 
             {currentDoc.totalEntidadesDocumento && currentDoc.entidadeNumero && (
-              <div className="flex items-center justify-between gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900">
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-900">
                 <div>
                   <p className="text-xs font-bold">Movimentação {currentDoc.entidadeNumero} de {currentDoc.totalEntidadesDocumento}</p>
                   <p className="text-[10px] text-blue-700">
@@ -507,7 +507,7 @@ export const PendingReviewView: React.FC = () => {
                   <p className="text-[10px] text-gray-500">A sugestão do OCR só será aplicada depois da sua confirmação.</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-600 mb-1">Movimento</label>
                   <select value={sentido} onChange={(e) => setSentido(e.target.value as SentidoFinanceiro)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
@@ -544,7 +544,7 @@ export const PendingReviewView: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Unidade / Filial *</label>
                 <select
@@ -668,7 +668,7 @@ export const PendingReviewView: React.FC = () => {
             {/* DDL Condition selector and live preview */}
             {impactoDRE === 'DESPESA' && ['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo) && (
             <div className="bg-[#f8f9ff] border border-[#C5A059]/40 p-3 rounded-lg space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between">
                 <label className="text-xs font-bold text-[#0b1c30] flex items-center gap-1">
                   <span className="material-symbols-outlined text-[#C5A059] text-base">event_note</span>
                   Condição de Pagamento (DDL)
@@ -733,7 +733,7 @@ export const PendingReviewView: React.FC = () => {
                       return (
                         <div
                           key={idx}
-                          className="flex items-center justify-between bg-white px-2 py-1 rounded border border-gray-200 text-[11px]"
+                          className="flex flex-wrap items-center justify-between bg-white px-2 py-1 rounded border border-gray-200 text-[11px]"
                         >
                           <span className="font-medium text-gray-700">
                             Boleto {idx + 1}/{prazos.length} ({dias} dias DDL)
@@ -817,7 +817,7 @@ export const PendingReviewView: React.FC = () => {
                         className="mt-0.5"
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center justify-between gap-2">
+                        <span className="flex flex-wrap items-center justify-between gap-2">
                           <strong className="truncate text-[11px] text-[#0b1c30]">{match.lancamento.fornecedorCliente}</strong>
                           <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold ${
                             match.nivel === 'DUPLICIDADE_FORTE'
@@ -837,7 +837,7 @@ export const PendingReviewView: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                   <button type="button" onClick={() => setAcaoFinanceira('VINCULAR_EXISTENTE')} disabled={!lancamentoSelecionadoId} className="px-2 py-1.5 rounded border border-emerald-300 bg-white text-emerald-800 text-[10px] font-bold disabled:opacity-40">Vincular selecionado</button>
                   <button type="button" onClick={() => setAcaoFinanceira('CRIAR_NOVO')} className="px-2 py-1.5 rounded border border-blue-300 bg-white text-blue-800 text-[10px] font-bold">Registrar como novo</button>
                   <button type="button" onClick={() => setAcaoFinanceira('SOMENTE_ARQUIVAR')} className="px-2 py-1.5 rounded border border-gray-300 bg-white text-gray-700 text-[10px] font-bold">Somente arquivar</button>
@@ -853,7 +853,7 @@ export const PendingReviewView: React.FC = () => {
             )}
 
             <div>
-              <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center justify-between">
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex flex-wrap items-center justify-between">
                 <span>Observações / Notas da Auditoria OCR</span>
                 <span className="text-[10px] text-gray-400 font-normal">Informações adicionais para o financeiro</span>
               </label>
@@ -899,7 +899,7 @@ export const PendingReviewView: React.FC = () => {
           </div>
 
           {/* Action buttons */}
-          <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
+          <div className="mt-6 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between">
             <button
               onClick={handleRejeitar}
               disabled={isSaving}

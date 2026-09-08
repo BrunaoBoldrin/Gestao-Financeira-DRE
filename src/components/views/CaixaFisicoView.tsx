@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
@@ -242,7 +243,7 @@ export const CaixaFisicoView: React.FC = () => {
           <p className="text-xs mt-1">Um administrador deve cadastrar uma conta cujo nome contenha “Caixa” e vinculá-la à unidade.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="bg-[#eff4ff] p-4 rounded-xl border border-[#d3e4fe]">
             <p className="text-[10px] font-bold text-[#131b2e] uppercase">Saldo disponível agora</p>
             <p className="text-xl font-black text-[#0b1c30] mt-0.5">{formatCurrency(contaCaixa.saldo)}</p>
@@ -265,7 +266,7 @@ export const CaixaFisicoView: React.FC = () => {
       )}
 
       <div className="bg-white rounded-xl border border-[#e5eeff] shadow-xs overflow-hidden">
-        <div className="p-4 bg-[#f8f9ff] border-b border-[#e5eeff] flex items-center justify-between">
+        <div className="p-4 bg-[#f8f9ff] border-b border-[#e5eeff] flex flex-wrap items-center justify-between">
           <div>
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">Histórico contínuo do Caixa Físico</h3>
             <p className="text-[10px] text-gray-500 mt-0.5">{unidadeCaixa}</p>
@@ -310,9 +311,9 @@ export const CaixaFisicoView: React.FC = () => {
       </div>
 
       {canExecuteFinancialActions && modalType && contaCaixa && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">
+            <div className="bg-[#0b1c30] text-white px-6 py-4 flex flex-wrap items-center justify-between">
               <div>
                 <h3 className="font-bold text-sm">{modalType === 'AJUSTE' ? 'Ajuste manual auditável' : `Movimentação de ${modalType}`}</h3>
                 <p className="text-[10px] text-slate-300 mt-0.5">{unidadeCaixa} · Saldo atual {formatCurrency(contaCaixa.saldo)}</p>
@@ -378,7 +379,7 @@ export const CaixaFisicoView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

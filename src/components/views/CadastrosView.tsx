@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
@@ -454,7 +455,7 @@ export const CadastrosView: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {bancos.map((b) => (
                 <div key={b.id} className="p-4 bg-[#eff4ff] border border-[#d3e4fe] rounded-xl flex justify-between items-start">
                   <div>
@@ -551,9 +552,9 @@ export const CadastrosView: React.FC = () => {
 
       {/* Modal Add / Edit */}
       {showFormModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">
+            <div className="bg-[#0b1c30] text-white px-6 py-4 flex flex-wrap items-center justify-between">
               <h3 className="font-bold text-sm">
                 {editingId ? 'Editar Cadastro' : 'Novo Cadastro'}
               </h3>
@@ -804,7 +805,7 @@ export const CadastrosView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

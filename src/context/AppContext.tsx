@@ -898,6 +898,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteUnit = (id: string) => {
     if (!checkAdminPermission('Excluir Filial')) return;
+    if (!window.confirm('Tem certeza que deseja excluir esta filial?')) return;
     setUnits((prev) => prev.filter((item) => item.id !== id));
     showToast('Filial removida.', 'info');
   };
@@ -920,6 +921,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const deleteCategoria = (id: string) => {
     if (!checkAdminPermission('Excluir Categoria')) return;
+    if (!window.confirm('Tem certeza que deseja excluir esta categoria?')) return;
     setCategorias((prev) => prev.filter((item) => item.id !== id));
     showToast('Categoria removida.', 'info');
   };
@@ -941,6 +943,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const deleteCentroCusto = (id: string) => {
     if (!checkAdminPermission('Excluir Centro de Custo')) return;
+    if (!window.confirm('Tem certeza que deseja excluir este centro de custo?')) return;
     setCentrosCusto((prev) => prev.filter((item) => item.id !== id));
     showToast('Centro de custo removido.', 'info');
   };
@@ -962,6 +965,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const deleteFornecedor = (id: string) => {
     if (!checkAdminPermission('Excluir Fornecedor')) return;
+    if (!window.confirm('Tem certeza que deseja excluir este fornecedor?')) return;
     setFornecedores((prev) => prev.filter((item) => item.id !== id));
     showToast('Cadastro removido.', 'info');
   };
@@ -999,6 +1003,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const deleteBanco = (id: string) => {
     if (!checkAdminPermission('Excluir Conta Bancária')) return;
+    if (!window.confirm('Tem certeza que deseja excluir esta conta bancária?')) return;
     setBancos((prev) => prev.filter((item) => item.id !== id));
     showToast('Conta bancária removida.', 'info');
   };
@@ -1020,6 +1025,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const deleteCondicaoPagamento = (id: string) => {
     if (!checkAdminPermission('Excluir DDL')) return;
+    if (!window.confirm('Tem certeza que deseja excluir esta condição de pagamento?')) return;
     setCondicoesPagamento((prev) => prev.filter((item) => item.id !== id));
     showToast('Condição de pagamento removida.', 'info');
   };
@@ -1429,6 +1435,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!existing) return;
     if (!ensureCompetenciaAberta(existing.dataCompetencia || existing.dataVencimento, 'excluir lançamentos')) return;
     if (existing && !canManageUnit(existing.unidade, 'Excluir Lançamento')) return;
+    if (!window.confirm(`Tem certeza que deseja excluir o lançamento "${existing.descricao}"?${existing.status === 'PAGO' ? ' O valor será estornado no saldo da conta.' : ''}`)) return;
     if (existing.status === 'PAGO') {
       const banco = resolveBancoForLancamento(existing);
       if (!banco) {
@@ -1438,7 +1445,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adjustBancoBalance(banco.id, -balanceDeltaForLancamento(existing), `Exclusão de "${existing.descricao}"`);
     }
     setLancamentos((prev) => prev.filter((item) => item.id !== id));
-    showToast('Exclusão preparada. Aguardando confirmação...', 'info');
+    showToast('Lançamento excluído. Salvando alteração...', 'info');
     addAuditLog('Lançamentos', 'EXCLUSAO', `Excluiu lançamento ID ${id}`);
   };
 

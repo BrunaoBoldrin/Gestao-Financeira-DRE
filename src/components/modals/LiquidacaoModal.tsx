@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { DadosLiquidacao, Lancamento } from '../../types';
@@ -69,7 +70,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b1c30]/65 p-4" role="dialog" aria-modal="true">
+    <ModalOverlay className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b1c30]/65 p-4" role="dialog" aria-modal="true">
       <form onSubmit={handleSubmit} className="w-full max-w-lg overflow-hidden rounded-2xl border border-[#d3e4fe] bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-[#e5eeff] bg-[#f8f9ff] p-5">
           <div className="flex items-start gap-3">
@@ -157,7 +158,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
           </div>
 
           {selectedBank && (
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs">
               <div>
                 <p className="text-[9px] font-bold uppercase text-blue-700">Saldo atual</p>
                 <p className="mt-0.5 font-black text-[#0b1c30]">{formatCurrency(selectedBank.saldo)}</p>
@@ -187,6 +188,6 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
           </button>
         </div>
       </form>
-    </div>
+    </ModalOverlay>
   );
 };

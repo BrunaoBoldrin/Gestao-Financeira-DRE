@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { User, UserRole } from '../../types';
@@ -239,7 +240,7 @@ export const UsuariosPermissoesView: React.FC = () => {
 
         {/* Add User Form */}
         <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between">
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
               {editingUserId ? 'Editar Usuário' : 'Novo Usuário'}
             </h3>
@@ -271,6 +272,7 @@ export const UsuariosPermissoesView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
+                        if (!window.confirm('Tem certeza que deseja remover esta foto?')) return;
                         setAvatarUrl(undefined);
                         if (photoInputRef.current) photoInputRef.current.value = '';
                       }}
@@ -397,7 +399,7 @@ export const UsuariosPermissoesView: React.FC = () => {
       </div>
 
       {userToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-rose-600 text-2xl">person_remove</span>
@@ -429,7 +431,7 @@ export const UsuariosPermissoesView: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

@@ -45,16 +45,16 @@ const MonthlyFinancialTooltip = ({ active, payload, label }: any) => {
     <div className="min-w-56 rounded-lg border border-slate-600 bg-[#0b1c30] p-3 text-xs shadow-xl">
       <p className="mb-2 font-bold text-white">Competência: {label}</p>
       <div className="space-y-1.5">
-        <p className="flex items-center justify-between gap-4 text-emerald-300">
+        <p className="flex flex-wrap items-center justify-between gap-4 text-emerald-300">
           <span>Receitas:</span>
           <strong>+ {formatTooltipCurrency(receitas)}</strong>
         </p>
-        <p className="flex items-center justify-between gap-4 text-amber-300">
+        <p className="flex flex-wrap items-center justify-between gap-4 text-amber-300">
           <span>Despesas:</span>
           <strong>− {formatTooltipCurrency(despesas)}</strong>
         </p>
         <div className="my-1 border-t border-slate-600" />
-        <p className="flex items-center justify-between gap-4 font-bold" style={{ color: resultadoColor }}>
+        <p className="flex flex-wrap items-center justify-between gap-4 font-bold" style={{ color: resultadoColor }}>
           <span>Resultado {resultadoStatus}:</span>
           <strong>{resultado > 0 ? '+' : resultado < 0 ? '−' : ''} {formatTooltipCurrency(resultado)}</strong>
         </p>
@@ -511,7 +511,7 @@ export const OverviewView: React.FC = () => {
 
       {/* Latest Entries Table Preview */}
       <div className="bg-white rounded-xl border border-[#e5eeff] shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-[#e5eeff] flex items-center justify-between bg-[#f8f9ff]">
+        <div className="p-4 border-b border-[#e5eeff] flex flex-wrap items-center justify-between bg-[#f8f9ff]">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#131b2e]">receipt</span>
             <h3 className="text-sm font-bold text-[#0b1c30]">Últimos Lançamentos da Unidade</h3>

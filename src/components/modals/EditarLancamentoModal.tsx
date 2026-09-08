@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { Lancamento } from '../../types';
@@ -75,7 +76,7 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
+    <ModalOverlay className="fixed inset-0 z-50 bg-black/55 flex items-center justify-center p-4">
       <form onSubmit={submit} className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
         <div className="p-5 border-b flex items-center justify-between">
           <div><h3 className="font-black text-[#0b1c30]">Editar {item.tipo === 'RECEITA' ? 'receita' : 'despesa'}</h3><p className="text-xs text-gray-500">A alteração fica registrada no histórico de auditoria.</p></div>
@@ -95,6 +96,6 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
         </div>
         <div className="p-5 border-t flex justify-end gap-2"><button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-gray-600">Cancelar</button><button disabled={saving} className="px-5 py-2 rounded-lg bg-[#131b2e] text-white text-sm font-bold disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
       </form>
-    </div>
+    </ModalOverlay>
   );
 };

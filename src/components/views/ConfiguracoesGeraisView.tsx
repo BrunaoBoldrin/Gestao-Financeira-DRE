@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 
@@ -68,7 +69,7 @@ export const ConfiguracoesGeraisView: React.FC = () => {
 
       {/* Units / Branches Section */}
       <div className="bg-white rounded-xl border border-[#e5eeff] p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-[#0b1c30] flex items-center gap-1.5">
               <span className="material-symbols-outlined text-blue-600">location_city</span>
@@ -145,7 +146,7 @@ export const ConfiguracoesGeraisView: React.FC = () => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-gray-500 font-semibold mb-1">CNPJ Matriz</label>
                 <input
@@ -172,9 +173,9 @@ export const ConfiguracoesGeraisView: React.FC = () => {
 
       {/* Modal Add/Edit Unit */}
       {showUnitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">
+            <div className="bg-[#0b1c30] text-white px-6 py-4 flex flex-wrap items-center justify-between">
               <h3 className="font-bold text-sm">
                 {editingUnitId ? 'Editar Filial' : 'Nova Filial / Unidade'}
               </h3>
@@ -235,7 +236,7 @@ export const ConfiguracoesGeraisView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

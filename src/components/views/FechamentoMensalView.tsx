@@ -1,3 +1,4 @@
+import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getCurrentMonthValue, getMonthValue } from '../../utils/dateRange';
@@ -32,7 +33,7 @@ export const FechamentoMensalView: React.FC = () => {
       <span className="material-symbols-outlined text-4xl text-gray-400">event_available</span><h3 className="font-bold mt-2">Fechamento ainda não iniciado</h3><p className="text-xs text-gray-500 mt-1">Há {entries.length} lançamento(s) nesta competência.</p>
       {app.canExecuteFinancialActions && <button onClick={async () => { app.iniciarFechamentoMensal(month); await persist('Fechamento iniciado e salvo.'); }} className="mt-4 px-4 py-2 rounded-lg bg-[#131b2e] text-white text-xs font-bold">Iniciar fechamento</button>}
     </div> : <>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {[['Status', closing.status], ['Lançamentos', String(entries.length)], ['Checklist', `${done}/${total} — ${progress}%`]].map(([label, value]) => <div key={label} className="bg-white border rounded-xl p-4"><p className="text-[10px] uppercase font-bold text-gray-500">{label}</p><p className="font-black mt-1">{value}</p></div>)}
       </div>
       <div className="bg-white rounded-xl border p-5 space-y-4">
@@ -45,6 +46,6 @@ export const FechamentoMensalView: React.FC = () => {
     </>}
 
     {app.fechamentosMensais.length > 0 && <div className="bg-white rounded-xl border overflow-hidden"><div className="p-4 border-b text-xs font-bold uppercase">Histórico de competências</div>{[...app.fechamentosMensais].sort((a, b) => b.mesAno.localeCompare(a.mesAno)).map((item) => <div key={item.id} className="px-4 py-3 border-b last:border-0 flex justify-between text-xs"><span className="font-bold">{item.mesAno.split('-').reverse().join('/')}</span><span>{item.status}{item.fechadoPor ? ` • ${item.fechadoPor}` : ''}</span></div>)}</div>}
-    {confirmLock && <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-xl p-6 max-w-md"><h3 className="font-bold">Travar {month.split('-').reverse().join('/')}?</h3><p className="text-xs text-gray-600 mt-2">Criações, edições, exclusões e liquidações nessa competência ficarão bloqueadas.</p><div className="flex justify-end gap-2 mt-5"><button onClick={() => setConfirmLock(false)} className="px-4 py-2 text-xs font-bold">Cancelar</button><button onClick={async () => { if (app.travarFechamentoMensal(month)) await persist('Competência travada e salva.'); setConfirmLock(false); }} className="px-4 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold">Confirmar trava</button></div></div></div>}
+    {confirmLock && <ModalOverlay className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-xl p-6 max-w-md"><h3 className="font-bold">Travar {month.split('-').reverse().join('/')}?</h3><p className="text-xs text-gray-600 mt-2">Criações, edições, exclusões e liquidações nessa competência ficarão bloqueadas.</p><div className="flex justify-end gap-2 mt-5"><button onClick={() => setConfirmLock(false)} className="px-4 py-2 text-xs font-bold">Cancelar</button><button onClick={async () => { if (app.travarFechamentoMensal(month)) await persist('Competência travada e salva.'); setConfirmLock(false); }} className="px-4 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold">Confirmar trava</button></div></div></ModalOverlay>}
   </div>;
 };
