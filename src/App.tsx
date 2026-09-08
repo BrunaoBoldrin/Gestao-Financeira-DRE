@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
-import { canAccessView } from './config/accessControl';
+import { canAccessView, ROLE_DEFAULT_VIEW } from './config/accessControl';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { AuthScreen } from './components/auth/AuthScreen';
@@ -42,11 +42,11 @@ const MainAppContent: React.FC = () => {
   }
 
   const renderActiveView = () => {
-    if (!canAccessView(currentUser.role, currentView)) {
-      return <OverviewView />;
-    }
+    const allowedView = canAccessView(currentUser.role, currentView)
+      ? currentView
+      : ROLE_DEFAULT_VIEW[currentUser.role];
 
-    switch (currentView) {
+    switch (allowedView) {
       case 'overview':
         return <OverviewView />;
       case 'inbox':
