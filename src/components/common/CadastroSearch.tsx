@@ -3,12 +3,14 @@ import React, { useId, useState } from 'react';
 interface Option { id: string; nome: string; codigo: string }
 interface Props {
   label: string;
+  placeholder?: string;
+  emptyMessage?: string;
   value: string;
   options: Option[];
   onChange: (value: string) => void;
   onSelect: (option: Option) => void;
 }
-export const CadastroSearch: React.FC<Props> = ({ label, value, options, onChange, onSelect }) => {
+export const CadastroSearch: React.FC<Props> = ({ label, value, options, onChange, onSelect, placeholder = 'Digite o nome ou código do cadastro', emptyMessage = 'Nenhum cadastro ativo encontrado. Cadastre a conta em Cadastros → Plano de Contas ou solicite ao administrador.' }) => {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -20,7 +22,7 @@ export const CadastroSearch: React.FC<Props> = ({ label, value, options, onChang
       <label htmlFor={id} className="block text-xs font-semibold text-gray-700 mb-1">{label} *</label>
       <input id={id} role="combobox" aria-expanded={open} aria-controls={id + '-list'}
         aria-autocomplete="list" aria-activedescendant={open && active >= 0 && matches[active] ? id + '-' + active : undefined}
-        required autoComplete="off" value={value} placeholder="Digite o nome ou código do cadastro"
+        required autoComplete="off" value={value} placeholder={placeholder}
         onFocus={() => { setOpen(true); setActive(-1); }}
         onChange={event => { onChange(event.target.value); setOpen(true); setActive(-1); }}
         onKeyDown={event => {
@@ -45,7 +47,7 @@ export const CadastroSearch: React.FC<Props> = ({ label, value, options, onChang
           <span className="text-xs text-gray-500 mr-2">{option.codigo}</span>{option.nome}
         </li>)}
         {matches.length === 0 && <li className="p-3 text-xs text-gray-500" role="presentation">
-          Nenhum cadastro ativo encontrado. Cadastre a conta em Cadastros → Plano de Contas ou solicite ao administrador.
+          {emptyMessage}
         </li>}
       </ul>}
     </div>
