@@ -44,6 +44,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   const [dataCompetencia, setDataCompetencia] = useState(new Date().toISOString().substring(0, 10));
   const [dataVencimento, setDataVencimento] = useState(new Date().toISOString().substring(0, 10));
   const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 Dias default
+  const [selectedFornecedorId, setSelectedFornecedorId] = useState('');
+  const [observacoes, setObservacoes] = useState('');
   const [fornecedorCliente, setFornecedorCliente] = useState('');
   const [bancoId, setBancoId] = useState('');
   const [unidade, setUnidade] = useState(selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
@@ -57,6 +59,9 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     setAnexo(null);
     setDescricao('');
     setCategoria('');
+    setFornecedorCliente('');
+    setSelectedFornecedorId('');
+    setObservacoes('');
     onClose();
   };
 
@@ -177,7 +182,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
         destinoBancoId: contaDestinoBancoId,
         valor: numVal,
         data: dataEmissao,
-        descricao,
+        descricao: observacoes.trim() ? descricao + ' — ' + observacoes.trim() : descricao,
         unidade: targetUnit,
         comprovanteUrl,
         documentoRef: anexo?.name
@@ -204,6 +209,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       dataVencimento: dataVencimento || dataEmissao,
       dataPagamento: status === 'PAGO' ? dataEmissao : undefined,
       status,
+      observacoes: observacoes.trim() || undefined,
       fornecedorCliente: fornecedorCliente || (tipo === 'RECEITA' ? 'Cliente Diverso' : 'Fornecedor Diverso'),
       bancoId: selectedBanco.id,
       contaBancaria: selectedBanco.banco,
@@ -250,7 +256,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                setTipo('RECEITA'); setDescricao(''); setCategoria('');
+                setTipo('RECEITA'); setDescricao(''); setCategoria(''); setFornecedorCliente(''); setSelectedFornecedorId('');
               }}
               className={`py-2 rounded-md font-bold text-xs flex items-center justify-center gap-1.5 transition ${
                 tipo === 'RECEITA' ? 'bg-emerald-600 text-white shadow-xs' : 'text-gray-600 hover:bg-white'
@@ -262,7 +268,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                setTipo('DESPESA'); setDescricao(''); setCategoria('');
+                setTipo('DESPESA'); setDescricao(''); setCategoria(''); setFornecedorCliente(''); setSelectedFornecedorId('');
               }}
               className={`py-2 rounded-md font-bold text-xs flex items-center justify-center gap-1.5 transition ${
                 tipo === 'DESPESA' ? 'bg-rose-600 text-white shadow-xs' : 'text-gray-600 hover:bg-white'
@@ -295,6 +301,33 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                 <p className="text-[10px] text-amber-700 mt-1">Informe a unidade responsável pelo lançamento.</p>
               )}
             </div>
+          {tipo === 'DESPESA' ? (
+            <div>
+              <label htmlFor="manual-fornecedor" className="block text-xs font-semibold text-gray-700 mb-1">Fornecedor (opcional)</label>
+              <select id="manual-fornecedor" value={selectedFornecedorId}
+                onChange={(event) => {
+                  const supplier = fornecedores.find((item) => item.ativo && item.id === event.target.value);
+                  setSelectedFornecedorId(supplier?.id || '');
+                  setFornecedorCliente(supplier?.nome || '');
+                  if (!supplier) return;
+                  const plan = categorias.find((item) => item.id === supplier.planoContaId && item.ativa && item.tipo === 'DESPESA' && categoryBelongsToUnit(item, targetUnit, units));
+                  const center = centrosCusto.find((item) => item.id === supplier.centroCustoId && item.ativo);
+                  setDescricao(plan?.nome || ''); setCategoria(plan?.nome || '');
+                  setCentroCusto(center?.nome || '');
+                  if (supplier.planoContaId && !plan) showToast('O plano padrão do fornecedor não está disponível nesta filial. Selecione outro plano.', 'info');
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                <option value="">Selecione o fornecedor</option>
+                {fornecedores.filter((item) => item.ativo && item.tipo !== 'CLIENTE').map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="manual-cliente" className="block text-xs font-semibold text-gray-700 mb-1">Cliente (opcional)</label>
+              <input id="manual-cliente" value={fornecedorCliente} onChange={(event) => setFornecedorCliente(event.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+          )}
           <CadastroSearch
             label={tipo === 'RECEITA' ? 'Receita cadastrada' : 'Despesa cadastrada'}
             value={descricao}
@@ -506,6 +539,12 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             </div>
           )}
 
+          <div>
+            <label htmlFor="manual-observacoes" className="block text-xs font-semibold text-gray-700 mb-1">Observações (opcional)</label>
+            <textarea id="manual-observacoes" rows={3} value={observacoes} onChange={(event) => setObservacoes(event.target.value)}
+              placeholder="Informações adicionais sobre o lançamento"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y" />
+          </div>
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Anexo financeiro (opcional)</label>
             <label className="flex items-center justify-between gap-3 w-full px-3 py-2.5 border border-dashed border-gray-300 rounded-md text-xs bg-gray-50 hover:bg-gray-100 cursor-pointer transition">

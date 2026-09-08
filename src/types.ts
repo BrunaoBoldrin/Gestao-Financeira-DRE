@@ -316,6 +316,8 @@ export interface CentroCustoMaster {
 }
 
 export interface FornecedorMaster {
+  planoContaId?: string;
+  centroCustoId?: string;
   id: string;
   nome: string;
   cnpj: string;
