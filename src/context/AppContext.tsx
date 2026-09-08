@@ -1327,12 +1327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Transferência de R$ ${dados.valor.toFixed(2)} de [${origem.banco}] para [${destino.banco}] (${dados.unidade})${dados.documentoRef ? ` — anexo: ${dados.documentoRef}` : ''}`
     );
 
-    if (saldoOrigemApos < 0) {
-      showToast(
-        `A conta "${origem.banco}" ficará com saldo negativo de ${formatCurrency(saldoOrigemApos)}, indicando uso do limite bancário.`,
-        'info'
-      );
-    }
+
   };
 
   const exportBackupJSON = () => {
