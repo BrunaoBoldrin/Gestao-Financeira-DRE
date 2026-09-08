@@ -337,8 +337,8 @@ export const ReceitasView: React.FC<ReceitasViewProps> = ({ onOpenNovoLancamento
           const saved = await flushPersistence();
           showToast(
             saved
-              ? `${lancamentoLiquidacao.tipo === 'RECEITA' ? 'Recebimento' : 'Pagamento'} confirmado e salvo no Neon.`
-              : 'A liquidação ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+              ? `${lancamentoLiquidacao.tipo === 'RECEITA' ? 'Recebimento' : 'Pagamento'} confirmado e salvo.`
+              : 'A liquidação ainda não foi confirmada. Use “Tentar salvar” antes de sair.',
             saved ? 'success' : 'error'
           );
           setLancamentoLiquidacao(null);

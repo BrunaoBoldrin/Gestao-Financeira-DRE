@@ -272,8 +272,8 @@ export const PendingReviewView: React.FC = () => {
       const saved = await flushPersistence();
       showToast(
         saved
-          ? 'Documento conciliado e salvo no Neon.'
-          : 'A conciliação ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+          ? 'Documento conciliado e salvo.'
+          : 'A conciliação ainda não foi confirmada. Use “Tentar salvar” antes de sair.',
         saved ? 'success' : 'error'
       );
       if (saved) advanceToNextDoc();
@@ -285,8 +285,8 @@ export const PendingReviewView: React.FC = () => {
       const saved = await flushPersistence();
       showToast(
         saved
-          ? 'Documento arquivado e salvo no Neon, sem gerar movimentação financeira.'
-          : 'O documento ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+          ? 'Documento arquivado e salvo, sem gerar movimentação financeira.'
+          : 'O documento ainda não foi confirmado. Use “Tentar salvar” antes de sair.',
         saved ? 'success' : 'error'
       );
       if (saved) advanceToNextDoc();
@@ -337,8 +337,8 @@ export const PendingReviewView: React.FC = () => {
     const saved = await flushPersistence();
     showToast(
       saved
-        ? 'Documento aprovado e lançamento financeiro salvos no Neon.'
-        : 'A aprovação ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+        ? 'Documento aprovado e lançamento financeiro salvos.'
+        : 'A aprovação ainda não foi confirmada. Use “Tentar salvar” antes de sair.',
       saved ? 'success' : 'error'
     );
     if (saved) advanceToNextDoc();
@@ -355,8 +355,8 @@ export const PendingReviewView: React.FC = () => {
       const saved = await flushPersistence();
       showToast(
         saved
-          ? `Documento "${currentDoc.nomeArquivo}" rejeitado e salvo no Neon.`
-          : 'A rejeição ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+          ? `Documento "${currentDoc.nomeArquivo}" rejeitado e salvo.`
+          : 'A rejeição ainda não foi confirmada. Use “Tentar salvar” antes de sair.',
         saved ? 'success' : 'error'
       );
       if (saved) advanceToNextDoc();
@@ -916,7 +916,7 @@ export const PendingReviewView: React.FC = () => {
             >
               <span className="material-symbols-outlined text-base">task_alt</span>
               {isSaving
-                ? 'Confirmando no Neon...'
+                ? 'Confirmando...'
                 : acaoFinanceira === 'A_CONFIRMAR'
                 ? 'Confirme a ação financeira'
                 : acaoFinanceira === 'VINCULAR_EXISTENTE'

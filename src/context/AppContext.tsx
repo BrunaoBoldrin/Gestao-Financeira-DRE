@@ -68,8 +68,8 @@ interface AppContextType {
   persistenceStatus: PersistenceStatus;
   persistenceMessage: string;
   flushPersistence: () => Promise<boolean>;
-  loginUser: (email: string, password: string) => Promise<boolean>;
-  setupInitialAdmin: (data: { setupToken: string; name: string; email: string; password: string }) => Promise<boolean>;
+  loginUser: (username: string, password: string) => Promise<boolean>;
+  setupInitialAdmin: (data: { setupToken: string; name: string; username: string; password: string }) => Promise<boolean>;
   logoutUser: () => Promise<void>;
   retryPersistence: () => void;
   currentUser: User | null;
@@ -423,7 +423,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const authenticatedUser = authenticatedUserRef.current;
     const storedAuthenticatedUser = authenticatedUser
       ? snapshot.users.find(
-          (user) => user.id === authenticatedUser.id || user.email.toLocaleLowerCase('pt-BR') === authenticatedUser.email.toLocaleLowerCase('pt-BR')
+          (user) => user.id === authenticatedUser.id || user.username?.toLocaleLowerCase('pt-BR') === authenticatedUser.username?.toLocaleLowerCase('pt-BR')
         )
       : undefined;
     const effectiveAuthenticatedUser = authenticatedUser
@@ -433,7 +433,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? [
           effectiveAuthenticatedUser,
           ...snapshot.users.filter(
-            (user) => user.id !== effectiveAuthenticatedUser.id && user.email.toLocaleLowerCase('pt-BR') !== effectiveAuthenticatedUser.email.toLocaleLowerCase('pt-BR')
+            (user) => user.id !== effectiveAuthenticatedUser.id && user.username?.toLocaleLowerCase('pt-BR') !== effectiveAuthenticatedUser.username?.toLocaleLowerCase('pt-BR')
           )
         ]
       : snapshot.users;
@@ -471,7 +471,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saveTask = saveChainRef.current.then(async () => {
       if (!hydratedRef.current) return false;
       setPersistenceStatus('SAVING');
-      setPersistenceMessage('Salvando alterações no Neon...');
+      setPersistenceMessage('Salvando alterações...');
       try {
         const result = await saveApplicationState(revisionRef.current, snapshot);
         revisionRef.current = result.revision;
@@ -479,9 +479,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           hasUnsavedChangesRef.current = false;
         }
         setPersistenceStatus('CONNECTED');
-        setPersistenceMessage(`Dados salvos no Neon · revisão ${result.revision}`);
+        setPersistenceMessage(`Dados salvos · revisão ${result.revision}`);
         if (notifyOnSuccess) {
-          showToast('Alterações confirmadas e salvas no Neon.', 'success');
+          showToast('Alterações confirmadas e salvas.', 'success');
         }
         return true;
       } catch (error) {
@@ -500,7 +500,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return false;
         }
         setPersistenceStatus('ERROR');
-        setPersistenceMessage(error instanceof Error ? error.message : 'Falha ao salvar no Neon.');
+        setPersistenceMessage(error instanceof Error ? error.message : 'Falha ao salvar.');
         return false;
       }
     });
@@ -532,10 +532,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           authenticatedUserRef.current = INITIAL_USERS[0];
           setCurrentUserState(INITIAL_USERS[0]);
           setPersistenceStatus('LOCAL_DEMO');
-          setPersistenceMessage('Modo local de demonstração: configure o Neon para salvar os dados.');
+          setPersistenceMessage('Modo local de demonstração: configure a conexão para salvar os dados.');
         } else {
           setPersistenceStatus('ERROR');
-          setPersistenceMessage('O banco Neon não está configurado. Cadastre as variáveis de conexão no Render.');
+          setPersistenceMessage('O banco de dados não está configurado. Cadastre as variáveis de conexão no Render.');
         }
         return;
       }
@@ -560,7 +560,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (!auth.authenticated || !auth.user) {
         setPersistenceStatus('AUTH_REQUIRED');
-        setPersistenceMessage('Informe seu e-mail e senha.');
+        setPersistenceMessage('Informe seu nome de usuário e senha.');
         return;
       }
       authenticatedUserRef.current = auth.user;
@@ -585,14 +585,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (auth.user.role === 'ADMIN') {
         const { users: authUsers } = await listAuthUsers();
         const legacyUsers = stateToApply.users.filter((storedUser) => !authUsers.some(
-          (authUser) => authUser.id === storedUser.id || authUser.email.toLocaleLowerCase('pt-BR') === storedUser.email.toLocaleLowerCase('pt-BR')
+          (authUser) => authUser.id === storedUser.id || authUser.username?.toLocaleLowerCase('pt-BR') === storedUser.username?.toLocaleLowerCase('pt-BR')
         ));
         stateToApply = {
           ...stateToApply,
           users: [
             ...authUsers.map((authUser) => {
               const storedUser = stateToApply.users.find(
-                (candidate) => candidate.id === authUser.id || candidate.email.toLocaleLowerCase('pt-BR') === authUser.email.toLocaleLowerCase('pt-BR')
+                (candidate) => candidate.id === authUser.id || candidate.username?.toLocaleLowerCase('pt-BR') === authUser.username?.toLocaleLowerCase('pt-BR')
               );
               return { ...storedUser, ...authUser, avatarUrl: storedUser?.avatarUrl };
             }),
@@ -605,11 +605,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       hasUnsavedChangesRef.current = false;
       hydratedRef.current = true;
       setPersistenceStatus('CONNECTED');
-      setPersistenceMessage(`Conectado ao Neon · revisão ${revisionRef.current}`);
+      setPersistenceMessage(`Dados sincronizados · revisão ${revisionRef.current}`);
     } catch (error) {
       if (error instanceof PersistenceApiError && error.status === 401) {
         setPersistenceStatus('AUTH_REQUIRED');
-        setPersistenceMessage('Informe seu e-mail e senha.');
+        setPersistenceMessage('Informe seu nome de usuário e senha.');
         return;
       }
       setPersistenceStatus('ERROR');
@@ -617,9 +617,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [applyPersistentSnapshot]);
 
-  const loginUser = useCallback(async (email: string, password: string) => {
+  const loginUser = useCallback(async (username: string, password: string) => {
     try {
-      const result = await loginUserApi(email, password);
+      const result = await loginUserApi(username, password);
       authenticatedUserRef.current = result.user;
       await hydratePersistence();
       return true;
@@ -633,7 +633,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setupInitialAdmin = useCallback(async (data: {
     setupToken: string;
     name: string;
-    email: string;
+    username: string;
     password: string;
   }) => {
     try {
@@ -650,7 +650,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logoutUser = useCallback(async () => {
     if (hasUnsavedChangesRef.current && !(await flushPersistence())) {
-      showToast('Não foi possível sair: ainda existem alterações não salvas no Neon.', 'error');
+      showToast('Não foi possível sair: ainda existem alterações não salvas.', 'error');
       return;
     }
     try {
@@ -770,7 +770,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
     if (persistenceStatus !== 'LOCAL_DEMO' && !hydratedRef.current) {
-      showToast(`Não é possível executar "${actionName}" enquanto o Neon não estiver sincronizado.`, 'error');
+      showToast(`Não é possível executar "${actionName}" enquanto os dados não estiverem sincronizados.`, 'error');
       return false;
     }
     return true;
@@ -782,7 +782,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
     if (persistenceStatus !== 'LOCAL_DEMO' && !hydratedRef.current) {
-      showToast(`Não é possível executar "${actionName}" enquanto o Neon não estiver sincronizado.`, 'error');
+      showToast(`Não é possível executar "${actionName}" enquanto os dados não estiverem sincronizados.`, 'error');
       return false;
     }
     return true;
@@ -1139,7 +1139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (options?.notify !== false) {
-      showToast('Lançamento preparado. Aguardando confirmação do Neon...', 'info');
+      showToast('Lançamento preparado. Aguardando confirmação...', 'info');
     }
   };
   const addLancamentoComParcelamento = (
@@ -1412,7 +1412,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adjustBancoBalance(updated.bancoId, balanceDeltaForLancamento(updated), `Edição de "${updated.descricao}"`);
     }
     setLancamentos((prev) => prev.map((item) => (item.id === id ? updated : item)));
-    showToast('Alteração preparada. Aguardando confirmação do Neon...', 'info');
+    showToast('Alteração preparada. Aguardando confirmação...', 'info');
     addAuditLog(
       'Lançamentos',
       'EDICAO',
@@ -1438,7 +1438,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adjustBancoBalance(banco.id, -balanceDeltaForLancamento(existing), `Exclusão de "${existing.descricao}"`);
     }
     setLancamentos((prev) => prev.filter((item) => item.id !== id));
-    showToast('Exclusão preparada. Aguardando confirmação do Neon...', 'info');
+    showToast('Exclusão preparada. Aguardando confirmação...', 'info');
     addAuditLog('Lançamentos', 'EXCLUSAO', `Excluiu lançamento ID ${id}`);
   };
 
@@ -2235,8 +2235,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Users ---
   const addUser = async (u: Omit<User, 'id' | 'lastAccess'> & { password: string }) => {
     if (!checkAdminPermission('Cadastrar Usuário')) return false;
-    if (users.some((user) => user.email.toLowerCase() === u.email.toLowerCase())) {
-      showToast('Já existe um usuário cadastrado com este e-mail.', 'error');
+    if (users.some((user) => user.username?.toLowerCase() === u.username?.toLowerCase())) {
+      showToast('Já existe um usuário cadastrado com este nome de usuário.', 'error');
       return false;
     }
     const { password, avatarUrl, ...profile } = u;
@@ -2261,8 +2261,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Não é possível alterar o próprio usuário nesta tela.', 'error');
       return false;
     }
-    if (changes.email && users.some((user) => user.id !== id && user.email.toLowerCase() === changes.email!.toLowerCase())) {
-      showToast('Já existe outro usuário cadastrado com este e-mail.', 'error');
+    if (changes.username && users.some((user) => user.id !== id && user.username?.toLowerCase() === changes.username!.toLowerCase())) {
+      showToast('Já existe outro usuário cadastrado com este nome de usuário.', 'error');
       return false;
     }
     const existing = users.find((user) => user.id === id);
@@ -2278,7 +2278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         result = await updateAuthUser(id, {
           name: updated.name,
-          email: updated.email,
+          username: updated.username,
           role: updated.role,
           unit: updated.unit,
           active: updated.active,
@@ -2292,7 +2292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         result = await createAuthUser({
           name: updated.name,
-          email: updated.email,
+          username: updated.username,
           password,
           role: updated.role,
           unit: updated.unit,
@@ -2323,7 +2323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const result = await updateAuthUser(id, {
         name: user.name,
-        email: user.email,
+        username: user.username,
         role: user.role,
         unit: user.unit,
         active: !user.active

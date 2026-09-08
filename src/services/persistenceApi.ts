@@ -37,17 +37,17 @@ export interface PersistenceAuthStatus {
 export const getPersistenceAuthStatus = () =>
   requestJson<PersistenceAuthStatus>('/api/auth/status');
 
-export const loginUser = (email: string, password: string) =>
+export const loginUser = (username: string, password: string) =>
   requestJson<{ success: boolean; user: User }>('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ username, password })
   });
 
 export const setupInitialAdmin = (data: {
   setupToken: string;
   name: string;
-  email: string;
+  username: string;
   password: string;
 }) => requestJson<{ success: boolean; user: User }>('/api/auth/setup', {
   method: 'POST',
@@ -60,7 +60,7 @@ export const logoutUser = () =>
 
 export interface CreateAuthUserInput {
   name: string;
-  email: string;
+  username: string;
   password: string;
   role: UserRole;
   unit: string;

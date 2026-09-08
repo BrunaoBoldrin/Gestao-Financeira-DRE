@@ -70,7 +70,7 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
     if (!changed) { setSaving(false); return; }
     const saved = await flushPersistence();
     setSaving(false);
-    showToast(saved ? 'Transação editada e salva no banco de dados.' : 'A edição ficou pendente de confirmação do banco de dados.', saved ? 'success' : 'error');
+    showToast(saved ? 'Transação editada e salva.' : 'A edição ficou pendente de confirmação.', saved ? 'success' : 'error');
     if (saved) onClose();
   };
 

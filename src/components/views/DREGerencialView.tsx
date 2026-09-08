@@ -315,8 +315,8 @@ export const DREGerencialView: React.FC = () => {
     if (saved) {
       setSelectedVersionId(version.id);
       setEditing(false);
-      showToast(`Versão ${version.versao} do DRE salva no banco de dados.`, 'success');
-    } else showToast('A versão ainda não foi confirmada pelo banco de dados.', 'error');
+      showToast(`Versão ${version.versao} do DRE salva.`, 'success');
+    } else showToast('A versão ainda não foi confirmada.', 'error');
   };
 
   const toggleExpand = (code: string) => {

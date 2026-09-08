@@ -182,7 +182,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
             className={`rounded-lg px-4 py-2 text-xs font-bold text-white transition disabled:cursor-not-allowed disabled:bg-gray-300 ${isReceipt ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-[#131b2e] hover:bg-[#0b1c30]'}`}
           >
             {isSubmitting
-              ? 'Confirmando no Neon...'
+              ? 'Confirmando...'
               : isReceipt ? 'Confirmar recebimento' : 'Confirmar pagamento'}
           </button>
         </div>

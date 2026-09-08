@@ -172,8 +172,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       const saved = await flushPersistence();
       showToast(
         saved
-          ? 'Transferência confirmada e salva no Neon.'
-          : 'A transferência ainda não foi confirmada pelo Neon. Use “Tentar salvar” antes de sair.',
+          ? 'Transferência confirmada e salva.'
+          : 'A transferência ainda não foi confirmada. Use “Tentar salvar” antes de sair.',
         saved ? 'success' : 'error'
       );
       setIsSubmitting(false);
@@ -210,8 +210,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     const saved = await flushPersistence();
     showToast(
       saved
-        ? `${tipo === 'RECEITA' ? 'Receita' : 'Despesa'} confirmada e salva no Neon.`
-        : 'O lançamento ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+        ? `${tipo === 'RECEITA' ? 'Receita' : 'Despesa'} confirmada e salva.`
+        : 'O lançamento ainda não foi confirmado. Use “Tentar salvar” antes de sair.',
       saved ? 'success' : 'error'
     );
     setIsSubmitting(false);
@@ -530,7 +530,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               className="px-5 py-2 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] disabled:bg-gray-400 disabled:cursor-not-allowed shadow-xs transition flex items-center gap-1.5"
             >
               <span className="material-symbols-outlined text-base">check_circle</span>
-              {isSubmitting ? 'Confirmando no Neon...' : 'Salvar Lançamento'}
+              {isSubmitting ? 'Confirmando...' : 'Salvar Lançamento'}
             </button>
           </div>
         </form>
