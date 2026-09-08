@@ -211,8 +211,8 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
           const saved = await flushPersistence();
           showToast(
             saved
-              ? 'Pagamento da parcela confirmado e salvo no Neon.'
-              : 'O pagamento da parcela ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+              ? 'Pagamento da parcela confirmado e salvo.'
+              : 'O pagamento da parcela ainda não foi confirmado. Use “Tentar salvar” antes de sair.',
             saved ? 'success' : 'error'
           );
           setParcelaLiquidacao(null);

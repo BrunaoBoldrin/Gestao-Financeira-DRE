@@ -321,8 +321,8 @@ export const DespesasView: React.FC<DespesasViewProps> = ({ onOpenNovoLancamento
           const saved = await flushPersistence();
           showToast(
             saved
-              ? 'Pagamento confirmado e salvo no Neon.'
-              : 'O pagamento ainda não foi confirmado pelo Neon. Use “Tentar salvar” antes de sair.',
+              ? 'Pagamento confirmado e salvo.'
+              : 'O pagamento ainda não foi confirmado. Use “Tentar salvar” antes de sair.',
             saved ? 'success' : 'error'
           );
           setLancamentoLiquidacao(null);

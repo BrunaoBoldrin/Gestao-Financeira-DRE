@@ -22,24 +22,24 @@ SESSION_MAX_AGE_SECONDS = int(os.getenv("DATA_SESSION_MAX_AGE_SECONDS", str(12 *
 PASSWORD_ITERATIONS = int(os.getenv("PASSWORD_PBKDF2_ITERATIONS", "600000"))
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
-EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{3,64}$")
 
 
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=250)
+    username: str = Field(min_length=3, max_length=64)
     password: str = Field(min_length=1, max_length=128)
 
 
 class SetupAdminRequest(BaseModel):
     setupToken: str = Field(min_length=16, max_length=500)
     name: str = Field(min_length=2, max_length=150)
-    email: str = Field(min_length=5, max_length=250)
+    username: str = Field(min_length=3, max_length=64)
     password: str = Field(min_length=12, max_length=128)
 
 
 class CreateUserRequest(BaseModel):
     name: str = Field(min_length=2, max_length=150)
-    email: str = Field(min_length=5, max_length=250)
+    username: str = Field(min_length=3, max_length=64)
     password: str = Field(min_length=12, max_length=128)
     role: Literal["ADMIN", "FINANCE", "AUDITOR"]
     unit: str = Field(min_length=2, max_length=150)
@@ -48,17 +48,52 @@ class CreateUserRequest(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     name: str = Field(min_length=2, max_length=150)
-    email: str = Field(min_length=5, max_length=250)
+    username: str = Field(min_length=3, max_length=64)
     password: str | None = Field(default=None, min_length=12, max_length=128)
     role: Literal["ADMIN", "FINANCE", "AUDITOR"]
     unit: str = Field(min_length=2, max_length=150)
     active: bool
 
 
-def _normalize_email(email: str) -> str:
+
+def ensure_username_migration() -> None:
+    ensure_schema()
+    with transaction() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtext('rf-username-migration'))")
+            cursor.execute("SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = 3) AS applied")
+            if cursor.fetchone()["applied"]:
+                return
+            cursor.execute("SELECT id::text, profile_nonce, profile_ciphertext, key_version, role FROM auth_users ORDER BY created_at, id")
+            rows = cursor.fetchall()
+            used = set()
+            admin_assigned = False
+            for row in rows:
+                profile = decrypt_json(bytes(row["profile_nonce"]), bytes(row["profile_ciphertext"]),
+                                       f"auth_users:profile:{row['id']}", row["key_version"])
+                if row["role"] == "ADMIN" and not admin_assigned:
+                    username = "admin"
+                    admin_assigned = True
+                else:
+                    base = re.sub(r"[^a-z0-9_.-]", "", profile.get("email", "").split("@")[0].casefold())[:50]
+                    if len(base) < 3 or base == "admin":
+                        base = "usuario"
+                    username = base
+                    suffix = 2
+                    while username in used:
+                        username = f"{base}{suffix}"
+                        suffix += 1
+                used.add(username)
+                profile["username"] = username
+                nonce, ciphertext, key_version = encrypt_json(profile, f"auth_users:profile:{row['id']}")
+                cursor.execute("UPDATE auth_users SET email_lookup = %s, profile_nonce = %s, profile_ciphertext = %s, key_version = %s WHERE id = %s",
+                               (lookup_fingerprint(username, "auth-email"), nonce, ciphertext, key_version, row["id"]))
+            cursor.execute("INSERT INTO schema_migrations (version) VALUES (3)")
+
+def _normalize_username(email: str) -> str:
     normalized = email.strip().casefold()
-    if not EMAIL_PATTERN.match(normalized):
-        raise HTTPException(status_code=422, detail="Informe um e-mail válido.")
+    if not USERNAME_PATTERN.match(normalized):
+        raise HTTPException(status_code=422, detail="Use de 3 a 64 letras, números, pontos, hífens ou sublinhados no nome de usuário.")
     return normalized
 
 
@@ -69,10 +104,10 @@ def _normalized_profile(name: str, email: str, unit: str) -> tuple[dict, str]:
         raise HTTPException(status_code=422, detail="Informe o nome do usuário.")
     if len(normalized_unit) < 2:
         raise HTTPException(status_code=422, detail="Informe a unidade do usuário.")
-    normalized_email = _normalize_email(email)
+    normalized_email = _normalize_username(email)
     return {
         "name": normalized_name,
-        "email": normalized_email,
+        "username": normalized_email,
         "unit": normalized_unit,
     }, normalized_email
 
@@ -139,7 +174,7 @@ def _profile_from_row(row: dict) -> dict:
     return {
         "id": row["id"],
         "name": profile["name"],
-        "email": profile["email"],
+        "username": profile["username"],
         "role": row["role"],
         "unit": profile.get("unit", "Todas as Unidades"),
         "active": row["active"],
@@ -151,7 +186,7 @@ def current_authenticated_user(request: Request) -> dict | None:
     token = request.cookies.get(COOKIE_NAME)
     if not token or not database_configured() or not encryption_configured():
         return None
-    ensure_schema()
+    ensure_username_migration()
     with transaction() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute(
@@ -182,15 +217,15 @@ def _create_session(cursor, user_id: str, response: Response) -> None:
 
 def setup_admin(payload: SetupAdminRequest, response: Response) -> dict:
     if not database_configured() or not encryption_configured():
-        raise HTTPException(status_code=503, detail="Configure o Neon e a chave de criptografia primeiro.")
+        raise HTTPException(status_code=503, detail="Configure a conexão e a chave de criptografia primeiro.")
     configured_token = os.getenv("APP_SETUP_TOKEN", "")
     if not configured_token or not secrets.compare_digest(payload.setupToken, configured_token):
         raise HTTPException(status_code=401, detail="Chave de configuração inicial inválida.")
 
-    email = _normalize_email(payload.email)
-    ensure_schema()
+    email = "admin"
+    ensure_username_migration()
     user_id = str(uuid.uuid4())
-    profile = {"name": payload.name.strip(), "email": email, "unit": "Todas as Unidades"}
+    profile = {"name": payload.name.strip(), "username": email, "unit": "Todas as Unidades"}
     profile_nonce, profile_ciphertext, key_version = encrypt_json(
         profile, f"auth_users:profile:{user_id}"
     )
@@ -228,9 +263,9 @@ def setup_admin(payload: SetupAdminRequest, response: Response) -> dict:
 def login_user(payload: LoginRequest, response: Response) -> dict:
     if not database_configured() or not encryption_configured():
         raise HTTPException(status_code=503, detail="Banco ou criptografia não configurados.")
-    email = _normalize_email(payload.email)
+    email = _normalize_username(payload.username)
     email_lookup = lookup_fingerprint(email, "auth-email")
-    ensure_schema()
+    ensure_username_migration()
     invalid_credentials = False
 
     with transaction() as conn:
@@ -280,7 +315,7 @@ def login_user(payload: LoginRequest, response: Response) -> dict:
                 cursor.execute("DELETE FROM auth_sessions WHERE expires_at <= NOW() OR revoked_at IS NOT NULL")
                 _create_session(cursor, row["id"], response)
     if invalid_credentials:
-        raise HTTPException(status_code=401, detail="E-mail ou senha inválidos.")
+        raise HTTPException(status_code=401, detail="Usuário ou senha inválidos.")
     return _profile_from_row(row)
 
 
@@ -288,7 +323,7 @@ def create_auth_user(payload: CreateUserRequest) -> dict:
     if not database_configured() or not encryption_configured():
         raise HTTPException(status_code=503, detail="Banco ou criptografia não configurados.")
 
-    profile, email = _normalized_profile(payload.name, payload.email, payload.unit)
+    profile, email = _normalized_profile(payload.name, payload.username, payload.unit)
     if payload.role == "FINANCE" and profile["unit"] == "Todas as Unidades":
         raise HTTPException(status_code=422, detail="Defina uma unidade específica para o perfil Financeiro.")
     user_id = str(uuid.uuid4())
@@ -296,7 +331,7 @@ def create_auth_user(payload: CreateUserRequest) -> dict:
     profile_nonce, profile_ciphertext, key_version = encrypt_json(
         profile, f"auth_users:profile:{user_id}"
     )
-    ensure_schema()
+    ensure_username_migration()
 
     with transaction() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -306,7 +341,7 @@ def create_auth_user(payload: CreateUserRequest) -> dict:
                 (email_lookup,),
             )
             if cursor.fetchone()["present"]:
-                raise HTTPException(status_code=409, detail="Já existe um usuário com este e-mail.")
+                raise HTTPException(status_code=409, detail="Já existe um usuário com este nome de usuário.")
             cursor.execute(
                 """
                 INSERT INTO auth_users (
@@ -333,7 +368,7 @@ def create_auth_user(payload: CreateUserRequest) -> dict:
 
 
 def list_auth_users() -> list[dict]:
-    ensure_schema()
+    ensure_username_migration()
     with transaction() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute(
@@ -356,7 +391,7 @@ def update_auth_user(user_id: str, payload: UpdateUserRequest, actor: dict) -> d
             detail="Não é possível alterar o próprio usuário nesta tela.",
         )
 
-    profile, email = _normalized_profile(payload.name, payload.email, payload.unit)
+    profile, email = _normalized_profile(payload.name, payload.username, payload.unit)
     if payload.role == "FINANCE" and profile["unit"] == "Todas as Unidades":
         raise HTTPException(status_code=422, detail="Defina uma unidade específica para o perfil Financeiro.")
     email_lookup = lookup_fingerprint(email, "auth-email")
@@ -364,7 +399,7 @@ def update_auth_user(user_id: str, payload: UpdateUserRequest, actor: dict) -> d
         profile, f"auth_users:profile:{validated_user_id}"
     )
     password_hash = _password_hash(payload.password) if payload.password else None
-    ensure_schema()
+    ensure_username_migration()
 
     with transaction() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -374,7 +409,7 @@ def update_auth_user(user_id: str, payload: UpdateUserRequest, actor: dict) -> d
                 (email_lookup, validated_user_id),
             )
             if cursor.fetchone()["present"]:
-                raise HTTPException(status_code=409, detail="Já existe outro usuário com este e-mail.")
+                raise HTTPException(status_code=409, detail="Já existe outro usuário com este nome de usuário.")
             cursor.execute(
                 """
                 UPDATE auth_users
@@ -419,7 +454,7 @@ def delete_auth_user(user_id: str, actor: dict) -> None:
             detail="Não é possível excluir o próprio usuário durante a sessão.",
         )
 
-    ensure_schema()
+    ensure_username_migration()
     with transaction() as conn:
         with conn.cursor() as cursor:
             cursor.execute("DELETE FROM auth_users WHERE id = %s RETURNING id", (validated_user_id,))
@@ -430,7 +465,7 @@ def delete_auth_user(user_id: str, actor: dict) -> None:
 def logout(request: Request, response: Response) -> None:
     token = request.cookies.get(COOKIE_NAME)
     if token and database_configured():
-        ensure_schema()
+        ensure_username_migration()
         with transaction() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -450,7 +485,7 @@ def auth_status(request: Request) -> dict:
 
     if database_ready and encryption_ready:
         try:
-            ensure_schema()
+            ensure_username_migration()
             with transaction() as conn:
                 with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                     cursor.execute("SELECT EXISTS (SELECT 1 FROM auth_users) AS present")

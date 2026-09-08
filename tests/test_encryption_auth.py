@@ -103,7 +103,7 @@ class AuthenticationApiWithoutDatabaseTests(unittest.TestCase):
     def test_login_cannot_run_without_protected_database(self):
         response = self.client.post(
             "/api/auth/login",
-            json={"email": "admin@empresa.com", "password": "qualquer-senha"},
+            json={"username": "admin", "password": "qualquer-senha"},
         )
 
         self.assertEqual(response.status_code, 503)
@@ -137,7 +137,7 @@ class AuthenticationRoleTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             auth.CreateUserRequest(
                 name="Usuário Financeiro",
-                email="financeiro@empresa.com",
+                username="financeiro",
                 password="curta",
                 role="FINANCE",
                 unit="Matriz",
@@ -145,7 +145,7 @@ class AuthenticationRoleTests(unittest.TestCase):
 
         payload = auth.CreateUserRequest(
             name="Usuário Financeiro",
-            email="financeiro@empresa.com",
+            username="financeiro",
             password="senha-forte-123",
             role="FINANCE",
             unit="Matriz",

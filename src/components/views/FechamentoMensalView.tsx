@@ -19,7 +19,7 @@ export const FechamentoMensalView: React.FC = () => {
   const progress = total ? Math.round(done / total * 100) : 0;
   const persist = async (message: string) => {
     const saved = await app.flushPersistence();
-    app.showToast(saved ? message : 'A alteração ainda não foi confirmada pelo banco de dados.', saved ? 'success' : 'error');
+    app.showToast(saved ? message : 'A alteração ainda não foi confirmada.', saved ? 'success' : 'error');
   };
 
   return <div className="space-y-6">

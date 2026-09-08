@@ -12,7 +12,7 @@ export const UsuariosPermissoesView: React.FC = () => {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [userToDeleteId, setUserToDeleteId] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [role, setRole] = useState<UserRole>('FINANCE');
   const [unit, setUnit] = useState('Royal Face - Matriz');
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
@@ -27,7 +27,7 @@ export const UsuariosPermissoesView: React.FC = () => {
   const resetForm = () => {
     setEditingUserId(null);
     setName('');
-    setEmail('');
+    setUsername('');
     setRole('FINANCE');
     setUnit('Royal Face - Matriz');
     setAvatarUrl(undefined);
@@ -40,7 +40,7 @@ export const UsuariosPermissoesView: React.FC = () => {
   const startEditing = (user: User) => {
     setEditingUserId(user.id);
     setName(user.name);
-    setEmail(user.email);
+    setUsername(user.username);
     setRole(user.role);
     setUnit(user.unit);
     setAvatarUrl(user.avatarUrl);
@@ -83,7 +83,7 @@ export const UsuariosPermissoesView: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) return;
-    if (!name || !email) return;
+    if (!name || !username) return;
     if (!editingUserId && !password) {
       showToast('Defina uma senha para o novo usuário.', 'error');
       return;
@@ -96,11 +96,11 @@ export const UsuariosPermissoesView: React.FC = () => {
       showToast('A confirmação da senha não confere.', 'error');
       return;
     }
-    const emailInUse = users.some((user) =>
-      user.id !== editingUserId && user.email.toLowerCase() === email.toLowerCase()
+    const usernameInUse = users.some((user) =>
+      user.id !== editingUserId && user.username?.toLowerCase() === username.toLowerCase()
     );
-    if (emailInUse) {
-      showToast('Já existe um usuário cadastrado com este e-mail.', 'error');
+    if (usernameInUse) {
+      showToast('Já existe um usuário cadastrado com este nome de usuário.', 'error');
       return;
     }
 
@@ -109,7 +109,7 @@ export const UsuariosPermissoesView: React.FC = () => {
     if (editingUserId) {
       success = await updateUser(editingUserId, {
         name: name.trim(),
-        email: email.trim(),
+        username: username.trim(),
         role,
         unit,
         avatarUrl,
@@ -118,7 +118,7 @@ export const UsuariosPermissoesView: React.FC = () => {
     } else {
       success = await addUser({
         name: name.trim(),
-        email: email.trim(),
+        username: username.trim(),
         role,
         unit,
         active: true,
@@ -158,7 +158,7 @@ export const UsuariosPermissoesView: React.FC = () => {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                  <SortableTableHeader label="Usuário / E-mail" sortKey="usuario" accessor={(item) => item.name} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                  <SortableTableHeader label="Nome / Usuário" sortKey="usuario" accessor={(item) => item.name} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Perfil" sortKey="perfil" accessor={(item) => item.role} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Unidade" sortKey="unidade" accessor={(item) => item.unit} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                   <SortableTableHeader label="Último Acesso" sortKey="acesso" accessor={(item) => normalizeDateValue(item.lastAccess) || item.lastAccess} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
@@ -174,7 +174,7 @@ export const UsuariosPermissoesView: React.FC = () => {
                         <UserAvatar name={u.name} avatarUrl={u.avatarUrl} sizeClass="w-8 h-8" textClass="text-[10px]" />
                         <div>
                           <p className="font-bold text-[#0b1c30]">{u.name}</p>
-                          <p className="text-[10px] text-gray-500">{u.email}</p>
+                          <p className="text-[10px] text-gray-500">{u.username}</p>
                         </div>
                       </div>
                     </td>
@@ -297,14 +297,14 @@ export const UsuariosPermissoesView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-gray-700 mb-1">E-mail Corporativo</label>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">Nome de usuário</label>
               <input
-                type="email"
+                type="text"
                 required
                 disabled={!isAdmin}
-                placeholder="marcela@royalface.com.br"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder="marcela"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>

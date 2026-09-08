@@ -527,13 +527,13 @@ export const ImportExcelView: React.FC = () => {
 
       const saved = await flushPersistence();
       if (!saved) {
-        showToast('A importação foi preparada, mas ainda não foi confirmada pelo Neon. Não importe o arquivo novamente; use “Tentar salvar”.', 'error');
+        showToast('A importação foi preparada, mas ainda não foi confirmada. Não importe o arquivo novamente; use “Tentar salvar”.', 'error');
         setCurrentView('receitas');
         return;
       }
 
       showToast(
-        `${mappedItems.length} registros e ${totalLancamentosGerados} lançamentos salvos no Neon. Os saldos bancários atuais foram preservados.`,
+        `${mappedItems.length} registros e ${totalLancamentosGerados} lançamentos salvos. Os saldos bancários atuais foram preservados.`,
         'success'
       );
       setCurrentView('receitas');

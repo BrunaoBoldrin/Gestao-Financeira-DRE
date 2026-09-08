@@ -11,7 +11,7 @@ export const AuthScreen: React.FC = () => {
     retryPersistence
   } = useApp();
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [setupToken, setSetupToken] = useState('');
@@ -30,8 +30,8 @@ export const AuthScreen: React.FC = () => {
     }
     setSubmitting(true);
     const success = isSetup
-      ? await setupInitialAdmin({ setupToken, name, email, password })
-      : await loginUser(email, password);
+      ? await setupInitialAdmin({ setupToken, name, username: 'admin', password })
+      : await loginUser(username, password);
     if (!success) setLocalError('Confira os dados informados e tente novamente.');
     setSubmitting(false);
   };
@@ -100,8 +100,8 @@ export const AuthScreen: React.FC = () => {
           )}
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">E-mail</label>
-            <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#C5A059] focus:outline-none" />
+            <label className="block text-xs font-bold text-gray-700 mb-1">Usuário</label>
+            <input type="text" required value={isSetup ? 'admin' : username} readOnly={isSetup} onChange={(event) => setUsername(event.target.value)} autoComplete="username" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#C5A059] focus:outline-none" />
           </div>
 
           <div>

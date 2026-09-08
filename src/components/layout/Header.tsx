@@ -29,7 +29,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
   const persistenceBadge = persistenceStatus === 'SAVING'
     ? { icon: 'sync', label: 'Salvando...', className: 'bg-amber-50 border-amber-200 text-amber-800' }
     : persistenceStatus === 'CONNECTED'
-      ? { icon: 'cloud_done', label: 'Salvo no Neon', className: 'bg-emerald-50 border-emerald-200 text-emerald-800' }
+      ? { icon: 'cloud_done', label: 'Salvo', className: 'bg-emerald-50 border-emerald-200 text-emerald-800' }
       : persistenceStatus === 'ERROR' || persistenceStatus === 'CONFLICT'
         ? { icon: 'cloud_off', label: 'Não salvo', className: 'bg-rose-50 border-rose-200 text-rose-800' }
         : null;
@@ -150,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
             <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-xl py-2 z-50 text-xs">
               <div className="px-4 py-2 border-b border-gray-100 bg-[#f8f9ff]">
                 <p className="font-bold text-[#0b1c30]">{currentUser?.name}</p>
-                <p className="text-gray-500 text-[11px]">{currentUser?.email}</p>
+                <p className="text-gray-500 text-[11px]">{currentUser?.username}</p>
                 <p className="text-gray-400 text-[10px] mt-0.5">{currentUser?.unit}</p>
               </div>
 

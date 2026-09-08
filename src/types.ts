@@ -21,7 +21,7 @@ export type ViewKey =
 export interface User {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: UserRole;
   avatarUrl?: string;
   unit: string;

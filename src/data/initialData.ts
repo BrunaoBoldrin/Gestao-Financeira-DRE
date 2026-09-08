@@ -20,7 +20,7 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'u1',
     name: 'Ana Claudia Silva',
-    email: 'ana.silva@royalface.com.br',
+    username: 'admin',
     role: 'ADMIN',
     unit: 'Royal Face - Matriz',
     active: true,
@@ -30,7 +30,7 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'u2',
     name: 'Carlos Eduardo Santos',
-    email: 'carlos.santos@royalface.com.br',
+    username: 'carlos.santos',
     role: 'FINANCE',
     unit: 'Royal Face - Unidade Centro',
     active: true,
@@ -40,7 +40,7 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'u3',
     name: 'Mariana Oliveira',
-    email: 'mariana.auditoria@royalface.com.br',
+    username: 'mariana.auditoria',
     role: 'AUDITOR',
     unit: 'Todas as Unidades',
     active: true,
