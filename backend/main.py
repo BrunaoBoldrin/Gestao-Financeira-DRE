@@ -45,6 +45,7 @@ from .persistence import (
     store_file,
 )
 from .state_models import SaveStateRequest
+from .transaction_access import merge_user_state, visible_state
 
 
 app = FastAPI(
@@ -162,7 +163,7 @@ def delete_user(
 
 
 @app.get("/api/state")
-def get_application_state(response: Response, _: dict = Depends(require_data_access)) -> dict:
+def get_application_state(response: Response, auth_user: dict = Depends(require_data_access)) -> dict:
     response.headers["Cache-Control"] = "no-store"
     try:
         revision, state = load_application_state()
@@ -171,7 +172,7 @@ def get_application_state(response: Response, _: dict = Depends(require_data_acc
     return {
         "revision": revision,
         "empty": state is None,
-        "data": state.model_dump(mode="json") if state else None,
+        "data": visible_state(state, auth_user).model_dump(mode="json") if state else None,
     }
 
 
@@ -181,8 +182,12 @@ def put_application_state(
     auth_user: dict = Depends(require_write_access),
 ) -> dict:
     try:
+        current_revision, previous = load_application_state()
+        if current_revision != payload.expectedRevision:
+            raise StateConflictError(current_revision)
+        state = merge_user_state(payload.data, previous, auth_user)
         revision = save_application_state(
-            payload.data,
+            state,
             expected_revision=payload.expectedRevision,
             updated_by=auth_user["id"],
         )
@@ -194,6 +199,8 @@ def put_application_state(
                 "currentRevision": exc.current_revision,
             },
         ) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:

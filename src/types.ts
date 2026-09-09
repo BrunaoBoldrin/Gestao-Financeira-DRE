@@ -72,6 +72,7 @@ export type TipoDocumentoOCR =
 
 export interface Lancamento {
   id: string;
+  criadoPorId?: string;
   descricao: string;
   tipo: TipoLancamento;
   categoria: string;
@@ -109,6 +110,7 @@ export interface DadosLiquidacao {
 
 export interface Parcelamento {
   id: string;
+  criadoPorId?: string;
   unidade: string;
   bancoId?: string;
   contaBancaria?: string;
@@ -257,6 +259,7 @@ export interface DREVersion {
 
 export interface AuditLog {
   id: string;
+  usuarioId?: string;
   dataHora: string;
   usuario: string;
   acao: 'CRIACAO' | 'EDICAO' | 'EXCLUSAO' | 'APROVACAO' | 'CONCILIACAO' | 'FECHAMENTO';
