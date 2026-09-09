@@ -5,7 +5,6 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { TipoLancamento, StatusLancamento } from '../../types';
 import { uploadPersistentFile } from '../../services/persistenceApi';
-import { CashMovementModal, type CashAction } from './CashMovementModal';
 
 interface NovoLancamentoModalProps {
   isOpen: boolean;
@@ -13,43 +12,7 @@ interface NovoLancamentoModalProps {
   tipoInicial?: TipoLancamento;
 }
 
-export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = (props) => {
-  const { isAdmin, canExecuteFinancialActions } = useApp();
-  const [action, setAction] = useState<'FINANCEIRO' | CashAction | null>(null);
-  React.useEffect(() => { if (!props.isOpen) setAction(null); }, [props.isOpen]);
-  const close = () => { setAction(null); props.onClose(); };
-  if (!props.isOpen || !canExecuteFinancialActions) return null;
-  if (action === 'FINANCEIRO') return <FinancialEntryModal {...props} onClose={close} />;
-  if (action) return <CashMovementModal initialAction={action} onClose={close} />;
-  return (
-    <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg max-h-full overflow-y-auto rounded-xl bg-white shadow-2xl">
-        <div className="bg-[#0b1c30] text-white px-5 py-4 flex items-center justify-between gap-3">
-          <h3 className="font-bold">Novo lançamento</h3>
-          <button type="button" aria-label="Fechar" onClick={close}><span className="material-symbols-outlined">close</span></button>
-        </div>
-        <div className="p-5 space-y-3">
-          <p className="text-sm text-gray-600">Qual operação deseja registrar?</p>
-          {([
-            ['FINANCEIRO', 'Receita ou despesa', 'Lançamentos, títulos e transferências entre contas.'],
-            ['SANGRIA', 'Sangria / saída do caixa', 'Depósito bancário, retirada ou pagamento de despesa.'],
-            ['SUPRIMENTO', 'Suprimento do caixa', 'Entrada de dinheiro para reforço do caixa.'],
-            ['VENDA', 'Venda em dinheiro', 'Recebimento de venda no caixa físico.'],
-            ...(isAdmin ? [['AJUSTE', 'Ajustar saldo do caixa', 'Informar o saldo contado e o motivo da diferença.']] : [])
-          ]).map(([value, title, description]) => (
-            <button key={value} type="button" onClick={() => setAction(value as 'FINANCEIRO' | CashAction)}
-              className="w-full text-left p-4 border border-[#d3e4fe] rounded-lg hover:bg-[#eff4ff] focus:ring-2 focus:ring-blue-500">
-              <span className="block text-sm font-bold text-[#0b1c30]">{title}</span>
-              <span className="block mt-1 text-xs text-gray-600">{description}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </ModalOverlay>
-  );
-};
-
-const FinancialEntryModal: React.FC<NovoLancamentoModalProps> = ({
+export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   isOpen,
   onClose,
   tipoInicial = 'DESPESA'
@@ -132,7 +95,8 @@ const FinancialEntryModal: React.FC<NovoLancamentoModalProps> = ({
     setDescricao(plan?.nome || ''); setCategoria(plan?.nome || '');
   }, [tipo, selectedFornecedorId, fornecedores, categorias, targetUnit, units]);
 
-  const availableBanks = bancos.filter((banco) => banco.ativo && banco.unidade === targetUnit);
+  const availableBanks = bancos.filter((banco) => banco.ativo && banco.unidade === targetUnit &&
+    (formaPagamento !== 'DINHEIRO' || banco.banco.toLowerCase().includes('caixa')));
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -146,7 +110,7 @@ const FinancialEntryModal: React.FC<NovoLancamentoModalProps> = ({
     if (!destinationIsValid) {
       setContaDestinoBancoId(availableBanks.find((banco) => banco.id !== nextSourceId)?.id || '');
     }
-  }, [isOpen, targetUnit, bancos, bancoId, contaDestinoBancoId]);
+  }, [isOpen, targetUnit, bancos, bancoId, contaDestinoBancoId, formaPagamento]);
 
   if (!isOpen) return null;
 
@@ -561,7 +525,10 @@ const FinancialEntryModal: React.FC<NovoLancamentoModalProps> = ({
                 ))}
               </select>
               {targetUnit && availableBanks.length === 0 && (
-                <p className="text-[10px] text-rose-600 mt-1">Nenhuma conta ativa cadastrada para esta unidade.</p>
+                <p className="text-[10px] text-rose-600 mt-1">{formaPagamento === 'DINHEIRO' ? 'Cadastre um Caixa Físico ativo para esta unidade antes de lançar em dinheiro.' : 'Nenhuma conta ativa cadastrada para esta unidade.'}</p>
+              )}
+              {formaPagamento === 'DINHEIRO' && availableBanks.length > 0 && (
+                <p className="text-[10px] text-gray-500 mt-1">Quando pago, o lançamento atualiza o caixa físico: receita soma e despesa subtrai.</p>
               )}
             </div>
           </div>
