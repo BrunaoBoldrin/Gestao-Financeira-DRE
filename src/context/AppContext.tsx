@@ -355,10 +355,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Filtering Logic
   const filteredLancamentos = lancamentos.filter((l) => {
+    if (currentUser?.role === 'FINANCE' && (l.criadoPorId !== currentUser.id || l.unidade !== currentUser.unit)) return false;
     return selectedUnit === 'Todas as Unidades' || l.unidade === selectedUnit;
   });
 
   const filteredParcelamentos = parcelamentos.filter((p) => {
+    if (currentUser?.role === 'FINANCE' && (p.criadoPorId !== currentUser.id || p.unidade !== currentUser.unit)) return false;
     return selectedUnit === 'Todas as Unidades' || p.unidade === selectedUnit;
   });
 
@@ -801,6 +803,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newLog: AuditLog = {
       id: createEntityId('log'),
       dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      usuarioId: currentUser?.id,
       usuario: currentUser ? currentUser.name : 'Sistema / OCR',
       acao,
       modulo,
@@ -1106,6 +1109,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : undefined,
         numeroParcela: totalParcelas > 1 ? `${index + 1}/${totalParcelas}` : undefined,
         parcelamentoId,
+        criadoPorId: currentUser?.id,
         criadoEm: new Date().toISOString()
       };
 
@@ -1137,6 +1141,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (totalParcelas > 1 && parcelamentoId) {
       const newParcelamento: Parcelamento = {
         id: parcelamentoId,
+        criadoPorId: currentUser?.id,
         unidade: dadosBase.unidade,
         bancoId: dadosBase.bancoId,
         contaBancaria: dadosBase.contaBancaria,
@@ -1218,12 +1223,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         numeroParcela: `${i}/${numeroParcelas}`,
         status: isPaid ? 'PAGO' : 'PENDENTE',
         dataPagamento: isPaid ? baseData.dataPagamento || dataInicio : undefined,
+        criadoPorId: currentUser?.id,
         criadoEm: new Date().toISOString().substring(0, 10)
       });
     }
 
     const novoParcelamento: Parcelamento = {
       id: parcelamentoId,
+      criadoPorId: currentUser?.id,
       unidade: baseData.unidade,
       bancoId: baseData.bancoId,
       contaBancaria: baseData.contaBancaria,
@@ -1401,6 +1408,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newL: Lancamento = {
       ...l,
       id,
+      criadoPorId: currentUser?.id,
       criadoEm: new Date().toISOString().substring(0, 10)
     };
     setLancamentos((prev) => [newL, ...prev]);
@@ -1418,7 +1426,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!ensureCompetenciaAberta(l.dataCompetencia || l.dataVencimento, 'mover o lançamento para este mês')) return false;
     if (!canManageUnit(existing.unidade, 'Editar Lançamento')) return false;
     if (isFinance && currentUser) l = { ...l, unidade: currentUser.unit };
-    const updated = bindLancamentoToBanco({ ...existing, ...l });
+    if (isFinance && existing.criadoPorId !== currentUser?.id) return false;
+    const updated = bindLancamentoToBanco({ ...existing, ...l, criadoPorId: existing.criadoPorId });
     if (!ensurePaidLancamentoHasBanco(updated)) return false;
     if (existing.status === 'PAGO') {
       const oldBank = resolveBancoForLancamento(existing);
@@ -1448,6 +1457,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = lancamentos.find((item) => item.id === id);
     if (!existing) return;
     if (!ensureCompetenciaAberta(existing.dataCompetencia || existing.dataVencimento, 'excluir lançamentos')) return;
+    if (isFinance && existing?.criadoPorId !== currentUser?.id) return false;
     if (existing && !canManageUnit(existing.unidade, 'Excluir Lançamento')) return;
     if (!window.confirm(`Tem certeza que deseja excluir o lançamento "${existing.descricao}"?${existing.status === 'PAGO' ? ' O valor será estornado no saldo da conta.' : ''}`)) return;
     if (existing.status === 'PAGO') {
@@ -1468,6 +1478,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = lancamentos.find((item) => item.id === id);
     if (!existing) return false;
     if (!ensureCompetenciaAberta(existing.dataCompetencia || existing.dataVencimento, 'liquidar lançamentos')) return false;
+    if (isFinance && existing?.criadoPorId !== currentUser?.id) return false;
     if (existing && !canManageUnit(existing.unidade, 'Liquidar Lançamento')) return false;
     if (existing.status === 'PAGO') {
       showToast('Este lançamento já está pago.', 'info');
@@ -1562,6 +1573,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!checkFinancialPermission('Pagar Parcela')) return false;
     const parcelamento = parcelamentos.find((item) => item.id === parcelamentoId);
     if (!parcelamento) return false;
+    if (isFinance && parcelamento?.criadoPorId !== currentUser?.id) return false;
     if (parcelamento && !canManageUnit(parcelamento.unidade, 'Pagar Parcela')) return false;
     const parcela = parcelamento.cronograma.find((item) => item.numero === numeroParcela);
     if (!parcela || parcela.status === 'PAGO') {
@@ -1862,6 +1874,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Não foi possível localizar o documento, lançamento ou conta para conciliação.', 'error');
       return;
     }
+    if (isFinance && lancamento.criadoPorId !== currentUser?.id) return;
     if (!canManageUnit(lancamento.unidade, 'Conciliar Documento OCR')) return;
     if (banco.unidade !== lancamento.unidade) {
       showToast('A conta da conciliação deve pertencer à mesma unidade do lançamento.', 'error');
