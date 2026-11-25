@@ -1,8 +1,22 @@
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import type { PwaInstall } from '../../hooks/usePwaInstall';
+import { PwaInstallPanel } from '../common/PwaInstallPanel';
 
-export const ConfiguracoesGeraisView: React.FC = () => {
+export function ConfiguracoesGeraisView({ pwaInstall }: { pwaInstall: PwaInstall }) {
+  const { isAdmin } = useApp();
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-extrabold tracking-tight text-[#0b1c30]">Configurações</h1>
+      <PwaInstallPanel {...pwaInstall} />
+      {isAdmin && <ConfiguracoesAdministrativas />}
+    </div>
+  );
+}
+
+function ConfiguracoesAdministrativas() {
   const { units, addUnit, updateUnit, toggleUnitActive, exportBackupJSON, showToast } = useApp();
 
   const [showUnitModal, setShowUnitModal] = useState(false);
@@ -13,6 +27,7 @@ export const ConfiguracoesGeraisView: React.FC = () => {
 
   const handleBackup = () => {
     const jsonStr = exportBackupJSON();
+    if (!jsonStr) return;
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -51,7 +66,7 @@ export const ConfiguracoesGeraisView: React.FC = () => {
         <div>
           <h2 className="text-lg font-bold text-[#0b1c30] flex items-center gap-2">
             <span className="material-symbols-outlined text-[#131b2e]">settings</span>
-            Configurações Gerais do Sistema & Filiais
+            Administração do sistema
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
             Cadastro de novas unidades/filiais, parâmetros do grupo e exportação de backup.
@@ -240,4 +255,4 @@ export const ConfiguracoesGeraisView: React.FC = () => {
       )}
     </div>
   );
-};
+}

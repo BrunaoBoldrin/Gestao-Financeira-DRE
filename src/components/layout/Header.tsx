@@ -41,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
       <button type="button" onClick={onOpenMenu} aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'} aria-expanded={menuOpen} aria-controls="app-navigation" className="lg:hidden p-2 rounded-lg bg-[#eff4ff]"><span className="material-symbols-outlined">menu</span></button>
       {/* Left: Unit Selector & Search */}
       <div className="flex items-center gap-3 lg:gap-6">
-        {currentView !== 'overview' && currentView !== 'ponto_equilibrio' && <div className="relative">
+        {currentView !== 'overview' && currentView !== 'ponto_equilibrio' && currentView !== 'configuracoes' && <div className="relative">
           <label className="block text-[10px] font-semibold text-[#45464d] uppercase tracking-wider mb-0.5">
             Unidade / Filial
           </label>
