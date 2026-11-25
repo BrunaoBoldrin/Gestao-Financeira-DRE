@@ -1,3 +1,4 @@
+import { bankBelongsToUnit } from '../../utils/categoryUnits';
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CompetenciaSelect, formatCompetencia } from '../common/CompetenciaSelect';
@@ -86,7 +87,7 @@ export const OverviewView: React.FC = () => {
     (banco) =>
       banco.ativo &&
       banco.banco.toLocaleLowerCase('pt-BR').includes('caixa') &&
-      (selectedUnit === 'Todas as Unidades' || banco.unidade === selectedUnit)
+      (selectedUnit === 'Todas as Unidades' || bankBelongsToUnit(banco, selectedUnit, units))
   );
   const saldoCaixaFisico = caixasFisicosVisiveis.reduce((total, banco) => total + banco.saldo, 0);
   const periodoPersonalizadoInvalido = Boolean(

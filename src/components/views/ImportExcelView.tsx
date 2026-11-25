@@ -1,4 +1,4 @@
-import { categoryBelongsToUnit } from '../../utils/categoryUnits';
+import { bankBelongsToUnit, categoryBelongsToUnit, findUnit } from '../../utils/categoryUnits';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import * as XLSX from 'xlsx';
@@ -396,9 +396,8 @@ export const ImportExcelView: React.FC = () => {
       const unidStr = isFinance && currentUser
         ? currentUser.unit
         : String(row[mapping.unidade] || '').trim();
-      const matchedUnit = units.find(
-        (item) => item.ativa && normalizeLookupText(item.nome) === normalizeLookupText(unidStr)
-      );
+      const branch = findUnit(unidStr, units);
+      const matchedUnit = branch?.ativa ? branch : undefined;
       const resolvedUnit = matchedUnit?.nome || unidStr;
       const condStr = String(row[mapping.condicaoDDL] || '').trim();
       const statusRaw = String(row[mapping.status] || '').trim().toUpperCase();
@@ -434,13 +433,14 @@ export const ImportExcelView: React.FC = () => {
       if (!fornStr) errors.push('Favorecido ou cliente obrigatório');
       if (!unidStr || !matchedUnit) errors.push('Unidade não cadastrada ou inativa');
       if (!formaStr || !/(PIX|CRED|CARTAO|DEB|DINH|ESP|TRANS|TED|BOLETO|CARN)/.test(formaStr)) errors.push('Forma de pagamento inválida');
-      const contaValida = bancos.some(
+      const matchingBanks = bancos.filter(
         (item) =>
           item.ativo &&
-          normalizeLookupText(item.unidade) === normalizeLookupText(resolvedUnit) &&
-          item.banco.toLocaleLowerCase('pt-BR') === bancoStr.toLocaleLowerCase('pt-BR')
+          bankBelongsToUnit(item, resolvedUnit, units) &&
+          normalizeLookupText(item.banco) === normalizeLookupText(bancoStr)
       );
-      if (bancoStr && !contaValida) errors.push('Conta bancária não pertence à unidade ou está inativa');
+      const contaValida = matchingBanks.length === 1;
+      if (bancoStr && !contaValida) errors.push(matchingBanks.length > 1 ? 'Há mais de uma conta ativa com este nome na filial' : 'Conta bancária não pertence à unidade ou está inativa');
       if (status === 'PAGO' && !contaValida) errors.push('Conta bancária obrigatória para lançamento pago');
       if (status === 'PAGO' && !dataPagamento) errors.push('Data de pagamento obrigatória para lançamento pago');
 

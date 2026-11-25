@@ -1,3 +1,4 @@
+import { bankBelongsToUnit } from '../../utils/categoryUnits';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -25,14 +26,14 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
     setUnidade(isFinance && currentUser ? currentUser.unit : selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
   }, [isOpen, isFinance, currentUser?.unit, selectedUnit]);
 
-  const availableBanks = bancos.filter((banco) => banco.ativo && banco.unidade === unidade);
+  const availableBanks = bancos.filter((banco) => banco.ativo && bankBelongsToUnit(banco, unidade, units));
 
   React.useEffect(() => {
     if (!isOpen) return;
     if (!availableBanks.some((banco) => banco.id === bancoId)) {
       setBancoId(availableBanks[0]?.id || '');
     }
-  }, [isOpen, unidade, bancos, bancoId]);
+  }, [isOpen, unidade, bancos, units, bancoId]);
 
   if (!isOpen) return null;
 

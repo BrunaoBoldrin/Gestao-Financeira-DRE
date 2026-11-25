@@ -1,3 +1,4 @@
+import { bankBelongsToUnit, isPhysicalCashAccount } from '../../utils/categoryUnits';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -31,15 +32,16 @@ const formatCurrency = (value: number) =>
   value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose, onConfirm }) => {
-  const { bancos } = useApp();
+  const { bancos, units } = useApp();
   const [bancoId, setBancoId] = useState('');
   const [formaPagamento, setFormaPagamento] = useState<Lancamento['formaPagamento'] | ''>('');
   const [dataPagamento, setDataPagamento] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const availableBanks = useMemo(
-    () => bancos.filter((banco) => banco.ativo && banco.unidade === item?.unidade),
-    [bancos, item?.unidade]
+    () => bancos.filter((banco) => banco.ativo && bankBelongsToUnit(banco, item?.unidade, units) &&
+      (!formaPagamento || isPhysicalCashAccount(banco) === (formaPagamento === 'DINHEIRO'))),
+    [bancos, item?.unidade, units, formaPagamento]
   );
   const selectedBank = availableBanks.find((banco) => banco.id === bancoId);
 
@@ -106,7 +108,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
               {isReceipt ? 'Conta de destino *' : 'Conta utilizada no pagamento *'}
             </label>
             <select
-              value={bancoId}
+              value={selectedBank?.id ?? ''}
               onChange={(event) => setBancoId(event.target.value)}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-[#0b1c30] focus:border-[#C5A059] focus:outline-none focus:ring-2 focus:ring-[#C5A059]/20"
               required
@@ -120,7 +122,7 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
             </select>
             {availableBanks.length === 0 && (
               <p className="mt-1.5 text-[10px] font-bold text-rose-700">
-                Nenhuma conta ativa foi cadastrada para {item.unidade}.
+                {formaPagamento === 'DINHEIRO' ? 'Cadastre um Caixa Físico ativo para esta filial.' : 'Nenhuma conta ativa compatível com esta forma de pagamento.'}
               </p>
             )}
           </div>

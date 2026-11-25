@@ -1,3 +1,4 @@
+import { bankBelongsToUnit } from '../../utils/categoryUnits';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getCurrentMonthValue, getDateRangeBounds, isDateInRange, isMonthValue, normalizeDateValue, resolveReferenceMonth } from '../../utils/dateRange';
@@ -216,7 +217,7 @@ export const FluxoCaixaView: React.FC = () => {
   }, [eventosCalendario]);
 
   const contasAtivasUnidade = bancos.filter((banco) =>
-    banco.ativo && (unidadeFluxo === 'Todas as Unidades' || banco.unidade === unidadeFluxo)
+    banco.ativo && (unidadeFluxo === 'Todas as Unidades' || bankBelongsToUnit(banco, unidadeFluxo, units))
   );
   const saldoAtual = contasAtivasUnidade.reduce((sum, banco) => sum + banco.saldo, 0);
   const saldoAposPendencias = saldoAtual + totaisCalendario.pendente;

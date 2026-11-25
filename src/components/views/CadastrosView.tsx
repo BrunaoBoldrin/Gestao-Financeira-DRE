@@ -1,3 +1,4 @@
+import { bankBelongsToUnit, findUnit } from '../../utils/categoryUnits';
 import { MasterDataExchange } from '../common/MasterDataExchange';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
@@ -51,6 +52,7 @@ export const CadastrosView: React.FC = () => {
   const [tipo, setTipo] = useState<'RECEITA' | 'DESPESA'>('DESPESA');
   const [grupoDRE, setGrupoDRE] = useState<GrupoDRE>('DESPESA_ADMINISTRATIVA');
   const [responsavel, setResponsavel] = useState('');
+  const [contraparteTipo, setContraparteTipo] = useState<'FORNECEDOR' | 'CLIENTE'>('FORNECEDOR');
   const [fornecedorPlanoId, setFornecedorPlanoId] = useState('');
   const [planoCentroId, setPlanoCentroId] = useState('');
   const [cnpj, setCnpj] = useState('');
@@ -74,6 +76,7 @@ export const CadastrosView: React.FC = () => {
     setResponsavel('');
     setCnpj('');
     setFornecedorPlanoId('');
+    setContraparteTipo('FORNECEDOR');
     setPlanoCentroId('');
     setCidade('');
     setAgencia('');
@@ -108,11 +111,12 @@ export const CadastrosView: React.FC = () => {
     } else if (activeTab === 'FORNECEDORES') {
       if (!nome) return;
       if (!unidadeIds.length) { showToast('Selecione pelo menos uma filial para o favorecido.', 'error'); return; }
-      if (editingId) {
-        updateFornecedor(editingId, { nome, cnpj, cidade, planoContaId: fornecedorPlanoId, unidadeIds });
-      } else {
-        addFornecedor({ nome, cnpj, cidade, ativo: true, planoContaId: fornecedorPlanoId, unidadeIds });
-      }
+      const dados = {
+        nome, cnpj, cidade, unidadeIds, tipo: contraparteTipo,
+        planoContaId: contraparteTipo === 'FORNECEDOR' ? fornecedorPlanoId || undefined : undefined,
+      };
+      if (editingId) updateFornecedor(editingId, dados);
+      else addFornecedor({ ...dados, ativo: true });
     } else if (activeTab === 'BANCOS') {
       if (!nome || !bancoUnidade) return;
       if (editingId) {
@@ -139,7 +143,7 @@ export const CadastrosView: React.FC = () => {
 
   const contasUnidadeSelecionada = selectedUnit === 'Todas as Unidades'
     ? bancos
-    : bancos.filter((banco) => banco.unidade === selectedUnit);
+    : bancos.filter((banco) => bankBelongsToUnit(banco, selectedUnit, units));
 
   return (
     <div className="space-y-6">
@@ -379,7 +383,7 @@ export const CadastrosView: React.FC = () => {
             <h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">
               Favorecidos cadastrados
             </h3>
-            <p className="text-xs text-gray-500">Fornecedores, funcionários, prestadores de serviços e contas fixas, como água, luz e internet.</p>
+            <p className="text-xs text-gray-500">Clientes para receitas e fornecedores, prestadores e demais favorecidos para despesas.</p>
             <div className="border border-gray-200 rounded-lg overflow-x-auto text-xs">
               <table className="w-full text-left">
                 <thead className="bg-[#f8f9ff] text-gray-700 font-bold uppercase text-[10px]">
@@ -394,7 +398,9 @@ export const CadastrosView: React.FC = () => {
                 <tbody className="divide-y divide-gray-100">
                   {fornecedoresSort.sortedItems.map((f) => (
                     <tr key={f.id} className="hover:bg-gray-50">
-                      <td className="p-3 font-bold text-[#0b1c30]">{f.nome}<p className="text-[10px] font-normal text-gray-500 mt-1">{categorias.find((item) => item.id === f.planoContaId)?.nome || 'Sem plano padrão'} · {centrosCusto.find((item) => item.id === categorias.find((plan) => plan.id === f.planoContaId)?.centroCustoId)?.nome || 'Sem centro padrão'}</p></td>
+                      <td className="p-3 font-bold text-[#0b1c30]">{f.nome}<p className="text-[10px] font-normal text-gray-500 mt-1">{f.tipo === 'CLIENTE'
+                        ? 'Cliente'
+                        : categorias.find((item) => item.id === f.planoContaId)?.nome || 'Favorecido sem plano padrão'}</p></td>
                       <td className="p-3 font-mono text-gray-600">{f.cnpj || '-'}</td>
                       <td className="p-3 text-gray-600">{f.cidade || '-'}</td>
                       <td className="p-3 text-center">
@@ -413,6 +419,7 @@ export const CadastrosView: React.FC = () => {
                             setNome(f.nome);
                             setCnpj(f.cnpj || '');
                             setCidade(f.cidade || '');
+                            setContraparteTipo(f.tipo ?? 'FORNECEDOR');
                             setFornecedorPlanoId(f.planoContaId || '');
                             setUnidadeIds(f.unidadeIds ?? filiaisCadastradas.map((unit) => unit.id));
                             setShowFormModal(true);
@@ -497,7 +504,7 @@ export const CadastrosView: React.FC = () => {
                       setAgencia(b.agencia);
                       setConta(b.conta);
                       setSaldo(b.saldo.toString());
-                      setBancoUnidade(b.unidade);
+                      setBancoUnidade(findUnit(b.unidade, units)?.nome ?? b.unidade);
                       setShowFormModal(true);
                     }}
                     disabled={!isAdmin}
@@ -710,6 +717,15 @@ export const CadastrosView: React.FC = () => {
                       className="w-full px-3 py-2 border rounded text-xs focus:ring-2 focus:ring-[#131b2e]"
                     />
                   </div>
+                  <label className="block text-xs font-semibold text-gray-700">
+                    Tipo de cadastro
+                    <select value={contraparteTipo} onChange={(event) => setContraparteTipo(event.target.value === 'CLIENTE' ? 'CLIENTE' : 'FORNECEDOR')}
+                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                      <option value="FORNECEDOR">Favorecido / Fornecedor (despesas)</option>
+                      <option value="CLIENTE">Cliente (receitas)</option>
+                    </select>
+                  </label>
+                  {contraparteTipo === 'FORNECEDOR' && <>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Plano de contas padrão</label>
                     <select value={fornecedorPlanoId} onChange={(event) => setFornecedorPlanoId(event.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
@@ -722,6 +738,7 @@ export const CadastrosView: React.FC = () => {
                     <input readOnly value={centrosCusto.find((item) => item.ativo && item.id === categorias.find((plan) => plan.id === fornecedorPlanoId)?.centroCustoId)?.nome || 'Configure o centro de custo no plano de contas'}
                       className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50" />
                   </div>
+                  </>}
                   <fieldset className="rounded-lg border border-[#d3e4fe] p-3 space-y-2">
                     <legend className="px-1 text-xs font-bold">Filiais deste favorecido *</legend>
                     <label className="flex items-center gap-2 min-h-11 text-xs font-semibold">
