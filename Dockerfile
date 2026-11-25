@@ -6,6 +6,7 @@ RUN npm ci --no-audit --no-fund
 
 COPY index.html metadata.json tsconfig.json vite.config.ts ./
 COPY src ./src
+COPY public ./public
 RUN npm run build
 
 FROM python:3.12-slim-bookworm AS runtime

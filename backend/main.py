@@ -321,6 +321,10 @@ if assets_dir.is_dir():
 def frontend(full_path: str):
     requested = (dist_dir / full_path).resolve()
     if dist_dir.is_dir() and requested.is_relative_to(dist_dir.resolve()) and requested.is_file():
+        if full_path == "manifest.webmanifest":
+            return FileResponse(requested, media_type="application/manifest+json", headers={"Cache-Control": "no-cache"})
+        if full_path == "sw.js":
+            return FileResponse(requested, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
         return FileResponse(requested)
     index_file = dist_dir / "index.html"
     if index_file.is_file():

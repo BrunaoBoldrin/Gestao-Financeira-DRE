@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { canAccessView, ROLE_DEFAULT_VIEW } from './config/accessControl';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
+import { usePwaInstall } from './hooks/usePwaInstall';
 import { AuthScreen } from './components/auth/AuthScreen';
 
 // Modals
@@ -30,6 +31,7 @@ import { ConfiguracoesGeraisView } from './components/views/ConfiguracoesGeraisV
 const MainAppContent: React.FC = () => {
   const { currentView, currentUser, persistenceStatus, persistenceMessage, retryPersistence } = useApp();
 
+  const pwaInstall = usePwaInstall();
   const [isNovoLancamentoOpen, setIsNovoLancamentoOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isUploadOCROpen, setIsUploadOCROpen] = useState(false);
@@ -84,7 +86,7 @@ const MainAppContent: React.FC = () => {
       case 'usuarios':
         return <UsuariosPermissoesView />;
       case 'configuracoes':
-        return <ConfiguracoesGeraisView />;
+        return <ConfiguracoesGeraisView pwaInstall={pwaInstall} />;
       default:
         return <OverviewView />;
     }

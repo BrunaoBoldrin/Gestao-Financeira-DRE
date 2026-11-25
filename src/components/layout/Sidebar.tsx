@@ -65,7 +65,7 @@ export const Sidebar: React.FC<{ mobileOpen: boolean; onClose: () => void }> = (
         { key: 'automacoes', label: 'Automações', icon: 'smart_toy' },
         { key: 'historico', label: 'Histórico & Auditoria', icon: 'history' },
         { key: 'usuarios', label: 'Usuários & Permissões', icon: 'manage_accounts' },
-        { key: 'configuracoes', label: 'Configurações Gerais', icon: 'settings' }
+        { key: 'configuracoes', label: 'Configurações', icon: 'settings' }
       ]
     }
   ];

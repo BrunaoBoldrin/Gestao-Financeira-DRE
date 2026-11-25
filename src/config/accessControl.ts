@@ -22,7 +22,7 @@ export const VIEW_PERMISSIONS: Record<ViewKey, readonly UserRole[]> = {
   cadastros: ADMIN_ONLY,
   automacoes: ADMIN_ONLY,
   usuarios: ADMIN_ONLY,
-  configuracoes: ADMIN_ONLY
+  configuracoes: ALL_ROLES
 };
 
 export const ROLE_DEFAULT_VIEW: Record<UserRole, ViewKey> = {
