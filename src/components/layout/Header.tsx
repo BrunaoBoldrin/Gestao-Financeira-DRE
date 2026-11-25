@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { UserAvatar } from '../common/UserAvatar';
+import { getViewLabel } from './navigation';
 
 interface HeaderProps {
-  onOpenMenu: () => void;
-  menuOpen: boolean;
   onOpenNovoLancamentoModal: () => void;
   onOpenUploadModal: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpenUploadModal, onOpenMenu, menuOpen }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpenUploadModal }) => {
   const {
     currentUser,
     currentView,
@@ -37,12 +36,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
         : null;
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-[#e5eeff] px-4 lg:px-6 py-3 flex flex-wrap gap-2 items-center justify-between shadow-xs">
-      <button type="button" onClick={onOpenMenu} aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'} aria-expanded={menuOpen} aria-controls="app-navigation" className="lg:hidden p-2 rounded-lg bg-[#eff4ff]"><span className="material-symbols-outlined">menu</span></button>
-      {/* Left: Unit Selector & Search */}
-      <div className="flex items-center gap-3 lg:gap-6">
-        {currentView !== 'overview' && currentView !== 'ponto_equilibrio' && currentView !== 'configuracoes' && <div className="relative">
-          <label className="block text-[10px] font-semibold text-[#45464d] uppercase tracking-wider mb-0.5">
+    <header className="app-header sticky top-0 z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-[#e5eeff] bg-white shadow-xs desktop:min-h-[var(--desktop-header-height)]">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5 desktop:hidden">
+        <img src="/icons/app-192.png" className="size-9 shrink-0 rounded-lg" alt="" />
+        <div className="min-w-0">
+          <p className="truncate text-[10px] font-bold uppercase tracking-wide text-[#775a19]">Financeiro DRE</p>
+          <p className="truncate text-sm font-extrabold text-[#0b1c30] sm:text-base">{getViewLabel(currentView)}</p>
+        </div>
+      </div>
+      {currentView !== 'overview' && currentView !== 'ponto_equilibrio' && currentView !== 'configuracoes' && (
+        <div className="order-last w-full min-w-0 md:order-none md:w-auto">
+          <label htmlFor="header-unit" className="hidden text-[10px] font-semibold uppercase tracking-wider text-[#45464d] desktop:block">
             Unidade / Filial
           </label>
           <div className="relative flex items-center">
@@ -50,11 +54,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
               location_city
             </span>
             <select
+              id="header-unit"
+              aria-label="Unidade / Filial"
               value={selectedUnit}
               onChange={(e) => setSelectedUnit(e.target.value)}
               disabled={isFinance}
               title={isFinance ? 'Perfil Financeiro limitado à unidade cadastrada' : undefined}
-              className={`pl-8 pr-7 py-1.5 bg-[#f8f9ff] border border-[#d3e4fe] rounded-md text-xs font-semibold text-[#0b1c30] focus:outline-none focus:ring-2 focus:ring-[#131b2e] max-w-[min(220px,45vw)] truncate ${
+              className={`min-h-10 w-full truncate rounded-lg border border-[#d3e4fe] bg-[#f8f9ff] py-1.5 pl-8 pr-7 text-xs font-semibold text-[#0b1c30] focus:outline-none focus:ring-2 focus:ring-[#131b2e] md:max-w-[min(235px,36vw)] desktop:min-h-8 ${
                 isFinance ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
               }`}
             >
@@ -68,18 +74,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
               ))}
             </select>
           </div>
-        </div>}
-
-      </div>
+        </div>
+      )}
 
       {/* Right: Quick Actions, Badges & User Menu */}
-      <div className="flex items-center gap-2 lg:gap-4 ml-auto">
+      <div className="ml-auto flex shrink-0 items-center gap-2 desktop:gap-4">
         {/* Quick Action Buttons */}
         {canExecuteFinancialActions && (
           <>
             <button
               onClick={onOpenUploadModal}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition bg-[#eff4ff] border border-[#d3e4fe] text-[#0b1c30] hover:bg-[#e5eeff]"
+              className="hidden desktop:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition bg-[#eff4ff] border border-[#d3e4fe] text-[#0b1c30] hover:bg-[#e5eeff]"
             >
               <span className="material-symbols-outlined text-base">upload_file</span>
               <span>Caixa de Entrada / OCR</span>
@@ -87,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
 
             <button
               onClick={() => setCurrentView('import_excel')}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition bg-[#f8f9ff] border border-[#C5A059]/50 text-[#0b1c30] hover:bg-[#fff9ed]"
+              className="hidden desktop:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition bg-[#f8f9ff] border border-[#C5A059]/50 text-[#0b1c30] hover:bg-[#fff9ed]"
             >
               <span className="material-symbols-outlined text-base text-[#C5A059]">table_chart</span>
               <span>Importar Excel</span>
@@ -96,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
             <button
               aria-label="Novo lançamento"
               onClick={onOpenNovoLancamentoModal}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold shadow-xs transition bg-[#131b2e] text-white hover:bg-[#0b1c30]"
+              className="hidden desktop:flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold shadow-xs transition bg-[#131b2e] text-white hover:bg-[#0b1c30]"
             >
               <span className="material-symbols-outlined text-base">add_circle</span>
               <span className="hidden sm:inline">Novo Lançamento</span>
@@ -107,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
         {persistenceBadge && (
           <div
             title={persistenceMessage}
-            className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[10px] font-bold ${persistenceBadge.className}`}
+            className={`hidden desktop:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[10px] font-bold ${persistenceBadge.className}`}
           >
             <span className={`material-symbols-outlined text-base ${persistenceStatus === 'SAVING' ? 'animate-spin' : ''}`}>
               {persistenceBadge.icon}
@@ -116,10 +121,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
           </div>
         )}
 
-        <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+        <div className="h-6 w-px bg-gray-200 mx-1 hidden desktop:block"></div>
 
         {/* Notifications / Badges */}
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 desktop:flex">
           {canExecuteFinancialActions && pendingOCRCount > 0 && (
             <button
               onClick={() => setCurrentView('pending_review')}
@@ -135,13 +140,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
         </div>
 
         {/* User Profile Dropdown */}
-        <div className="relative">
+        <div className="relative" onKeyDown={(event) => { if (event.key === 'Escape') setShowUserMenu(false); }}>
           <button
+            type="button" aria-label="Conta do usuário" aria-expanded={showUserMenu}
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-2.5 p-1 rounded-md hover:bg-gray-100 transition focus:outline-none"
           >
             <UserAvatar name={currentUser?.name || 'Usuário'} avatarUrl={currentUser?.avatarUrl} />
-            <div className="text-left hidden md:block">
+            <div className="text-left hidden desktop:block">
               <p className="text-xs font-bold text-[#0b1c30] leading-tight">{currentUser?.name}</p>
               <span className="text-[10px] font-semibold text-[#775a19] bg-[#ffdea5] px-1.5 py-0.2 rounded">
                 {currentUser?.role === 'ADMIN' ? 'Administrador' : currentUser?.role === 'FINANCE' ? 'Financeiro' : 'Auditoria'}
@@ -151,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNovoLancamentoModal, onOpe
           </button>
 
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-xl py-2 z-50 text-xs">
+            <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-lg shadow-xl py-2 z-50 text-xs">
               <div className="px-4 py-2 border-b border-gray-100 bg-[#f8f9ff]">
                 <p className="font-bold text-[#0b1c30]">{currentUser?.name}</p>
                 <p className="text-gray-500 text-[11px]">{currentUser?.username}</p>

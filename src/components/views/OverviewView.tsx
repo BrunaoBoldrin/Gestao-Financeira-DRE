@@ -204,34 +204,34 @@ export const OverviewView: React.FC = () => {
   const { sortedItems: sortedUltimosLancamentos, sortConfig, requestSort } = useSortableData(ultimosLancamentos);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Top Banner / Welcome & Quick Action */}
-      <div className="bg-gradient-to-r from-[#0b1c30] via-[#131b2e] to-[#0f243d] rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#0b1c30] via-[#131b2e] to-[#0f243d] rounded-2xl p-4 text-white sm:p-6 shadow-lg relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059]/10 rounded-full blur-2xl pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="relative z-10 grid min-w-0 gap-4 desktop:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] desktop:items-center">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-gray-300 text-xs">Royal Face Estética Facial</span>
             </div>
-            <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">
-              Painel de Controle Financeiro & DRE Gerencial
+            <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">
+              Painel financeiro
             </h2>
-            <p className="text-xs text-gray-300 mt-1 max-w-xl">
+            <p className="mt-1 hidden max-w-xl text-xs text-gray-300 desktop:block">
               Acompanhamento financeiro por unidade, validação de documentos e apuração do DRE gerencial.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-end gap-2 md:justify-end max-w-full [&>div]:min-w-0 [&>div]:max-w-full">
+          <div className="grid min-w-0 grid-cols-2 items-end gap-2.5 [&>div]:min-w-0 [&_input]:w-full [&_select]:w-full">
             <div>
-              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Unidade / Filial</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-300">Unidade</label>
               <select
                 value={selectedUnit}
                 onChange={(event) => setSelectedUnit(event.target.value)}
                 disabled={isFinance}
                 title={isFinance ? 'Perfil Financeiro limitado à unidade cadastrada' : undefined}
-                className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#C5A059] disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed max-w-[230px]"
+                className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#C5A059] disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed min-w-0"
               >
-                {!isFinance && <option value="Todas as Unidades">Todas as Unidades (Consolidado)</option>}
+                {!isFinance && <option value="Todas as Unidades">Todas</option>}
                 {units.filter((unit) =>
                   unit.ativa !== false && unit.id !== 'all' && (!isFinance || unit.nome === currentUser?.unit)
                 ).map((unit) => (
@@ -240,7 +240,7 @@ export const OverviewView: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Competência dos cards</label>
+              <label className="mb-1 block text-xs font-semibold text-gray-300">Competência</label>
               <CompetenciaSelect
                 value={competencia}
                 onChange={(value) => {
@@ -251,8 +251,15 @@ export const OverviewView: React.FC = () => {
                 lancamentos={filteredLancamentos}
                 referenceMonth={dashboardReferenceMonth}
                 allowAll
+                compact
               />
             </div>
+            <details className="col-span-2 min-w-0 rounded-lg border border-white/15 px-2.5 text-xs">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1 font-semibold text-white [&::-webkit-details-marker]:hidden">
+                <span aria-hidden="true" className="material-symbols-outlined">date_range</span>
+                Período personalizado
+              </summary>
+              <div className="grid grid-cols-1 gap-2.5 pb-2.5 min-[360px]:grid-cols-2 sm:grid-cols-4">
             <div>
               <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Data inicial</label>
               <input
@@ -298,9 +305,11 @@ export const OverviewView: React.FC = () => {
                 Limpar período
               </button>
             )}
+              </div>
+            </details>
             {canExecuteFinancialActions && <button
               onClick={() => setCurrentView('pending_review')}
-              className="px-4 py-2 bg-[#C5A059] text-white rounded-lg text-xs font-bold hover:bg-[#b08d46] transition flex items-center gap-1.5 shadow-md"
+              className="col-span-2 flex items-center justify-center gap-1.5 rounded-lg bg-[#ffdea5] px-3 py-2 text-xs font-bold text-[#0b1c30] shadow-sm transition hover:bg-white"
             >
               <span className="material-symbols-outlined text-base">auto_awesome</span>
               Revisar Fila OCR ({pendingOCRDocs.length})
@@ -326,18 +335,18 @@ export const OverviewView: React.FC = () => {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
         {/* Receitas */}
-        <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
+            <span className="text-xs font-semibold text-[#45464d]">
               Receitas Brutas
             </span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="hidden sm:flex w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 items-center justify-center">
               <span className="material-symbols-outlined text-xl">trending_up</span>
             </div>
           </div>
-          <p className="text-2xl font-black text-[#0b1c30]">
+          <p className="break-words text-lg font-black tabular-nums text-[#0b1c30] sm:text-2xl">
             R$ {totalReceitas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <div className="mt-2 flex items-center text-[11px] text-emerald-700 font-semibold">
@@ -349,16 +358,16 @@ export const OverviewView: React.FC = () => {
         </div>
 
         {/* Despesas */}
-        <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
+            <span className="text-xs font-semibold text-[#45464d]">
               Despesas Operacionais
             </span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+            <div className="hidden sm:flex w-8 h-8 rounded-lg bg-rose-50 text-rose-600 items-center justify-center">
               <span className="material-symbols-outlined text-xl">trending_down</span>
             </div>
           </div>
-          <p className="text-2xl font-black text-[#0b1c30]">
+          <p className="break-words text-lg font-black tabular-nums text-[#0b1c30] sm:text-2xl">
             R$ {totalDespesas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <div className="mt-2 flex items-center text-[11px] text-rose-700 font-semibold">
@@ -368,16 +377,16 @@ export const OverviewView: React.FC = () => {
         </div>
 
         {/* Resultado Operacional / EBITDA */}
-        <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
+            <span className="text-xs font-semibold text-[#45464d]">
               Resultado do Período
             </span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="hidden sm:flex w-8 h-8 rounded-lg bg-blue-50 text-blue-600 items-center justify-center">
               <span className="material-symbols-outlined text-xl">account_balance_wallet</span>
             </div>
           </div>
-          <p className="text-2xl font-black text-[#0b1c30]">
+          <p className="break-words text-lg font-black tabular-nums text-[#0b1c30] sm:text-2xl">
             R$ {resultadoOperacional.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <div className="mt-2 flex items-center text-[11px] text-blue-700 font-semibold">
@@ -389,16 +398,16 @@ export const OverviewView: React.FC = () => {
         </div>
 
         {/* Status Caixa Físico */}
-        <div className="bg-white p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
+        <div className="bg-white p-3 sm:p-5 rounded-xl border border-[#e5eeff] shadow-xs hover:shadow-md transition">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-semibold text-[#45464d] uppercase tracking-wider">
+            <span className="text-xs font-semibold text-[#45464d]">
               Caixa Físico Recepção
             </span>
             <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
               {selectedUnit === 'Todas as Unidades' ? 'Consolidado' : 'Saldo contínuo'}
             </span>
           </div>
-          <p className="text-2xl font-black text-[#0b1c30]">
+          <p className="break-words text-lg font-black tabular-nums text-[#0b1c30] sm:text-2xl">
             R$ {saldoCaixaFisico.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-[11px] text-gray-500 mt-2">

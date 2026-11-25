@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { normalizeDateValue } from '../../utils/dateRange';
 
 export type CompetenciaFilter = 'TODOS' | 'PERSONALIZADO' | string;
@@ -42,6 +42,7 @@ export const LancamentosPeriodFilter: React.FC<LancamentosPeriodFilterProps> = (
   onApplyPeriod,
   onClearPeriod
 }) => {
+  const id = useId();
   const customMode = competencia === 'PERSONALIZADO';
   const invalidRange = Boolean(
     dataInicio && dataFim && normalizeDateValue(dataInicio) > normalizeDateValue(dataFim)
@@ -53,10 +54,10 @@ export const LancamentosPeriodFilter: React.FC<LancamentosPeriodFilterProps> = (
     <div className="px-4 py-3 bg-white border-b border-[#e5eeff] space-y-2">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
         <div className="w-full sm:w-64">
-          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+          <label htmlFor={id + "-month"} className="block text-[11px] font-bold text-gray-600 mb-1">
             Competência da tabela e dos totais
           </label>
-          <select
+          <select id={id + "-month"}
             value={competencia}
             onChange={(event) => onCompetenciaChange(event.target.value)}
             className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-bold text-[#0b1c30] focus:ring-2 focus:ring-[#131b2e]"
@@ -70,23 +71,23 @@ export const LancamentosPeriodFilter: React.FC<LancamentosPeriodFilterProps> = (
         </div>
 
         {customMode && (
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="grid grid-cols-2 items-end gap-2 sm:flex sm:flex-wrap">
             <div>
-              <label className="block text-[10px] font-semibold text-gray-600 mb-1">Data inicial</label>
+              <label htmlFor={id + "-start"} className="block text-xs font-semibold text-gray-600 mb-1">Data inicial</label>
               <input
-                type="date"
+                id={id + "-start"} type="date"
                 value={dataInicio}
                 onChange={(event) => onDataInicioChange(event.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-gray-600 mb-1">Data final</label>
+              <label htmlFor={id + "-end"} className="block text-xs font-semibold text-gray-600 mb-1">Data final</label>
               <input
-                type="date"
+                id={id + "-end"} type="date"
                 value={dataFim}
                 onChange={(event) => onDataFimChange(event.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
               />
             </div>
             <button

@@ -2518,7 +2518,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     >
       {children}
       {/* Toast Notification Container */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
+      <div className="app-toast-stack pointer-events-none fixed left-3 right-3 z-50 ml-auto flex max-w-sm flex-col gap-2 desktop:right-5">
         {toasts.map((toast) => (
           <div
             key={toast.id}

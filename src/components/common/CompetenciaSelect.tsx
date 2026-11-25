@@ -10,6 +10,7 @@ interface CompetenciaSelectProps {
   allowAll?: boolean;
   disabled?: boolean;
   className?: string;
+  compact?: boolean;
 }
 
 export const formatCompetencia = (month: string) => {
@@ -29,7 +30,8 @@ export const CompetenciaSelect: React.FC<CompetenciaSelectProps> = ({
   referenceMonth,
   allowAll = true,
   disabled = false,
-  className = ''
+  className = '',
+  compact = false
 }) => {
   const availableMonths = useMemo(() => {
     const months = new Set<string>(
@@ -60,7 +62,7 @@ export const CompetenciaSelect: React.FC<CompetenciaSelectProps> = ({
       {allowAll && <option value="TODOS">Todos os meses</option>}
       {availableMonths.map((month) => (
         <option key={month} value={month}>
-          {formatCompetencia(month)}{month === referenceMonth ? ' (Atual)' : ''}
+          {compact ? month.split('-').reverse().join('/') : formatCompetencia(month)}{!compact && month === referenceMonth ? ' (Atual)' : ''}
         </option>
       ))}
     </select>
