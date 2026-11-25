@@ -253,14 +253,14 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   };
 
   return (
-    <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150">
-        <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">
+    <ModalOverlay aria-labelledby="new-movement-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+      <div className="entry-dialog bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150">
+        <div className="entry-dialog-header bg-[#0b1c30] text-white px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#C5A059]">post_add</span>
-            <h3 className="font-bold text-base">Novo Lançamento Financeiro</h3>
+            <h3 id="new-movement-title" className="font-bold text-base">Novo Lançamento Financeiro</h3>
           </div>
-          <button onClick={handleClose} className="text-gray-400 hover:text-white transition">
+          <button type="button" aria-label="Fechar lançamento" onClick={handleClose} className="grid size-11 shrink-0 place-items-center rounded-lg text-gray-300 hover:bg-white/10 hover:text-white">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -269,7 +269,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
           {/* Tipo Toggle */}
           <div className="grid grid-cols-2 gap-2 bg-[#f8f9ff] p-1 rounded-lg border border-[#d3e4fe]">
             <button
-              type="button"
+              type="button" aria-pressed={tipo === 'RECEITA'}
               onClick={() => {
                 setTipo('RECEITA'); selectPlan(); setFornecedorCliente(''); setSelectedFornecedorId('');
               }}
@@ -281,7 +281,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               Receita
             </button>
             <button
-              type="button"
+              type="button" aria-pressed={tipo === 'DESPESA'}
               onClick={() => {
                 setTipo('DESPESA'); selectPlan(); setFornecedorCliente(''); setSelectedFornecedorId('');
               }}
@@ -621,7 +621,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             )}
           </div>
 
-          <div className="pt-4 border-t border-gray-100 flex justify-end gap-2">
+          <div className="entry-dialog-actions pt-4 border-t border-gray-100 flex justify-end gap-2">
             <button
               type="button"
               onClick={handleClose}

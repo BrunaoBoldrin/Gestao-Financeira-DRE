@@ -49,14 +49,14 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
   };
 
   return (
-    <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+    <ModalOverlay aria-labelledby="upload-document-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150">
         <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#C5A059]">cloud_upload</span>
-            <h3 className="font-bold text-base">Importação & Leitura OCR de Notas</h3>
+            <h3 id="upload-document-title" className="font-bold text-base">Importação & Leitura OCR de Notas</h3>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition">
+          <button type="button" aria-label="Fechar envio" onClick={onClose} className="grid size-11 shrink-0 place-items-center rounded-lg text-gray-300 hover:bg-white/10 hover:text-white">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>

@@ -3,6 +3,8 @@ import { AppProvider, useApp } from './context/AppContext';
 import { canAccessView, ROLE_DEFAULT_VIEW } from './config/accessControl';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
+import { MobileNavigation } from './components/layout/MobileNavigation';
+import type { TipoLancamento } from './types';
 import { usePwaInstall } from './hooks/usePwaInstall';
 import { AuthScreen } from './components/auth/AuthScreen';
 
@@ -32,16 +34,15 @@ const MainAppContent: React.FC = () => {
   const { currentView, currentUser, persistenceStatus, persistenceMessage, retryPersistence } = useApp();
 
   const pwaInstall = usePwaInstall();
-  const [isNovoLancamentoOpen, setIsNovoLancamentoOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [newTransaction, setNewTransaction] = useState<TipoLancamento | null>(null);
   const [isUploadOCROpen, setIsUploadOCROpen] = useState(false);
 
   useEffect(() => {
-    setIsNovoLancamentoOpen(false);
+    setNewTransaction(null);
     setIsUploadOCROpen(false);
   }, [currentUser?.id]);
 
-  useEffect(() => { setMobileMenuOpen(false); }, [currentView, currentUser?.id]);
+  useEffect(() => { window.scrollTo(0, 0); }, [currentView, currentUser?.id]);
 
   if (!currentUser) {
     return <AuthScreen />;
@@ -60,9 +61,9 @@ const MainAppContent: React.FC = () => {
       case 'pending_review':
         return <PendingReviewView />;
       case 'receitas':
-        return <ReceitasView onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)} />;
+        return <ReceitasView onOpenNovoLancamentoModal={() => setNewTransaction('DESPESA')} />;
       case 'despesas':
-        return <ReceitasView onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)} />;
+        return <ReceitasView onOpenNovoLancamentoModal={() => setNewTransaction('DESPESA')} />;
       case 'caixa_fisico':
         return <CaixaFisicoView />;
       case 'fluxo_caixa':
@@ -96,9 +97,7 @@ const MainAppContent: React.FC = () => {
     <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col font-sans antialiased selection:bg-[#ffdea5] selection:text-[#775a19]">
       {/* Header */}
       <Header
-        onOpenMenu={() => setMobileMenuOpen((open) => !open)}
-        menuOpen={mobileMenuOpen}
-        onOpenNovoLancamentoModal={() => setIsNovoLancamentoOpen(true)}
+        onOpenNovoLancamentoModal={() => setNewTransaction('DESPESA')}
         onOpenUploadModal={() => setIsUploadOCROpen(true)}
       />
 
@@ -114,21 +113,23 @@ const MainAppContent: React.FC = () => {
         </div>
       )}
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex min-w-0 flex-1">
         {/* Sidebar */}
-        <Sidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+        <Sidebar />
 
         {/* Main View Area */}
-        <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
+        <main className="app-main mx-auto w-full min-w-0 max-w-[1600px] flex-1">
           {renderActiveView()}
         </main>
       </div>
 
       {/* Modals */}
-      <NovoLancamentoModal
-        isOpen={isNovoLancamentoOpen}
-        onClose={() => setIsNovoLancamentoOpen(false)}
-      />
+      <MobileNavigation onOpenNew={setNewTransaction} onOpenUpload={() => setIsUploadOCROpen(true)} />
+      {newTransaction && <NovoLancamentoModal
+        isOpen
+        tipoInicial={newTransaction}
+        onClose={() => setNewTransaction(null)}
+      />}
 
       <UploadOCRModal
         isOpen={isUploadOCROpen}
