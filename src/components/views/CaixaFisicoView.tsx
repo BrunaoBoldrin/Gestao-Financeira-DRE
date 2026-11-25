@@ -1,3 +1,4 @@
+import { bankBelongsToUnit, isPhysicalCashAccount } from '../../utils/categoryUnits';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
@@ -22,7 +23,7 @@ export const CaixaFisicoView: React.FC = () => {
     ? currentUser.unit
     : selectedUnit !== 'Todas as Unidades'
       ? selectedUnit
-      : units.find((unit) => unit.ativa)?.nome || '';
+      : units.find((unit) => unit.ativa && unit.id !== 'all')?.nome || '';
   const [unidadeCaixa, setUnidadeCaixa] = useState(unidadeInicial);
   useEffect(() => {
     if (isFinance && currentUser) {
@@ -32,8 +33,8 @@ export const CaixaFisicoView: React.FC = () => {
     }
   }, [currentUser, isFinance, selectedUnit]);
 
-  const contasUnidade = bancos.filter((banco) => banco.ativo && banco.unidade === unidadeCaixa);
-  const contaCaixa = contasUnidade.find((banco) => banco.banco.toLowerCase().includes('caixa'));
+  const contasUnidade = bancos.filter((banco) => banco.ativo && bankBelongsToUnit(banco, unidadeCaixa, units));
+  const contaCaixa = contasUnidade.find(isPhysicalCashAccount);
   const movimentacoesDaUnidade = useMemo(
     () => sessaoCaixa.movimentacoes.filter((movimento) => movimento.unidade === unidadeCaixa),
     [sessaoCaixa.movimentacoes, unidadeCaixa]
@@ -67,7 +68,7 @@ export const CaixaFisicoView: React.FC = () => {
             <div>
               <label className="block text-[10px] font-semibold text-gray-600 mb-1">Unidade do caixa</label>
               <select value={unidadeCaixa} onChange={(event) => { setUnidadeCaixa(event.target.value); setSelectedUnit(event.target.value); }} className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white">
-                {units.filter((unit) => unit.ativa).map((unit) => <option key={unit.id} value={unit.nome}>{unit.nome}</option>)}
+                {units.filter((unit) => unit.ativa && unit.id !== 'all').map((unit) => <option key={unit.id} value={unit.nome}>{unit.nome}</option>)}
               </select>
             </div>
           )}
@@ -78,7 +79,7 @@ export const CaixaFisicoView: React.FC = () => {
       {!contaCaixa ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-900">
           <strong>Nenhum Caixa Físico ativo para {unidadeCaixa || 'a unidade selecionada'}.</strong>
-          <p className="text-xs mt-1">Um administrador deve cadastrar uma conta cujo nome contenha “Caixa” e vinculá-la à unidade.</p>
+          <p className="text-xs mt-1">Um administrador deve cadastrar uma conta com o nome “Caixa Físico” e vinculá-la à unidade.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

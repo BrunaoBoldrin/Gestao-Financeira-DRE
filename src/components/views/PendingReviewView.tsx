@@ -1,4 +1,4 @@
-import { categoryBelongsToUnit } from '../../utils/categoryUnits';
+import { bankBelongsToUnit, categoryBelongsToUnit } from '../../utils/categoryUnits';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
@@ -100,14 +100,14 @@ export const PendingReviewView: React.FC = () => {
 
   const unidadeLancamento = isFinance && currentUser ? currentUser.unit : unidade;
   const availableBanks = bancos.filter(
-    (banco) => banco.ativo && banco.unidade === unidadeLancamento
+    (banco) => banco.ativo && bankBelongsToUnit(banco, unidadeLancamento, units)
   );
 
   useEffect(() => {
     if (!availableBanks.some((banco) => banco.id === bancoId)) {
       setBancoId(availableBanks[0]?.id || '');
     }
-  }, [unidadeLancamento, bancos, bancoId]);
+  }, [unidadeLancamento, bancos, units, bancoId]);
 
   const financialMatches = useMemo(
     () => {

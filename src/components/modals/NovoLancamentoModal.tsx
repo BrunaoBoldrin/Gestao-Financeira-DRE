@@ -1,4 +1,4 @@
-import { categoryBelongsToUnit, supplierBelongsToUnit } from '../../utils/categoryUnits';
+import { bankBelongsToUnit, findUnit, isPhysicalCashAccount, supplierBelongsToUnit } from '../../utils/categoryUnits';
 import { CadastroSearch } from '../common/CadastroSearch';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
@@ -57,11 +57,15 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
   const handleClose = () => {
     setAnexo(null);
+    setValor('');
     setDescricao('');
     setCategoria('');
     setFornecedorCliente('');
     setSelectedFornecedorId('');
     setObservacoes('');
+    setCentroCusto('');
+    setBancoId('');
+    setContaDestinoBancoId('');
     onClose();
   };
 
@@ -74,49 +78,47 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     setUnidade(selectedUnit === 'Todas as Unidades' ? '' : selectedUnit);
   }, [isOpen, isFinance, currentUser?.unit, selectedUnit]);
 
-  const targetUnit = isFinance && currentUser ? currentUser.unit : unidade;
-  React.useEffect(() => {
-    if (categoria && !categorias.some((item) => item.nome === categoria && item.ativa && item.tipo === tipo && categoryBelongsToUnit(item, targetUnit, units))) {
-      setCategoria(''); setDescricao('');
-    }
-  }, [targetUnit, units, categorias, categoria, tipo]);
+  const activeUnits = units.filter((item) => item.id !== 'all' && item.ativa);
+  const branch = findUnit(isFinance && currentUser ? currentUser.unit : unidade, units)
+    ?? (!isFinance && activeUnits.length === 1 ? activeUnits[0] : undefined);
+  const targetUnit = branch?.ativa ? branch.nome : '';
+  const plans = categorias.filter((item) => item.ativa && item.tipo === tipo);
+  const parties = fornecedores.filter((item) => item.ativo && supplierBelongsToUnit(item, targetUnit, units) &&
+    (tipo === 'RECEITA' ? item.tipo === 'CLIENTE' : item.tipo !== 'CLIENTE'));
+  const selectedParty = parties.find((item) => item.id === selectedFornecedorId);
+  const defaultExpensePlan = tipo === 'DESPESA' && plans.find((item) => item.id === selectedParty?.planoContaId);
+  const activeCenters = centrosCusto.filter((item) => item.ativo);
+  const selectedPlan = defaultExpensePlan || plans.find((item) => item.id === categoria);
+  const defaultCenter = activeCenters.find((item) => item.id === selectedPlan?.centroCustoId);
+  const availableBanks = bancos.filter((banco) =>
+    banco.ativo && bankBelongsToUnit(banco, targetUnit, units) &&
+    (formaPagamento === 'TRANSFERENCIA' || isPhysicalCashAccount(banco) === (formaPagamento === 'DINHEIRO'))
+  );
+  const mustSelectBank = status === 'PAGO' || formaPagamento === 'TRANSFERENCIA';
+  const selectedBank = availableBanks.find((item) => item.id === bancoId);
+  const selectedDestination = availableBanks.find((item) => item.id === contaDestinoBancoId && item.id !== bancoId);
 
-  React.useEffect(() => {
-    const plan = categorias.find((item) => item.nome === categoria && item.tipo === tipo && item.ativa && categoryBelongsToUnit(item, targetUnit, units));
-    const center = centrosCusto.find((item) => item.id === plan?.centroCustoId && item.ativo);
-    setCentroCusto(center?.nome || '');
-  }, [categoria, tipo, targetUnit, categorias, centrosCusto, units]);
+  const selectPlan = (plan?: { id: string; nome: string }) => {
+    setDescricao(plan?.nome || '');
+    setCategoria(plan?.id || '');
+    setCentroCusto('');
+  };
 
-  React.useEffect(() => {
-    if (tipo !== 'DESPESA') return;
-    const supplier = fornecedores.find((item) => item.id === selectedFornecedorId && item.ativo && item.tipo !== 'CLIENTE' && supplierBelongsToUnit(item, targetUnit, units));
-    if (selectedFornecedorId && !supplier) { setSelectedFornecedorId(''); setFornecedorCliente(''); }
-    const plan = categorias.find((item) => item.id === supplier?.planoContaId && item.ativa && item.tipo === 'DESPESA' && categoryBelongsToUnit(item, targetUnit, units));
-    setDescricao(plan?.nome || ''); setCategoria(plan?.nome || '');
-  }, [tipo, selectedFornecedorId, fornecedores, categorias, targetUnit, units]);
-
-  const availableBanks = bancos.filter((banco) => banco.ativo && banco.unidade === targetUnit &&
-    (formaPagamento !== 'DINHEIRO' || banco.banco.toLowerCase().includes('caixa')));
-
-  React.useEffect(() => {
-    if (!isOpen) return;
-    const sourceIsValid = availableBanks.some((banco) => banco.id === bancoId);
-    const nextSourceId = sourceIsValid ? bancoId : availableBanks[0]?.id || '';
-    if (nextSourceId !== bancoId) setBancoId(nextSourceId);
-
-    const destinationIsValid = availableBanks.some(
-      (banco) => banco.id === contaDestinoBancoId && banco.id !== nextSourceId
-    );
-    if (!destinationIsValid) {
-      setContaDestinoBancoId(availableBanks.find((banco) => banco.id !== nextSourceId)?.id || '');
-    }
-  }, [isOpen, targetUnit, bancos, bancoId, contaDestinoBancoId, formaPagamento]);
+  const selectUnit = (name: string) => {
+    setUnidade(name);
+    setSelectedFornecedorId('');
+    setFornecedorCliente('');
+    setBancoId('');
+    setContaDestinoBancoId('');
+    if (tipo === 'DESPESA') selectPlan();
+  };
 
   if (!isOpen) return null;
 
-  const numVal = parseFloat(valor) || 0;
-  const activeCond = condicoesPagamento.find((c) => c.id === selectedCondicaoId) || condicoesPagamento[0];
-  const prazos = activeCond ? activeCond.prazosDias : [0];
+  const numVal = Number(valor);
+  const activeConditions = condicoesPagamento.filter((condition) => condition.ativa);
+  const activeCond = activeConditions.find((condition) => condition.id === selectedCondicaoId) || activeConditions[0];
+  const prazos = activeCond?.prazosDias.length ? activeCond.prazosDias : [0];
 
   const handleAnexoChange = (file?: File) => {
     if (!file) {
@@ -148,25 +150,30 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!descricao || numVal <= 0 || !unidade || isSubmitting) return;
+    if (isSubmitting) return;
+    if (!targetUnit) { showToast('Selecione uma filial ativa para continuar.', 'error'); return; }
+    if (!Number.isFinite(numVal) || numVal <= 0) { showToast('Informe um valor maior que zero.', 'error'); return; }
 
-    if (tipo === 'DESPESA' && !fornecedores.some((item) => item.id === selectedFornecedorId && item.ativo && item.nome === fornecedorCliente && supplierBelongsToUnit(item, targetUnit, units))) {
+    if (tipo === 'DESPESA' && !selectedParty) {
       showToast('Selecione um favorecido cadastrado na lista.', 'error'); return;
     }
-    const selectedCadastro = categorias.find((item) => item.ativa && item.tipo === tipo && categoryBelongsToUnit(item, targetUnit, units) && item.nome === categoria && item.nome === descricao);
+    const selectedCadastro = selectedPlan;
     if (!selectedCadastro) {
       showToast('Selecione uma receita ou despesa da lista de cadastros.', 'error');
       return;
     }
-    const linkedCenter = centrosCusto.find((item) => item.ativo && item.id === selectedCadastro.centroCustoId);
+    const linkedCenter = defaultCenter ?? activeCenters.find((item) => item.nome === centroCusto);
     if (!linkedCenter) {
-      showToast('Configure um centro de custo ativo neste plano de contas antes de lançar.', 'error');
+      showToast('Selecione um centro de custo ativo para continuar.', 'error');
       return;
     }
 
-    const selectedBanco = availableBanks.find((banco) => banco.id === bancoId);
-    if (!selectedBanco) {
+    if (mustSelectBank && !selectedBank) {
       showToast(`Cadastre ou selecione uma conta bancária para a unidade "${targetUnit}".`, 'error');
+      return;
+    }
+    if (formaPagamento === 'TRANSFERENCIA' && !selectedDestination) {
+      showToast('Selecione uma conta de destino diferente da origem.', 'error');
       return;
     }
     setIsSubmitting(true);
@@ -185,20 +192,17 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     }
 
     if (formaPagamento === 'TRANSFERENCIA') {
-      if (!contaDestinoBancoId) {
-        showToast('Selecione uma conta de destino diferente da origem.', 'error');
-        return;
-      }
-      addTransferencia({
+      const created = addTransferencia({
         origemBancoId: bancoId,
         destinoBancoId: contaDestinoBancoId,
         valor: numVal,
         data: dataEmissao,
-        descricao: observacoes.trim() ? descricao + ' — ' + observacoes.trim() : descricao,
+        descricao: observacoes.trim() ? selectedCadastro.nome + ' — ' + observacoes.trim() : selectedCadastro.nome,
         unidade: targetUnit,
         comprovanteUrl,
         documentoRef: anexo?.name
       });
+      if (!created) { setIsSubmitting(false); return; }
       const saved = await flushPersistence();
       showToast(
         saved
@@ -212,7 +216,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     }
 
     const payload = {
-      descricao,
+      descricao: selectedCadastro.nome,
       tipo,
       categoria: selectedCadastro.nome,
       centroCusto: linkedCenter.nome,
@@ -222,9 +226,9 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       dataPagamento: status === 'PAGO' ? dataEmissao : undefined,
       status,
       observacoes: observacoes.trim() || undefined,
-      fornecedorCliente: fornecedorCliente || (tipo === 'RECEITA' ? 'Cliente Diverso' : 'Favorecido Diverso'),
-      bancoId: selectedBanco.id,
-      contaBancaria: selectedBanco.banco,
+      fornecedorCliente: fornecedorCliente.trim() || (tipo === 'RECEITA' ? 'Cliente Diverso' : 'Favorecido Diverso'),
+      bancoId: selectedBank?.id,
+      contaBancaria: selectedBank?.banco || '',
       formaPagamento,
       unidade: targetUnit,
       comprovanteUrl,
@@ -232,11 +236,10 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       impactoDRE: tipo
     };
 
-    if (tipo === 'DESPESA' && prazos.length >= 1) {
-      addLancamentoComDDL(payload, dataEmissao, prazos);
-    } else {
-      addLancamento(payload);
-    }
+    const created = tipo === 'DESPESA'
+      ? addLancamentoComDDL(payload, dataEmissao, prazos)
+      : addLancamento(payload);
+    if (!created) { setIsSubmitting(false); return; }
 
     const saved = await flushPersistence();
     showToast(
@@ -268,7 +271,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                setTipo('RECEITA'); setDescricao(''); setCategoria(''); setFornecedorCliente(''); setSelectedFornecedorId('');
+                setTipo('RECEITA'); selectPlan(); setFornecedorCliente(''); setSelectedFornecedorId('');
               }}
               className={`py-2 rounded-md font-bold text-xs flex items-center justify-center gap-1.5 transition ${
                 tipo === 'RECEITA' ? 'bg-emerald-600 text-white shadow-xs' : 'text-gray-600 hover:bg-white'
@@ -280,7 +283,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                setTipo('DESPESA'); setDescricao(''); setCategoria(''); setFornecedorCliente(''); setSelectedFornecedorId('');
+                setTipo('DESPESA'); selectPlan(); setFornecedorCliente(''); setSelectedFornecedorId('');
               }}
               className={`py-2 rounded-md font-bold text-xs flex items-center justify-center gap-1.5 transition ${
                 tipo === 'DESPESA' ? 'bg-rose-600 text-white shadow-xs' : 'text-gray-600 hover:bg-white'
@@ -292,12 +295,13 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
           </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label htmlFor="manual-unidade" className="block text-xs font-semibold text-gray-700 mb-1">
                 Unidade / Filial <span className="text-red-500">*</span>
               </label>
               <select
-                value={unidade}
-                onChange={(e) => setUnidade(e.target.value)}
+                id="manual-unidade"
+                value={targetUnit}
+                onChange={(e) => selectUnit(e.target.value)}
                 required
                 disabled={isFinance}
                 className={`w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white ${
@@ -305,62 +309,75 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                 }`}
               >
                 <option value="" disabled>Selecione a unidade...</option>
-                {units.filter((unit) => unit.ativa && unit.id !== 'all').map((unit) => (
+                {activeUnits.map((unit) => (
                   <option key={unit.id} value={unit.nome}>{unit.nome} ({unit.cidade})</option>
                 ))}
               </select>
-              {selectedUnit === 'Todas as Unidades' && !isFinance && !unidade && (
-                <p className="text-[10px] text-amber-700 mt-1">Informe a unidade responsável pelo lançamento.</p>
+              {!targetUnit && (
+                <p className="text-xs text-amber-700 mt-1">{isFinance
+                  ? 'Peça ao administrador para vincular seu usuário a uma filial ativa.'
+                  : 'Escolha a filial para carregar as contas e os favorecidos.'}</p>
               )}
             </div>
-          {tipo === 'DESPESA' ? (
-            <CadastroSearch label="Favorecido" value={fornecedorCliente}
-              placeholder="Digite o nome ou CNPJ do favorecido"
-              emptyMessage="Nenhum favorecido ativo disponível nesta filial. Selecione a filial e confira o vínculo do favorecido."
-              options={fornecedores.filter((item) => item.ativo && item.tipo !== 'CLIENTE' && supplierBelongsToUnit(item, targetUnit, units)).map((item) => ({ id: item.id, nome: item.nome, codigo: item.cnpj || '' }))}
-              onChange={(text) => { setFornecedorCliente(text); setSelectedFornecedorId(''); setDescricao(''); setCategoria(''); }}
-              onSelect={(item) => { setSelectedFornecedorId(item.id); setFornecedorCliente(item.nome); }}
-            />
-          ) : (
-            <div>
-              <label htmlFor="manual-cliente" className="block text-xs font-semibold text-gray-700 mb-1">Cliente (opcional)</label>
-              <input id="manual-cliente" value={fornecedorCliente} onChange={(event) => setFornecedorCliente(event.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-            </div>
-          )}
-          {tipo === 'DESPESA' ? (
-            <div>
-              <label htmlFor="manual-despesa" className="block text-xs font-semibold text-gray-700 mb-1">Despesa cadastrada</label>
-              <input id="manual-despesa" readOnly value={descricao} placeholder="Preenchida pelo favorecido selecionado"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50" />
-              {selectedFornecedorId && !categoria && <p className="mt-1 text-xs text-amber-700">
-                O favorecido precisa de um plano de despesa ativo. Atualize o cadastro do favorecido ou do plano de contas.
-              </p>}
-            </div>
-          ) : (
           <CadastroSearch
-            label={tipo === 'RECEITA' ? 'Receita cadastrada' : 'Despesa cadastrada'}
-            value={descricao}
-            options={categorias.filter((item) => item.ativa && item.tipo === tipo && categoryBelongsToUnit(item, targetUnit, units))}
-            onChange={(text) => { setDescricao(text); setCategoria(''); }}
-            onSelect={(item) => { setDescricao(item.nome); setCategoria(item.nome); }}
+            label={tipo === 'DESPESA' ? 'Favorecido / Fornecedor' : 'Cliente (opcional)'}
+            value={fornecedorCliente}
+            disabled={!targetUnit}
+            required={tipo === 'DESPESA'}
+            placeholder={tipo === 'DESPESA' ? 'Busque pelo nome ou CPF/CNPJ' : 'Digite o cliente ou selecione um cadastro'}
+            emptyMessage={tipo === 'DESPESA' ? 'Nenhum favorecido ativo vinculado a esta filial.' : 'Nenhum cliente ativo nesta filial. Você pode informar o nome.'}
+            options={parties.map((item) => ({ id: item.id, nome: item.nome, codigo: item.cnpj || '' }))}
+            onChange={(name) => {
+              setFornecedorCliente(name);
+              setSelectedFornecedorId('');
+              if (tipo === 'DESPESA') selectPlan();
+            }}
+            onSelect={(option) => {
+              setSelectedFornecedorId(option.id);
+              setFornecedorCliente(option.nome);
+              if (tipo === 'DESPESA') selectPlan();
+            }}
           />
+          {defaultExpensePlan ? (
+            <label className="block text-xs font-semibold text-gray-700">
+              Plano de despesa do favorecido
+              <input readOnly value={defaultExpensePlan.nome} className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50" />
+            </label>
+          ) : (
+            <CadastroSearch
+              label={tipo === 'RECEITA' ? 'Receita cadastrada' : 'Plano de despesa'}
+              value={descricao}
+              disabled={!targetUnit || (tipo === 'DESPESA' && !selectedParty)}
+              placeholder="Digite o nome ou código do plano"
+              options={plans}
+              emptyMessage={tipo === 'RECEITA' ? 'Nenhum plano de receita ativo no Plano de Contas.' : 'Nenhum plano de despesa ativo no Plano de Contas.'}
+              onChange={(name) => { setDescricao(name); setCategoria(''); setCentroCusto(''); }}
+              onSelect={selectPlan}
+            />
           )}
           <div>
             <label htmlFor="manual-centro-custo" className="block text-xs font-semibold text-gray-700 mb-1">Centro de custo *</label>
-            <input id="manual-centro-custo" readOnly value={centroCusto}
-              placeholder={categoria ? 'Configure o centro de custo no plano de contas' : 'Selecione primeiro o plano de contas'}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50" />
-
+            {defaultCenter ? (
+              <input id="manual-centro-custo" readOnly value={defaultCenter.nome}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50" />
+            ) : (
+              <select id="manual-centro-custo" value={centroCusto} onChange={(event) => setCentroCusto(event.target.value)}
+                required disabled={!selectedPlan} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100">
+                <option value="">{selectedPlan ? 'Selecione o centro de custo' : 'Selecione primeiro o plano de contas'}</option>
+                {activeCenters.map((item) => <option key={item.id} value={item.nome}>{item.nome}</option>)}
+              </select>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label htmlFor="manual-valor" className="block text-xs font-semibold text-gray-700 mb-1">
                 Valor Total (R$) <span className="text-red-500">*</span>
               </label>
               <input
+                id="manual-valor"
                 type="number"
+                min="0.01"
                 step="0.01"
                 required
                 placeholder="0,00"
@@ -414,11 +431,11 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               </div>
 
               <select
-                value={selectedCondicaoId}
+                value={activeCond?.id ?? ''}
                 onChange={(e) => setSelectedCondicaoId(e.target.value)}
                 className="w-full px-3 py-2 border border-[#d3e4fe] rounded-md text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e]"
               >
-                {condicoesPagamento.filter((c) => c.ativa).map((c) => (
+                {activeConditions.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nome}
                   </option>
@@ -471,8 +488,8 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Status de Pagamento</label>
-              <select
+              <label htmlFor="manual-status" className="block text-xs font-semibold text-gray-700 mb-1">Status de Pagamento</label>
+              <select id="manual-status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as StatusLancamento)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white"
@@ -487,10 +504,14 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Forma de Pagamento</label>
-              <select
+              <label htmlFor="manual-forma" className="block text-xs font-semibold text-gray-700 mb-1">Forma de Pagamento</label>
+              <select id="manual-forma"
                 value={formaPagamento}
-                onChange={(e) => setFormaPagamento(e.target.value as typeof formaPagamento)}
+                onChange={(e) => {
+                  setFormaPagamento(e.target.value as typeof formaPagamento);
+                  setBancoId('');
+                  setContaDestinoBancoId('');
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] bg-white"
               >
                 <option value="PIX">PIX</option>
@@ -504,19 +525,20 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label htmlFor="manual-conta" className="block text-xs font-semibold text-gray-700 mb-1">
                 {formaPagamento === 'TRANSFERENCIA' ? 'Conta de origem' : 'Conta bancária / Caixa'}{' '}
-                <span className="text-red-500">*</span>
+                {mustSelectBank && <span className="text-red-500">*</span>}
               </label>
               <select
-                value={bancoId}
+                id="manual-conta"
+                value={selectedBank?.id ?? ''}
                 onChange={(e) => setBancoId(e.target.value)}
-                required
+                required={mustSelectBank}
                 disabled={!targetUnit || availableBanks.length === 0}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] bg-white disabled:bg-gray-100"
               >
-                <option value="" disabled>
-                  {targetUnit ? 'Selecione a conta...' : 'Selecione primeiro a unidade'}
+                <option value="">
+                  {targetUnit ? (mustSelectBank ? 'Selecione a conta...' : 'Definir na liquidação') : 'Selecione primeiro a unidade'}
                 </option>
                 {availableBanks.map((banco) => (
                   <option key={banco.id} value={banco.id}>
@@ -524,7 +546,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                   </option>
                 ))}
               </select>
-              {targetUnit && availableBanks.length === 0 && (
+              {targetUnit && mustSelectBank && availableBanks.length === 0 && (
                 <p className="text-[10px] text-rose-600 mt-1">{formaPagamento === 'DINHEIRO' ? 'Cadastre um Caixa Físico ativo para esta unidade antes de lançar em dinheiro.' : 'Nenhuma conta ativa cadastrada para esta unidade.'}</p>
               )}
               {formaPagamento === 'DINHEIRO' && availableBanks.length > 0 && (
@@ -539,9 +561,9 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                 Conta de destino <span className="text-red-500">*</span>
               </label>
               <select
-                value={contaDestinoBancoId}
+                value={selectedDestination?.id ?? ''}
                 onChange={(e) => setContaDestinoBancoId(e.target.value)}
-                required
+                required disabled={!selectedBank}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] bg-white"
               >
                 <option value="" disabled>Selecione a conta de destino...</option>

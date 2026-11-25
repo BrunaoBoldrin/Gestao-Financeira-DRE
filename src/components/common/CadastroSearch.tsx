@@ -1,4 +1,5 @@
 import React, { useId, useState } from 'react';
+import { normalizeText } from '../../utils/text';
 
 interface Option { id: string; nome: string; codigo: string }
 interface Props {
@@ -6,23 +7,30 @@ interface Props {
   placeholder?: string;
   emptyMessage?: string;
   value: string;
+  required?: boolean;
+  disabled?: boolean;
   options: Option[];
   onChange: (value: string) => void;
   onSelect: (option: Option) => void;
 }
-export const CadastroSearch: React.FC<Props> = ({ label, value, options, onChange, onSelect, placeholder = 'Digite o nome ou código do cadastro', emptyMessage = 'Nenhum cadastro ativo encontrado. Cadastre a conta em Cadastros → Plano de Contas ou solicite ao administrador.' }) => {
+export const CadastroSearch: React.FC<Props> = ({ label, value, options, onChange, onSelect, required = true, disabled = false, placeholder = 'Digite o nome ou código do cadastro', emptyMessage = 'Nenhum cadastro ativo encontrado. Cadastre a conta em Cadastros → Plano de Contas ou solicite ao administrador.' }) => {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
-  const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  const matches = options.filter(option => normalize(option.nome + ' ' + option.codigo).includes(normalize(value)));
+  const query = normalizeText(value);
+  const digits = query.replace(/\D/g, '');
+  const matches = options.filter(({ nome, codigo }) =>
+    normalizeText(nome + ' ' + codigo).includes(query) ||
+    (/^[0-9./\s-]+$/.test(query) && digits && codigo.replace(/\D/g, '').includes(digits))
+  );
   const select = (option: Option) => { onSelect(option); setOpen(false); setActive(-1); };
   return (
     <div onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
-      <label htmlFor={id} className="block text-xs font-semibold text-gray-700 mb-1">{label} *</label>
+      <label htmlFor={id} className="block text-xs font-semibold text-gray-700 mb-1">{label}{required ? ' *' : ''}</label>
       <input id={id} role="combobox" aria-expanded={open} aria-controls={id + '-list'}
         aria-autocomplete="list" aria-activedescendant={open && active >= 0 && matches[active] ? id + '-' + active : undefined}
-        required autoComplete="off" value={value} placeholder={placeholder}
+        required={required} disabled={disabled} autoComplete="off" value={value} placeholder={placeholder}
+        onClick={() => setOpen(true)}
         onFocus={() => { setOpen(true); setActive(-1); }}
         onChange={event => { onChange(event.target.value); setOpen(true); setActive(-1); }}
         onKeyDown={event => {
@@ -30,8 +38,8 @@ export const CadastroSearch: React.FC<Props> = ({ label, value, options, onChang
           if (event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); setActive(index => Math.max(index - 1, 0)); }
           if (event.key === 'Escape') { event.preventDefault(); setOpen(false); }
           if (event.key === 'Enter' && open) {
-            event.preventDefault();
             const option = matches[active] || (matches.length === 1 ? matches[0] : undefined);
+            if (option || required) event.preventDefault();
             if (option) select(option);
           }
         }}
@@ -47,7 +55,7 @@ export const CadastroSearch: React.FC<Props> = ({ label, value, options, onChang
           <span className="text-xs text-gray-500 mr-2">{option.codigo}</span>{option.nome}
         </li>)}
         {matches.length === 0 && <li className="p-3 text-xs text-gray-500" role="presentation">
-          {emptyMessage}
+          {options.length ? 'Nenhum resultado para esta busca. Tente outro nome ou código.' : emptyMessage}
         </li>}
       </ul>}
     </div>

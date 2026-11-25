@@ -1,3 +1,5 @@
+import { bankBelongsToUnit, isPhysicalCashAccount } from '../utils/categoryUnits';
+import { normalizeText } from '../utils/text';
 import { masterFingerprint, type MasterImport } from '../utils/masterWorkbook';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -150,14 +152,14 @@ interface AppContextType {
   deleteCondicaoPagamento: (id: string) => void;
 
   // Actions
-  addLancamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>) => void;
+  addLancamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>) => boolean;
   addLancamentoComDDL: (
     dadosBase: Omit<Lancamento, 'id' | 'criadoEm'>,
     dataEmissao: string,
     prazosDias: number[],
     primeiroVencimento?: string,
     options?: { adjustBankBalance?: boolean; notify?: boolean; audit?: boolean }
-  ) => void;
+  ) => boolean;
   addLancamentoComParcelamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>, numeroParcelas: number) => void;
   addTransferencia: (dados: {
     origemBancoId: string;
@@ -168,7 +170,7 @@ interface AppContextType {
     unidade: string;
     comprovanteUrl?: string;
     documentoRef?: string;
-  }) => void;
+  }) => boolean;
   updateLancamento: (id: string, l: Partial<Lancamento>) => boolean;
   deleteLancamento: (id: string) => void;
   marcarLancamentoComoPago: (id: string, dados: DadosLiquidacao) => boolean;
@@ -317,9 +319,6 @@ const normalizePersistedFinancialDates = (snapshot: ApplicationStateSnapshot): A
 
 const persistentUrl = (value?: string) =>
   value && !value.startsWith('blob:') && !value.startsWith('data:') ? value : undefined;
-
-const isPhysicalCashAccount = (account: Pick<BancoMaster, 'banco'>) =>
-  account.banco.trim().toLocaleLowerCase('pt-BR').includes('caixa físico');
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [persistenceStatus, setPersistenceStatus] = useState<PersistenceStatus>('LOADING');
@@ -843,23 +842,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const resolveBancoForLancamento = (
     lancamento: Pick<Lancamento, 'bancoId' | 'contaBancaria' | 'unidade'>
   ): BancoMaster | undefined => {
-    const normalizedName = lancamento.contaBancaria?.trim().toLocaleLowerCase('pt-BR');
-    const byId = lancamento.bancoId
-      ? bancos.find((banco) => banco.id === lancamento.bancoId && banco.unidade === lancamento.unidade)
-      : undefined;
+    const unitAccounts = bancos.filter((banco) => bankBelongsToUnit(banco, lancamento.unidade, units));
+    const byId = unitAccounts.find((banco) => banco.id === lancamento.bancoId);
     if (byId) return byId;
-
-    const byName = normalizedName
-      ? bancos.find(
-          (banco) =>
-            banco.unidade === lancamento.unidade &&
-            banco.banco.trim().toLocaleLowerCase('pt-BR') === normalizedName
-        )
-      : undefined;
-    if (byName) return byName;
-
-    const unitAccounts = bancos.filter((banco) => banco.unidade === lancamento.unidade && banco.ativo);
-    return unitAccounts.length === 1 ? unitAccounts[0] : undefined;
+    const name = normalizeText(lancamento.contaBancaria);
+    if (!name) return undefined;
+    const matching = unitAccounts.filter((banco) => normalizeText(banco.banco) === name);
+    return matching.length === 1 ? matching[0] : undefined;
   };
 
   const bindLancamentoToBanco = <T extends Pick<Lancamento, 'bancoId' | 'contaBancaria' | 'unidade'>>(
@@ -1082,15 +1071,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     primeiroVencimento?: string,
     options?: { adjustBankBalance?: boolean; notify?: boolean; audit?: boolean }
   ) => {
-    if (!checkFinancialPermission('Lançamento DDL')) return;
+    if (!checkFinancialPermission('Lançamento DDL')) return false;
     dadosBase = bindLancamentoToBanco({
       ...dadosBase,
       dataCompetencia: dadosBase.dataCompetencia || dataEmissao || dadosBase.dataVencimento,
       impactoDRE: dadosBase.impactoDRE || dadosBase.tipo,
       unidade: resolveAllowedUnit(dadosBase.unidade)
     });
-    if (!ensureCompetenciaAberta(dadosBase.dataCompetencia || dadosBase.dataVencimento, 'criar lançamentos')) return;
-    if (!ensurePaidLancamentoHasBanco(dadosBase)) return;
+    if (!ensureCompetenciaAberta(dadosBase.dataCompetencia || dadosBase.dataVencimento, 'criar lançamentos')) return false;
+    if (!ensurePaidLancamentoHasBanco(dadosBase)) return false;
     if (!prazosDias || prazosDias.length === 0) {
       prazosDias = [0];
     }
@@ -1193,6 +1182,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (options?.notify !== false) {
       showToast('Lançamento preparado. Aguardando confirmação...', 'info');
     }
+    return true;
   };
   const addLancamentoComParcelamento = (
     baseData: Omit<Lancamento, 'id' | 'criadoEm'>,
@@ -1297,32 +1287,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     comprovanteUrl?: string;
     documentoRef?: string;
   }) => {
-    if (!checkFinancialPermission('Transferência de Contas')) return;
+    if (!checkFinancialPermission('Transferência de Contas')) return false;
     dados = { ...dados, unidade: resolveAllowedUnit(dados.unidade) };
     const origem = bancos.find((banco) => banco.id === dados.origemBancoId);
     const destino = bancos.find((banco) => banco.id === dados.destinoBancoId);
-    if (!origem || !destino) {
+    if (!origem?.ativo || !destino?.ativo) {
       showToast('Selecione as contas de origem e destino da transferência.', 'error');
-      return;
+      return false;
     }
     if (origem.id === destino.id) {
       showToast('A conta de destino deve ser diferente da conta de origem.', 'error');
-      return;
+      return false;
     }
     if (!Number.isFinite(dados.valor) || dados.valor <= 0) {
       showToast('Informe um valor de transferência maior que zero.', 'error');
-      return;
+      return false;
     }
     const origemCaixaFisico = isPhysicalCashAccount(origem);
     const destinoCaixaFisico = isPhysicalCashAccount(destino);
     const saldoOrigemApos = origem.saldo - dados.valor;
     if (origemCaixaFisico && saldoOrigemApos < 0) {
       showToast(`Saldo insuficiente no Caixa Físico de "${origem.unidade}".`, 'error');
-      return;
+      return false;
     }
-    if (origem.unidade !== dados.unidade || destino.unidade !== dados.unidade) {
+    if (!bankBelongsToUnit(origem, dados.unidade, units) || !bankBelongsToUnit(destino, dados.unidade, units)) {
       showToast('A transferência só pode ocorrer entre contas da unidade selecionada.', 'error');
-      return;
+      return false;
     }
 
     setBancos((prev) =>
@@ -1374,8 +1364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'CRIACAO',
       `Transferência de R$ ${dados.valor.toFixed(2)} de [${origem.banco}] para [${destino.banco}] (${dados.unidade})${dados.documentoRef ? ` — anexo: ${dados.documentoRef}` : ''}`
     );
-
-
+    return true;
   };
 
   const exportBackupJSON = () => {
@@ -1418,15 +1407,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // --- Lancamentos CRUD ---
   const addLancamento = (l: Omit<Lancamento, 'id' | 'criadoEm'>) => {
-    if (!checkFinancialPermission('Criar Lançamento')) return;
-    if (!ensureCompetenciaAberta(l.dataCompetencia || l.dataVencimento, 'criar lançamentos')) return;
+    if (!checkFinancialPermission('Criar Lançamento')) return false;
+    if (!ensureCompetenciaAberta(l.dataCompetencia || l.dataVencimento, 'criar lançamentos')) return false;
     l = bindLancamentoToBanco({
       ...l,
       dataCompetencia: l.dataCompetencia || l.dataVencimento,
       impactoDRE: l.impactoDRE || l.tipo,
       unidade: resolveAllowedUnit(l.unidade)
     });
-    if (!ensurePaidLancamentoHasBanco(l)) return;
+    if (!ensurePaidLancamentoHasBanco(l)) return false;
     const id = createEntityId(l.tipo === 'RECEITA' ? 'rec' : 'desp');
     const newL: Lancamento = {
       ...l,
@@ -1439,6 +1428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adjustBancoBalance(newL.bancoId, balanceDeltaForLancamento(newL), `Lançamento "${newL.descricao}"`);
     }
     addAuditLog('Lançamentos', 'CRIACAO', `Criou ${l.tipo.toLowerCase()} "${l.descricao}" no valor de R$ ${l.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, undefined, `Status: ${l.status}`);
+    return true;
   };
 
   const updateLancamento = (id: string, l: Partial<Lancamento>): boolean => {
@@ -1508,7 +1498,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
     const banco = bancos.find(
-      (item) => item.id === dados.bancoId && item.ativo && item.unidade === existing.unidade
+      (item) => item.id === dados.bancoId && item.ativo && bankBelongsToUnit(item, existing.unidade, units) &&
+        isPhysicalCashAccount(item) === (dados.formaPagamento === 'DINHEIRO')
     );
     if (!banco) {
       showToast(`Selecione uma conta bancária ativa da unidade "${existing.unidade}".`, 'error');
@@ -1611,7 +1602,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'liquidar parcelas'
     )) return false;
     const banco = bancos.find(
-      (item) => item.id === dados.bancoId && item.ativo && item.unidade === parcelamento.unidade
+      (item) => item.id === dados.bancoId && item.ativo && bankBelongsToUnit(item, parcelamento.unidade, units) &&
+        isPhysicalCashAccount(item) === (dados.formaPagamento === 'DINHEIRO')
     );
     if (!banco) {
       showToast(
@@ -1971,7 +1963,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unidade = resolveAllowedUnit(unidadeSolicitada);
     const caixaBanco = bancos.find(
       (banco) =>
-        banco.unidade === unidade &&
+        bankBelongsToUnit(banco, unidade, units) &&
         banco.ativo &&
         isPhysicalCashAccount(banco)
     );
@@ -2092,9 +2084,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const caixaBanco = bancos.find(
       (banco) =>
-        banco.unidade === unidade &&
+        bankBelongsToUnit(banco, unidade, units) &&
         banco.ativo &&
-        banco.banco.toLocaleLowerCase('pt-BR').includes('caixa')
+        isPhysicalCashAccount(banco)
     );
     if (!caixaBanco) {
       showToast(`Cadastre uma conta do tipo Caixa Físico para a unidade "${unidade}".`, 'error');
