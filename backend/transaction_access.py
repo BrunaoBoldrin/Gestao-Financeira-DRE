@@ -13,6 +13,7 @@ def visible_state(state: ApplicationState | None, user: dict) -> ApplicationStat
     result.lancamentos = [x for x in state.lancamentos if owns(x, user)]
     result.parcelamentos = [x for x in state.parcelamentos if owns(x, user)]
     result.auditLogs = [x for x in state.auditLogs if x.get("usuarioId") == user["id"]]
+    result.pontosEquilibrio = []
     return result
 
 
@@ -20,6 +21,15 @@ def merge_user_state(incoming: ApplicationState, previous: ApplicationState | No
     previous = previous or ApplicationState()
     result = incoming.model_copy(deep=True)
     finance = user.get("role") == "FINANCE"
+    if "pontosEquilibrio" not in incoming.model_fields_set or finance:
+        if finance and incoming.pontosEquilibrio:
+            raise PermissionError("Apenas administradores podem alterar o ponto de equilíbrio.")
+        result.pontosEquilibrio = previous.pontosEquilibrio
+    else:
+        units = {unit.get("id") for unit in incoming.units}
+        previous_points = {point.id: point for point in previous.pontosEquilibrio}
+        if any(point.unidadeId not in units and previous_points.get(point.id) != point for point in result.pontosEquilibrio):
+            raise ValueError("Selecione uma filial cadastrada para o ponto de equilíbrio.")
     for collection in ("lancamentos", "parcelamentos"):
         old = {x["id"]: x for x in getattr(previous, collection)}
         submitted = getattr(result, collection)

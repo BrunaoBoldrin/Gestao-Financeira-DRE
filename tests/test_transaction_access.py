@@ -70,3 +70,57 @@ class TransactionAccessTests(unittest.TestCase):
         saved = merge_user_state(scoped,self.state,self.user)
         self.assertEqual(len(saved.parcelamentos),4)
         self.assertEqual(len(saved.auditLogs),3)
+
+
+class BreakEvenAccessTests(unittest.TestCase):
+    def setUp(self):
+        self.admin = {"id": "admin", "role": "ADMIN"}
+        self.finance = {"id": "finance-a", "role": "FINANCE", "unit": "Rio Claro"}
+        self.point = {
+            "id": "rc:2026-11",
+            "unidadeId": "rc",
+            "competencia": "2026-11",
+            "receitaReferenciaCentavos": 200000,
+            "custos": [{"descricao": "Aluguel", "tipo": "FIXO", "valor": 100000}],
+        }
+        self.state = ApplicationState(units=[{"id": "rc"}], pontosEquilibrio=[self.point])
+
+    def test_finance_cannot_read_break_even_or_remove_it_using_a_scoped_save(self):
+        scoped = visible_state(self.state, self.finance)
+        self.assertEqual(scoped.pontosEquilibrio, [])
+        saved = merge_user_state(scoped, self.state, self.finance)
+        self.assertEqual(saved.pontosEquilibrio, self.state.pontosEquilibrio)
+
+    def test_finance_cannot_submit_break_even_data_to_state_endpoint(self):
+        with patch("backend.main.load_application_state", return_value=(4, self.state)):
+            with self.assertRaises(HTTPException) as error:
+                put_application_state(SaveStateRequest(expectedRevision=4, data=self.state), self.finance)
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_legacy_admin_snapshot_preserves_break_even(self):
+        legacy = ApplicationState(units=[{"id": "rc"}])
+        saved = merge_user_state(legacy, self.state, self.admin)
+        self.assertEqual(saved.pontosEquilibrio, self.state.pontosEquilibrio)
+
+    def test_admin_can_store_separate_records_and_auditor_can_read(self):
+        second_month = {**self.point, "id": "rc:2026-12", "competencia": "2026-12"}
+        other_unit = {**self.point, "id": "pira:2026-11", "unidadeId": "pira"}
+        incoming = ApplicationState(units=[{"id": "rc"}, {"id": "pira"}], pontosEquilibrio=[self.point, second_month, other_unit])
+        saved = merge_user_state(incoming, self.state, self.admin)
+        result = visible_state(saved, {"role": "AUDITOR"})
+        self.assertEqual([point.id for point in result.pontosEquilibrio], ["rc:2026-11", "rc:2026-12", "pira:2026-11"])
+
+    def test_cannot_write_entries_for_a_missing_unit(self):
+        with self.assertRaises(ValueError):
+            merge_user_state(ApplicationState(pontosEquilibrio=[self.point]), None, self.admin)
+
+    def test_month_id_and_data_are_validated(self):
+        from pydantic import ValidationError
+        for invalid in [
+            {**self.point, "id": "rc:2026-10"},
+            {**self.point, "competencia": "2026-13", "id": "rc:2026-13"},
+            {**self.point, "receitaReferenciaCentavos": -1},
+            {**self.point, "custos": [{"descricao": "Taxas", "tipo": "VARIAVEL_PERCENTUAL", "valor": 10001}]},
+        ]:
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                ApplicationState(pontosEquilibrio=[invalid])

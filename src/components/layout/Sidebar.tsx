@@ -53,6 +53,7 @@ export const Sidebar: React.FC<{ mobileOpen: boolean; onClose: () => void }> = (
       items: [
         { key: 'fluxo_caixa', label: 'Fluxo de Caixa', icon: 'show_chart' },
         { key: 'dre', label: 'DRE Gerencial', icon: 'analytics' },
+        { key: 'ponto_equilibrio', label: 'Ponto de Equilíbrio', icon: 'balance' },
         { key: 'documentos', label: 'Documentos (GED)', icon: 'folder_open' },
         { key: 'fechamento', label: 'Fechamentos Mensais', icon: 'lock_clock' }
       ]

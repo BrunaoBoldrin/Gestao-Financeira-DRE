@@ -9,6 +9,7 @@ export type ViewKey =
   | 'caixa_fisico'
   | 'fluxo_caixa'
   | 'dre'
+  | 'ponto_equilibrio'
   | 'documentos'
   | 'fechamento'
   | 'cadastros'
@@ -348,6 +349,20 @@ export interface CondicaoPagamento {
   ativa: boolean;
 }
 
+export interface CustoPontoEquilibrio {
+  descricao: string;
+  tipo: 'FIXO' | 'VARIAVEL_VALOR' | 'VARIAVEL_PERCENTUAL';
+  valor: number;
+}
+
+export interface PontoEquilibrioMensal {
+  id: string;
+  unidadeId: string;
+  competencia: string;
+  receitaReferenciaCentavos: number | null;
+  custos: CustoPontoEquilibrio[];
+}
+
 export interface ApplicationStateSnapshot {
   units: UnitConfig[];
   categorias: CategoriaMaster[];
@@ -366,6 +381,7 @@ export interface ApplicationStateSnapshot {
   regrasAutomacao: RegraAutomacao[];
   dreData: DREItem[];
   dreVersions: DREVersion[];
+  pontosEquilibrio?: PontoEquilibrioMensal[];
 }
 
 export type PersistenceStatus =

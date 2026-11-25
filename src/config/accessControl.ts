@@ -15,6 +15,7 @@ export const VIEW_PERMISSIONS: Record<ViewKey, readonly UserRole[]> = {
   caixa_fisico: ALL_ROLES,
   fluxo_caixa: AUDIT_ROLES,
   dre: AUDIT_ROLES,
+  ponto_equilibrio: AUDIT_ROLES,
   documentos: AUDIT_ROLES,
   fechamento: AUDIT_ROLES,
   historico: AUDIT_ROLES,

@@ -17,6 +17,7 @@ import { ReceitasView } from './components/views/ReceitasView';
 import { CaixaFisicoView } from './components/views/CaixaFisicoView';
 import { FluxoCaixaView } from './components/views/FluxoCaixaView';
 import { DREGerencialView } from './components/views/DREGerencialView';
+import { PontoEquilibrioView } from './components/views/PontoEquilibrioView';
 import { DocumentosView } from './components/views/DocumentosView';
 import { FechamentoMensalView } from './components/views/FechamentoMensalView';
 import { CadastrosView } from './components/views/CadastrosView';
@@ -66,6 +67,8 @@ const MainAppContent: React.FC = () => {
         return <FluxoCaixaView />;
       case 'dre':
         return <DREGerencialView />;
+      case 'ponto_equilibrio':
+        return <PontoEquilibrioView />;
       case 'documentos':
         return <DocumentosView />;
       case 'fechamento':
