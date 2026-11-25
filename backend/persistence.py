@@ -27,6 +27,7 @@ COLLECTIONS = (
     "regrasAutomacao",
     "dreData",
     "dreVersions",
+    "pontosEquilibrio",
     "fechamentosMensais",
 )
 SINGLETONS = ("sessaoCaixa", "fechamentoMensal")

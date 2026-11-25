@@ -13,6 +13,7 @@ import {
   RegraAutomacao,
   DREItem,
   DREVersion,
+  PontoEquilibrioMensal,
   UnitConfig,
   CategoriaMaster,
   CentroCustoMaster,
@@ -101,6 +102,8 @@ interface AppContextType {
   regrasAutomacao: RegraAutomacao[];
   dreData: DREItem[];
   dreVersions: DREVersion[];
+  pontosEquilibrio: PontoEquilibrioMensal[];
+  salvarPontoEquilibrio: (dados: PontoEquilibrioMensal) => Promise<boolean>;
   users: User[];
   
   toasts: Toast[];
@@ -245,7 +248,8 @@ const INITIAL_APPLICATION_STATE: ApplicationStateSnapshot = {
   auditLogs: INITIAL_AUDIT_LOGS,
   regrasAutomacao: INITIAL_AUTOMATIONS,
   dreData: INITIAL_DRE,
-  dreVersions: []
+  dreVersions: [],
+  pontosEquilibrio: []
 };
 
 const createFechamentoChecklist = (): FechamentoMensal['checklist'] => [
@@ -342,6 +346,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [regrasAutomacao, setRegrasAutomacao] = useState<RegraAutomacao[]>(INITIAL_AUTOMATIONS);
   const [dreData, setDreData] = useState<DREItem[]>(INITIAL_DRE);
   const [dreVersions, setDreVersions] = useState<DREVersion[]>([]);
+  const [pontosEquilibrio, setPontosEquilibrio] = useState<PontoEquilibrioMensal[]>([]);
   
   const [toasts, setToasts] = useState<Toast[]>([]);
   const revisionRef = useRef(0);
@@ -402,7 +407,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     auditLogs,
     regrasAutomacao,
     dreData,
-    dreVersions
+    dreVersions,
+    pontosEquilibrio
   }), [
     units,
     categorias,
@@ -420,7 +426,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     auditLogs,
     regrasAutomacao,
     dreData,
-    dreVersions
+    dreVersions,
+    pontosEquilibrio
   ]);
 
   const applyPersistentSnapshot = useCallback((snapshot: ApplicationStateSnapshot) => {
@@ -460,6 +467,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRegrasAutomacao(snapshot.regrasAutomacao);
     setDreData(snapshot.dreData);
     setDreVersions(snapshot.dreVersions);
+    setPontosEquilibrio(snapshot.pontosEquilibrio ?? []);
     setCurrentUserState(effectiveAuthenticatedUser);
     setCurrentViewState(effectiveAuthenticatedUser ? ROLE_DEFAULT_VIEW[effectiveAuthenticatedUser.role] : 'overview');
     setSelectedUnitState(
@@ -817,6 +825,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const formatCurrency = (value: number) =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const salvarPontoEquilibrio = async (dados: PontoEquilibrioMensal) => {
+    if (!checkAdminPermission('Salvar ponto de equilíbrio')) return false;
+    const unit = units.find((item) => item.id === dados.unidadeId && item.id !== 'all');
+    if (!unit) return false;
+    const existing = pontosEquilibrio.find((item) => item.id === dados.id);
+    const changed = JSON.stringify(existing) !== JSON.stringify(dados);
+    if (changed) {
+      setPontosEquilibrio((previous) => [...previous.filter((item) => item.id !== dados.id), dados]);
+      addAuditLog('Ponto de Equilíbrio', existing ? 'EDICAO' : 'CRIACAO',
+        `Salvou o ponto de equilíbrio de ${unit.cidade || unit.nome} (${dados.competencia}).`);
+    }
+    return flushPersistence();
+  };
 
   const resolveBancoForLancamento = (
     lancamento: Pick<Lancamento, 'bancoId' | 'contaBancaria' | 'unidade'>
@@ -1373,6 +1395,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fechamentoMensal,
         fechamentosMensais,
         dreVersions,
+        pontosEquilibrio,
         auditLogs
       },
       null,
@@ -2440,6 +2463,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         regrasAutomacao,
         dreData,
         dreVersions,
+        pontosEquilibrio,
+        salvarPontoEquilibrio,
         users,
         toasts,
         showToast,
