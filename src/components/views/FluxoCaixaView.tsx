@@ -254,8 +254,8 @@ export const FluxoCaixaView: React.FC = () => {
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
               <div><h3 className="text-xs font-bold text-[#0b1c30] uppercase tracking-wider">Período personalizado</h3><p className="text-[11px] text-gray-500 mt-0.5">A consulta inicia na competência aberta. Informe as duas datas e aplique o período.</p></div>
               <div className="flex flex-wrap items-end gap-2">
-                <div><label className="block text-[10px] font-semibold text-gray-600 mb-1">Data inicial</label><input type="date" value={dataInicioInput} onChange={(event) => setDataInicioInput(event.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white" /></div>
-                <div><label className="block text-[10px] font-semibold text-gray-600 mb-1">Data final</label><input type="date" value={dataFimInput} onChange={(event) => setDataFimInput(event.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white" /></div>
+                <div><label htmlFor="fluxo-inicio" className="block text-[10px] font-semibold text-gray-600 mb-1">Data inicial</label><CalendarInput id="fluxo-inicio" value={dataInicioInput} onValueChange={setDataInicioInput} className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white" /></div>
+                <div><label htmlFor="fluxo-fim" className="block text-[10px] font-semibold text-gray-600 mb-1">Data final</label><CalendarInput id="fluxo-fim" value={dataFimInput} onValueChange={setDataFimInput} className="px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white" /></div>
                 <button type="button" onClick={() => setPeriodoAplicado({ inicio: normalizeDateValue(dataInicioInput), fim: normalizeDateValue(dataFimInput) })} disabled={periodoPersonalizadoInvalido || !periodoInputCompleto} className="px-4 py-2 bg-[#131b2e] text-white rounded-lg text-xs font-bold disabled:bg-gray-300">Aplicar período</button>
                 <button type="button" onClick={() => { setDataInicioInput(competenciaAbertaRange.inicio); setDataFimInput(competenciaAbertaRange.fim); setPeriodoAplicado(competenciaAbertaRange); }} className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold text-gray-600">Restaurar competência</button>
               </div>
@@ -353,3 +353,4 @@ export const FluxoCaixaView: React.FC = () => {
     </div>
   );
 };
+import { CalendarInput } from '../common/MaskedInputs';

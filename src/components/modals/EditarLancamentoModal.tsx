@@ -1,5 +1,6 @@
 import { bankBelongsToUnit, categoryBelongsToUnit, isPhysicalCashAccount } from '../../utils/categoryUnits';
 import { ModalOverlay } from '../common/ModalOverlay';
+import { CalendarInput, MoneyInput } from '../common/MaskedInputs';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { Lancamento } from '../../types';
@@ -96,10 +97,16 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
             setForm((current) => ({ ...current, categoria: e.target.value, centroCusto: center?.nome || '' }));
           }}><option value="">Selecione o plano</option>{availableCategories.map((category) => <option key={category.id} value={category.nome}>{category.nome}</option>)}</select></label>
           <label className="text-xs font-bold">Centro de custo<select className={fieldClass} value={form.centroCusto} onChange={(e) => set('centroCusto', e.target.value)}><option value="">Selecione o centro</option>{availableCenters.map((center) => <option key={center.id} value={center.nome}>{center.nome}</option>)}</select></label>
-          <label className="text-xs font-bold">Valor (R$)<input className={fieldClass} inputMode="decimal" value={form.valor} onChange={(e) => set('valor', e.target.value)} /></label>
+          <label className="text-xs font-bold">Valor (R$)<MoneyInput className={fieldClass} value={form.valor} onValueChange={(value) => set('valor', value)} /></label>
           <label className="text-xs font-bold">Forma de pagamento<select className={fieldClass} value={form.formaPagamento} onChange={(e) => set('formaPagamento', e.target.value)}>{paymentOptions.map((option) => <option key={option} value={option}>{option.replaceAll('_', ' ')}</option>)}</select></label>
-          <label className="text-xs font-bold">Data de competência<input type="date" className={fieldClass} value={form.dataCompetencia} onChange={(e) => set('dataCompetencia', e.target.value)} /></label>
-          <label className="text-xs font-bold">Data de vencimento<input type="date" className={fieldClass} value={form.dataVencimento} onChange={(e) => set('dataVencimento', e.target.value)} /></label>
+          <div className="text-xs font-bold">
+            <label htmlFor="edicao-competencia">Data de competência</label>
+            <CalendarInput id="edicao-competencia" className={fieldClass} value={form.dataCompetencia} onValueChange={(value) => set('dataCompetencia', value)} />
+          </div>
+          <div className="text-xs font-bold">
+            <label htmlFor="edicao-vencimento">Data de vencimento</label>
+            <CalendarInput id="edicao-vencimento" className={fieldClass} value={form.dataVencimento} onValueChange={(value) => set('dataVencimento', value)} />
+          </div>
           <label className="text-xs font-bold md:col-span-2">Conta bancária<select className={fieldClass} value={form.bancoId} onChange={(e) => set('bancoId', e.target.value)}><option value="">Sem conta vinculada</option>{availableBanks.map((bank) => <option key={bank.id} value={bank.id}>{bank.banco}</option>)}</select></label>
           <label className="text-xs font-bold md:col-span-2">Observações<textarea rows={3} className={fieldClass} value={form.observacoes} onChange={(e) => set('observacoes', e.target.value)} /></label>
         </div>

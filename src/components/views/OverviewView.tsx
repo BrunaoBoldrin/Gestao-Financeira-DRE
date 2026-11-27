@@ -261,20 +261,20 @@ export const OverviewView: React.FC = () => {
               </summary>
               <div className="grid grid-cols-1 gap-2.5 pb-2.5 min-[360px]:grid-cols-2 sm:grid-cols-4">
             <div>
-              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Data inicial</label>
-              <input
-                type="date"
+              <label htmlFor="visao-periodo-inicio" className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Data inicial</label>
+              <CalendarInput
+                id="visao-periodo-inicio"
                 value={periodoRascunho.inicio}
-                onChange={(event) => setPeriodoRascunho((current) => ({ ...current, inicio: event.target.value }))}
+                onValueChange={(value) => setPeriodoRascunho((current) => ({ ...current, inicio: value }))}
                 className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#C5A059]"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Data final</label>
-              <input
-                type="date"
+              <label htmlFor="visao-periodo-fim" className="block text-[10px] font-semibold text-gray-300 uppercase tracking-wider mb-1">Data final</label>
+              <CalendarInput
+                id="visao-periodo-fim"
                 value={periodoRascunho.fim}
-                onChange={(event) => setPeriodoRascunho((current) => ({ ...current, fim: event.target.value }))}
+                onValueChange={(value) => setPeriodoRascunho((current) => ({ ...current, fim: value }))}
                 className="px-3 py-2 border border-[#d3e4fe] rounded-lg text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#C5A059]"
               />
             </div>
@@ -591,3 +591,4 @@ export const OverviewView: React.FC = () => {
     </div>
   );
 };
+import { CalendarInput } from '../common/MaskedInputs';

@@ -74,19 +74,19 @@ export const LancamentosPeriodFilter: React.FC<LancamentosPeriodFilterProps> = (
           <div className="grid grid-cols-2 items-end gap-2 sm:flex sm:flex-wrap">
             <div>
               <label htmlFor={id + "-start"} className="block text-xs font-semibold text-gray-600 mb-1">Data inicial</label>
-              <input
-                id={id + "-start"} type="date"
+              <CalendarInput
+                id={id + "-start"}
                 value={dataInicio}
-                onChange={(event) => onDataInicioChange(event.target.value)}
+                onValueChange={onDataInicioChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
               />
             </div>
             <div>
               <label htmlFor={id + "-end"} className="block text-xs font-semibold text-gray-600 mb-1">Data final</label>
-              <input
-                id={id + "-end"} type="date"
+              <CalendarInput
+                id={id + "-end"}
                 value={dataFim}
-                onChange={(event) => onDataFimChange(event.target.value)}
+                onValueChange={onDataFimChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#131b2e]"
               />
             </div>
@@ -129,3 +129,4 @@ export const LancamentosPeriodFilter: React.FC<LancamentosPeriodFilterProps> = (
     </div>
   );
 };
+import { CalendarInput } from './MaskedInputs';

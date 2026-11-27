@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { CalendarInput, MoneyInput } from './MaskedInputs';
 import type { CondicaoPagamento } from '../../types';
 import { type ParcelaEditavel, paymentTermsFromDates, paymentTotal } from '../../utils/paymentSchedule';
 
@@ -23,6 +24,7 @@ export function OcrPaymentSchedule({
   onConfirmDifference, onChange, onApplyCondition
 }: Props) {
   const [conditionId, setConditionId] = useState('');
+  const fieldsId = useId();
   const terms = paymentTermsFromDates(issueDate, rows);
   const key = terms.join('/');
   const condition = terms.length && conditions.find((item) => item.prazosDias.join('/') === key);
@@ -70,13 +72,14 @@ export function OcrPaymentSchedule({
           <fieldset key={index} className="rounded-lg border border-[#e5eeff] bg-white px-2.5 pb-2.5">
             <legend className="px-1 text-xs font-bold text-[#0b1c30]">Boleto {index + 1}{row.numero ? ` · nº ${row.numero}` : ''}</legend>
             <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
-              <label className="text-xs font-semibold text-gray-700">
-                Vencimento
-                <input type="date" value={row.dataVencimento} onChange={(event) => edit(index, { dataVencimento: event.target.value })} className={inputClass} />
-              </label>
+              <div className="text-xs font-semibold text-gray-700">
+                <label htmlFor={`${fieldsId}-${index}`}>Vencimento</label>
+                <CalendarInput id={`${fieldsId}-${index}`} value={row.dataVencimento}
+                  onValueChange={(value) => edit(index, { dataVencimento: value })} className={inputClass} />
+              </div>
               <label className="text-xs font-semibold text-gray-700">
                 Valor (R$)
-                <input inputMode="decimal" value={row.valor} onChange={(event) => edit(index, { valor: event.target.value })} className={inputClass} />
+                <MoneyInput min={0.01} value={row.valor} onValueChange={(value) => edit(index, { valor: value })} className={inputClass} />
               </label>
               {rows.length > 1 && (
                 <button type="button" aria-label={`Remover boleto ${index + 1}`}

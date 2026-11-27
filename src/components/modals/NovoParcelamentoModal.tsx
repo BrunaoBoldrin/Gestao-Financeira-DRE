@@ -1,5 +1,6 @@
 import { bankBelongsToUnit } from '../../utils/categoryUnits';
 import { ModalOverlay } from '../common/ModalOverlay';
+import { CalendarInput, MoneyInput } from '../common/MaskedInputs';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 
@@ -104,12 +105,12 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Data 1ª Parcela</label>
-              <input
-                type="date"
+              <label htmlFor="parcelamento-inicio" className="block text-xs font-semibold text-gray-700 mb-1">Data 1ª Parcela</label>
+              <CalendarInput
+                id="parcelamento-inicio"
                 required
                 value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
+                onValueChange={setDataInicio}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
               />
             </div>
@@ -153,16 +154,14 @@ export const NovoParcelamentoModal: React.FC<NovoParcelamentoModalProps> = ({ is
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label htmlFor="parcelamento-valor" className="block text-xs font-semibold text-gray-700 mb-1">
                 Valor Total (R$) <span className="text-red-500">*</span>
               </label>
-              <input
-                type="number"
-                step="0.01"
+              <MoneyInput
+                id="parcelamento-valor"
                 required
-                placeholder="0,00"
                 value={valorTotal}
-                onChange={(e) => setValorTotal(e.target.value)}
+                onValueChange={setValorTotal}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs font-bold text-[#0b1c30] focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
               />
             </div>

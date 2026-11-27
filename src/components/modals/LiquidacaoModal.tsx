@@ -1,5 +1,6 @@
 import { bankBelongsToUnit, isPhysicalCashAccount } from '../../utils/categoryUnits';
 import { ModalOverlay } from '../common/ModalOverlay';
+import { CalendarInput } from '../common/MaskedInputs';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { DadosLiquidacao, Lancamento } from '../../types';
@@ -143,13 +144,13 @@ export const LiquidacaoModal: React.FC<LiquidacaoModalProps> = ({ item, onClose,
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-gray-700">
+              <label htmlFor="liquidacao-data" className="mb-1 block text-xs font-bold text-gray-700">
                 {isReceipt ? 'Data do recebimento *' : 'Data do pagamento *'}
               </label>
-              <input
-                type="date"
+              <CalendarInput
+                id="liquidacao-data"
                 value={dataPagamento}
-                onChange={(event) => setDataPagamento(event.target.value)}
+                onValueChange={setDataPagamento}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-xs font-semibold text-[#0b1c30] focus:border-[#C5A059] focus:outline-none focus:ring-2 focus:ring-[#C5A059]/20"
                 required
               />

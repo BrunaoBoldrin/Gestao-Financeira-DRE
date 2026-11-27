@@ -6,6 +6,7 @@ import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
 import { buildPaymentSchedule, centsFromAmount, type ParcelaEditavel, paymentTotal, readPaymentSchedule } from '../../utils/paymentSchedule';
 import { OcrPaymentSchedule } from '../common/OcrPaymentSchedule';
+import { CalendarInput, MoneyInput, TaxIdInput } from '../common/MaskedInputs';
 import { FinalidadeFinanceira, ImpactoDRE, Lancamento, SentidoFinanceiro } from '../../types';
 import { findDuplicateDocumentByHash, findFinancialMatches } from '../../utils/financialMatching';
 
@@ -46,6 +47,7 @@ export const PendingReviewView: React.FC = () => {
   const [cnpj, setCnpj] = useState('');
   const [dataEmissao, setDataEmissao] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
+  const [competenciaManual, setCompetenciaManual] = useState(false);
   const [valorTotal, setValorTotal] = useState('');
   const [categoria, setCategoria] = useState('');
   const [centroCusto, setCentroCusto] = useState('');
@@ -84,6 +86,7 @@ export const PendingReviewView: React.FC = () => {
       setCnpj(currentDoc.dadosExtraidos.cnpj || '');
       setDataEmissao(extractedIssueDate);
       setDataCompetencia(currentDoc.dadosExtraidos.dataCompetencia || extractedIssueDate);
+      setCompetenciaManual(Boolean(data.dataCompetencia && data.dataCompetencia !== extractedIssueDate));
       setValorTotal(currentDoc.dadosExtraidos.valorTotal ? currentDoc.dadosExtraidos.valorTotal.toString() : '0');
       setCategoria(currentDoc.dadosExtraidos.categoria || 'Insumos Médicos & Estéticos');
       setCentroCusto(currentDoc.dadosExtraidos.centroCusto || 'Clínica / Atendimento');
@@ -693,11 +696,10 @@ export const PendingReviewView: React.FC = () => {
 
               <div>
                 <label htmlFor="ocr-tax-id" className="block text-[11px] font-semibold text-gray-700 mb-1">CPF/CNPJ da contraparte</label>
-                <input
+                <TaxIdInput
                   id="ocr-tax-id"
-                  type="text"
                   value={cnpj}
-                  onChange={(e) => setCnpj(e.target.value)}
+                  onValueChange={setCnpj}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs font-mono focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
                 />
               </div>
@@ -728,25 +730,22 @@ export const PendingReviewView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="ocr-document-amount" className="block text-[11px] font-semibold text-gray-700 mb-1">{usesSchedule ? 'Valor do documento (R$)' : 'Valor Total (R$)'}</label>
-                <input
+                <MoneyInput
                   id="ocr-document-amount"
-                  type="number"
-                  step="0.01"
                   value={valorTotal}
-                  onChange={(e) => { setValorTotal(e.target.value); setDifferenceConfirmed(false); }}
+                  onValueChange={(value) => { setValorTotal(value); setDifferenceConfirmed(false); }}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs font-black text-rose-700 focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
                 />
               </div>
 
               <div>
                 <label htmlFor="ocr-issue-date" className="block text-[11px] font-semibold text-gray-700 mb-1">Data de Emissão (Boleto/NF)</label>
-                <input
+                <CalendarInput
                   id="ocr-issue-date"
-                  type="date"
                   value={dataEmissao}
-                  onChange={(e) => {
-                    setDataEmissao(e.target.value);
-                    if (!dataCompetencia || dataCompetencia === dataEmissao) setDataCompetencia(e.target.value);
+                  onValueChange={(value) => {
+                    setDataEmissao(value);
+                    if (value && !competenciaManual) setDataCompetencia(value);
                   }}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs font-semibold focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
                 />
@@ -754,14 +753,14 @@ export const PendingReviewView: React.FC = () => {
             </div>
 
             <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
-              <label className="block text-[11px] font-semibold text-sky-900 mb-1">
+              <label htmlFor="ocr-competencia" className="block text-[11px] font-semibold text-sky-900 mb-1">
                 Data de competência da DRE
               </label>
-              <input
-                type="date"
+              <CalendarInput
+                id="ocr-competencia"
                 required
                 value={dataCompetencia}
-                onChange={(e) => setDataCompetencia(e.target.value)}
+                onValueChange={(value) => { setDataCompetencia(value); setCompetenciaManual(value !== dataEmissao); }}
                 className="w-full px-3 py-1.5 border border-sky-200 rounded-md text-xs font-semibold bg-white focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
               />
               <p className="text-[10px] text-sky-800 mt-1">
