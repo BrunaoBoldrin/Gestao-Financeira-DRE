@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .auth import (
@@ -263,11 +263,12 @@ def get_financial_file(file_id: str) -> Response:
     )
 
 
-@app.post("/api/ocr", dependencies=[Depends(require_write_access_when_configured)])
-def run_ocr(request: OCRRequest) -> dict:
+@app.post("/api/ocr", dependencies=[Depends(require_write_access_when_configured)], response_model=dict)
+def run_ocr(request: OCRRequest) -> dict | JSONResponse:
     max_file_mb = int(os.getenv("OCR_MAX_FILE_MB", "15"))
     max_pages = int(os.getenv("OCR_MAX_PAGES", "5"))
 
+    file_metadata = {}
     try:
         content = decode_file_data(request.file_data)
         if not content and not (request.text_content or "").strip():
@@ -275,6 +276,12 @@ def run_ocr(request: OCRRequest) -> dict:
 
         validate_document(content, request.mime_type, request.file_name, max_file_mb)
         stored = store_file(request.file_name, request.mime_type, content) if content and database_configured() else None
+        if stored:
+            file_metadata = {
+                "arquivoId": stored.id,
+                "previewUrl": f"/api/files/{stored.id}",
+                "hashArquivo": stored.sha256,
+            }
         result = analyze_document(
             content=content,
             mime_type=request.mime_type,
@@ -283,8 +290,15 @@ def run_ocr(request: OCRRequest) -> dict:
             max_pages=max_pages,
         )
     except OCRProcessingError as exc:
+        if file_metadata:
+            return JSONResponse(status_code=422, content={"detail": str(exc), "metadados": file_metadata})
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
+        if file_metadata:
+            return JSONResponse(status_code=500, content={
+                "detail": "Falha interna ao analisar o documento.",
+                "metadados": file_metadata,
+            })
         raise HTTPException(status_code=500, detail="Falha interna ao analisar o documento.") from exc
 
     return {

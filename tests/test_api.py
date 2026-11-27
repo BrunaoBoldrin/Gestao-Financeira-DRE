@@ -1,9 +1,12 @@
 import base64
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.ocr_service import OCRProcessingError
+from backend.persistence import StoredFile
 
 
 class OCRApiTests(unittest.TestCase):
@@ -74,6 +77,28 @@ class OCRApiTests(unittest.TestCase):
             json={"fileName": "vazio.pdf", "mimeType": "application/pdf"},
         )
         self.assertEqual(response.status_code, 422)
+
+    def test_unreadable_photo_returns_stored_preview_and_hash_for_manual_review(self):
+        stored = StoredFile("foto-1", "recibo.jpg", "image/jpeg", 4, "a" * 64)
+        with (
+            patch("backend.main.database_configured", return_value=True),
+            patch("backend.main.store_file", return_value=stored) as store,
+            patch("backend.main.analyze_document", side_effect=OCRProcessingError("Nenhum texto legível.")),
+        ):
+            response = self.client.post(
+                "/api/ocr",
+                json={"fileName": stored.file_name, "mimeType": stored.mime_type, "fileData": "Zm90bw=="},
+            )
+        store.assert_called_once_with(stored.file_name, stored.mime_type, b"foto")
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json(), {
+            "detail": "Nenhum texto legível.",
+            "metadados": {
+                "arquivoId": stored.id,
+                "previewUrl": "/api/files/foto-1",
+                "hashArquivo": stored.sha256,
+            },
+        })
 
 
 if __name__ == "__main__":

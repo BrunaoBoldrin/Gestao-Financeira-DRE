@@ -2,6 +2,11 @@ import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 
+const photoExtensions: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png'
+};
+
 interface UploadOCRModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -35,9 +40,32 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) {
-      processFiles(Array.from(e.target.files));
+    const files: FileList | null = e.currentTarget.files;
+    if (!files?.length) return;
+    const selectedFiles = Array.from(files);
+    e.currentTarget.value = '';
+    processFiles(selectedFiles);
+  };
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const photo: File | undefined = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';
+    if (!photo) return;
+
+    if (/\.(jpe?g|png)$/i.test(photo.name)) {
+      processFiles([photo]);
+      return;
     }
+
+    const extension = photoExtensions[photo.type];
+    if (!extension) {
+      showToast('Envie uma foto em JPG ou PNG.', 'error');
+      return;
+    }
+    processFiles([new File([photo], `foto-ocr.${extension}`, {
+      type: photo.type,
+      lastModified: photo.lastModified
+    })]);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -53,8 +81,8 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150">
         <div className="bg-[#0b1c30] text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#C5A059]">cloud_upload</span>
-            <h3 id="upload-document-title" className="font-bold text-base">Importação & Leitura OCR de Notas</h3>
+            <span className="material-symbols-outlined text-[#C5A059]" aria-hidden="true">cloud_upload</span>
+            <h3 id="upload-document-title" className="font-bold text-base">Enviar documento para OCR</h3>
           </div>
           <button type="button" aria-label="Fechar envio" onClick={onClose} className="grid size-11 shrink-0 place-items-center rounded-lg text-gray-300 hover:bg-white/10 hover:text-white">
             <span className="material-symbols-outlined">close</span>
@@ -62,8 +90,8 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
         </div>
 
         <div className="p-6">
-          <p className="text-xs text-gray-600 mb-4">
-            Envie arquivos PDF, XML ou Imagens (NF-e, NFS-e, Recibos ou Cupons). O motor OCR fará a extração automática dos dados para conferência lado a lado.
+          <p className="mb-4 text-sm text-gray-600">
+            Envie faturas, notas ou comprovantes. O documento ficará em Pendências / OCR para conferência.
           </p>
 
           <div
@@ -73,35 +101,38 @@ export const UploadOCRModal: React.FC<UploadOCRModalProps> = ({ isOpen, onClose 
             }}
             onDragLeave={() => setDragActive(false)}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition flex flex-col items-center justify-center cursor-pointer ${
+            className={`rounded-xl border-2 border-dashed p-4 text-center transition sm:p-6 ${
               dragActive
                 ? 'border-[#C5A059] bg-[#eff4ff]'
                 : 'border-gray-300 bg-[#f8f9ff] hover:border-[#131b2e]'
             }`}
           >
-            <span className="material-symbols-outlined text-4xl text-[#C5A059] mb-2">upload_file</span>
-            <p className="text-xs font-bold text-[#0b1c30] mb-1">
-              Arraste e solte seus comprovantes ou notas fiscais aqui
-            </p>
-            <p className="text-[11px] text-gray-500 mb-4">Suporta PDF, PNG, JPG e XML até 15 MB</p>
-
-            <label className="px-4 py-2 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] cursor-pointer shadow-xs transition">
-              <span>Selecionar Arquivos</span>
-              <input
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.xml"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2.5">
-            <span className="material-symbols-outlined text-blue-600 text-lg shrink-0 mt-0.5">auto_awesome</span>
-            <p className="text-[11px] text-blue-800 leading-relaxed">
-              <strong>Processamento local:</strong> PDFs com texto são lidos diretamente; documentos digitalizados e imagens passam pelo OCR Python/Tesseract antes da conferência.
-            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="relative flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#131b2e] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#0b1c30] focus-within:ring-2 focus-within:ring-[#C5A059]">
+                <span className="material-symbols-outlined text-xl" aria-hidden="true">upload_file</span>
+                Selecionar arquivos
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.xml"
+                  multiple
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
+              </label>
+              <label className="relative flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[#d3e4fe] bg-white px-3 py-2 text-sm font-semibold text-[#0b1c30] transition hover:bg-[#eff4ff] focus-within:ring-2 focus-within:ring-[#C5A059]">
+                <span className="material-symbols-outlined text-xl" aria-hidden="true">photo_camera</span>
+                Tirar foto
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  capture="environment"
+                  onChange={handlePhotoChange}
+                  className="sr-only"
+                />
+              </label>
+            </div>
+            <p className="mt-3 hidden text-xs text-gray-600 sm:block">Você também pode arrastar os arquivos até aqui.</p>
+            <p className="mt-1 text-xs text-gray-600">PDF, XML, JPG ou PNG, até 15 MB por arquivo.</p>
           </div>
         </div>
       </div>
