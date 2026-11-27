@@ -72,6 +72,52 @@ class TransactionAccessTests(unittest.TestCase):
         self.assertEqual(len(saved.auditLogs),3)
 
 
+class FinanceClientAccessTests(unittest.TestCase):
+    def setUp(self):
+        self.finance = {"id": "finance-rc", "role": "FINANCE", "unit": "Rio Claro"}
+        self.client = {
+            "id": "client-rc", "nome": "Cliente Rio Claro", "cnpj": "123.456.789-00",
+            "cidade": "", "tipo": "CLIENTE", "ativo": True, "unidadeIds": ["rc"],
+        }
+        self.other = {**self.client, "id": "client-pira", "unidadeIds": ["pira"]}
+        self.supplier = {"id": "forn-1", "tipo": "FORNECEDOR", "unidadeIds": ["rc"]}
+        self.state = ApplicationState(
+            units=[
+                {"id": "rc", "nome": "Rio Claro", "ativa": True},
+                {"id": "pira", "nome": "Piracicaba", "ativa": True},
+            ],
+            fornecedores=[self.other, self.supplier],
+        )
+
+    def test_finance_registers_client_only_in_own_clinic_and_keeps_other_records(self):
+        submitted = visible_state(self.state, self.finance)
+        self.assertEqual(submitted.fornecedores, [self.supplier])
+        submitted.fornecedores = [{**self.client, "planoContaId": "ignored"}]
+        saved = merge_user_state(submitted, self.state, self.finance)
+        self.assertEqual(saved.fornecedores, [self.other, self.supplier, self.client])
+        self.assertEqual(visible_state(saved, self.finance).fornecedores, [self.supplier, self.client])
+        other_finance = {**self.finance, "unit": "Piracicaba"}
+        self.assertEqual(visible_state(saved, other_finance).fornecedores, [self.other, self.supplier])
+
+    def test_finance_cannot_create_outside_clinic_or_alter_existing_parties(self):
+        for invalid in [
+            {**self.client, "unidadeIds": ["pira"]},
+            {**self.client, "unidadeIds": ["rc", "pira"]},
+            {**self.client, "unidadeIds": []},
+            {**self.client, "tipo": "FORNECEDOR"},
+            {**self.other, "nome": "Alterado"},
+            {**self.supplier, "nome": "Alterado"},
+        ]:
+            with self.subTest(invalid=invalid), self.assertRaises(PermissionError):
+                merge_user_state(ApplicationState(fornecedores=[invalid]), self.state, self.finance)
+
+    def test_finance_cannot_register_duplicate_client_in_same_clinic(self):
+        self.state.fornecedores.append(self.client)
+        duplicate = {**self.client, "id": "new", "cnpj": "12345678900"}
+        with self.assertRaisesRegex(ValueError, "Já existe"):
+            merge_user_state(ApplicationState(fornecedores=[duplicate]), self.state, self.finance)
+
+
 class BreakEvenAccessTests(unittest.TestCase):
     def setUp(self):
         self.admin = {"id": "admin", "role": "ADMIN"}

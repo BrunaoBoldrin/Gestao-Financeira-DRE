@@ -1,4 +1,4 @@
-import { bankBelongsToUnit, isPhysicalCashAccount } from '../utils/categoryUnits';
+import { bankBelongsToUnit, findUnit, isPhysicalCashAccount, supplierBelongsToUnit } from '../utils/categoryUnits';
 import { normalizeText } from '../utils/text';
 import { masterFingerprint, type MasterImport } from '../utils/masterWorkbook';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -137,6 +137,7 @@ interface AppContextType {
   deleteCentroCusto: (id: string) => void;
 
   addFornecedor: (f: Omit<FornecedorMaster, 'id'>) => void;
+  addCliente: (client: Pick<FornecedorMaster, 'nome' | 'cnpj' | 'cidade'>, unitId: string) => Promise<FornecedorMaster | null>;
   updateFornecedor: (id: string, f: Partial<FornecedorMaster>) => void;
   toggleFornecedorActive: (id: string) => void;
   deleteFornecedor: (id: string) => void;
@@ -988,6 +989,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setFornecedores((prev) => [...prev, newF]);
     showToast(`Cadastro de "${f.nome}" realizado!`, 'success');
   };
+  const addCliente: AppContextType['addCliente'] = async (client, unitId) => {
+    if (!checkFinancialPermission('Cadastrar cliente')) return null;
+    const unit = findUnit(isFinance ? currentUser?.unit : unitId, units);
+    if (!unit?.ativa || unit.id !== unitId) {
+      showToast('Selecione uma clínica ativa vinculada ao seu acesso.', 'error');
+      return null;
+    }
+    const nome = client.nome.trim();
+    const cnpj = client.cnpj.trim();
+    const cidade = client.cidade.trim();
+    if (!nome) {
+      showToast('Informe o nome ou a razão social do cliente.', 'error');
+      return null;
+    }
+
+    const documentKey = cnpj.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    const existing = fornecedores.find((item) =>
+      item.tipo === 'CLIENTE' && supplierBelongsToUnit(item, unit.id, units) &&
+      (documentKey
+        ? String(item.cnpj || '').replace(/[^a-z0-9]/gi, '').toUpperCase() === documentKey
+        : normalizeText(item.nome) === normalizeText(nome))
+    );
+    if (existing && !existing.ativo) {
+      showToast('O cliente já existe nesta clínica e está inativo. Solicite a reativação.', 'error');
+      return null;
+    }
+
+    const registered: FornecedorMaster = existing || {
+      id: createEntityId('forn'),
+      nome,
+      cnpj,
+      cidade,
+      tipo: 'CLIENTE',
+      ativo: true,
+      unidadeIds: [unit.id]
+    };
+    if (!existing) {
+      setFornecedores((previous) => [...previous, registered]);
+      addAuditLog('Favorecidos', 'CRIACAO', `Cadastrou cliente "${nome}" em ${unit.nome}.`);
+    }
+    if (!(await flushPersistence())) {
+      showToast('O cadastro ainda não foi confirmado. Confira a conexão e tente salvar novamente.', 'error');
+      return null;
+    }
+    showToast(existing ? 'Cliente já cadastrado e selecionado.' : 'Cliente salvo e selecionado.', 'success');
+    return registered;
+  };
   const updateFornecedor = (id: string, f: Partial<FornecedorMaster>) => {
     if (!checkAdminPermission('Editar Fornecedor')) return;
     setFornecedores((prev) => prev.map((item) => (item.id === id ? { ...item, ...f } : item)));
@@ -1720,6 +1768,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Analisando arquivo "${file.name}" via Motor OCR Inteligente...`, 'info');
     addAuditLog('Documentos OCR', 'CRIACAO', `Upload de arquivo "${file.name}" para OCR`);
 
+    let storedFile: Partial<Pick<DocumentoOCR, 'previewUrl' | 'hashArquivo'>> = {};
     try {
       // Read file content
       const base64Data = await new Promise<string>((resolve) => {
@@ -1752,6 +1801,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       const result = await response.json().catch(() => null);
+      if (result?.metadados?.previewUrl) {
+        storedFile = {
+          previewUrl: result.metadados.previewUrl,
+          hashArquivo: result.metadados.hashArquivo
+        };
+      }
       if (!response.ok) {
         throw new Error(result?.detail || `Falha no OCR (HTTP ${response.status})`);
       }
@@ -1833,6 +1888,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           doc.id === docId
             ? {
                 ...doc,
+                ...storedFile,
                 status: 'PENDENTE_REVISAO',
                 confiancaOCR: 0,
                 dadosExtraidos: {
@@ -2474,6 +2530,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleCentroCustoActive,
         deleteCentroCusto,
         addFornecedor,
+        addCliente,
         updateFornecedor,
         toggleFornecedorActive,
         deleteFornecedor,

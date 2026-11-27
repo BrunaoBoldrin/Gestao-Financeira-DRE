@@ -1,6 +1,7 @@
 import { bankBelongsToUnit, findUnit, isPhysicalCashAccount, supplierBelongsToUnit } from '../../utils/categoryUnits';
 import { CadastroSearch } from '../common/CadastroSearch';
 import { ModalOverlay } from '../common/ModalOverlay';
+import { NovoClienteModal } from './NovoClienteModal';
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { TipoLancamento, StatusLancamento } from '../../types';
@@ -30,6 +31,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     condicoesPagamento,
     currentUser,
     isFinance,
+    canExecuteFinancialActions,
     persistenceStatus,
     flushPersistence,
     showToast
@@ -54,6 +56,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   const [contaDestinoBancoId, setContaDestinoBancoId] = useState('');
   const [anexo, setAnexo] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newClientQuery, setNewClientQuery] = useState<string | null>(null);
 
   const handleClose = () => {
     setAnexo(null);
@@ -66,6 +69,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     setCentroCusto('');
     setBancoId('');
     setContaDestinoBancoId('');
+    setNewClientQuery(null);
     onClose();
   };
 
@@ -114,6 +118,21 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   };
 
   if (!isOpen) return null;
+
+  if (newClientQuery !== null && branch?.ativa && tipo === 'RECEITA') {
+    return (
+      <NovoClienteModal
+        branch={branch}
+        query={newClientQuery}
+        onClose={() => setNewClientQuery(null)}
+        onSaved={(client) => {
+          setFornecedorCliente(client.nome);
+          setSelectedFornecedorId(client.id);
+          setNewClientQuery(null);
+        }}
+      />
+    );
+  }
 
   const numVal = Number(valor);
   const activeConditions = condicoesPagamento.filter((condition) => condition.ativa);
@@ -324,9 +343,12 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             value={fornecedorCliente}
             disabled={!targetUnit}
             required={tipo === 'DESPESA'}
-            placeholder={tipo === 'DESPESA' ? 'Busque pelo nome ou CPF/CNPJ' : 'Digite o cliente ou selecione um cadastro'}
-            emptyMessage={tipo === 'DESPESA' ? 'Nenhum favorecido ativo vinculado a esta filial.' : 'Nenhum cliente ativo nesta filial. Você pode informar o nome.'}
+            placeholder="Busque pelo nome ou CPF/CNPJ"
+            emptyMessage={tipo === 'DESPESA' ? 'Nenhum favorecido ativo vinculado a esta filial.' : 'Nenhum cliente ativo nesta filial. Digite um nome para cadastrar.'}
             options={parties.map((item) => ({ id: item.id, nome: item.nome, codigo: item.cnpj || '' }))}
+            createAction={tipo === 'RECEITA' && canExecuteFinancialActions
+              ? { label: 'Adicionar cliente', onCreate: setNewClientQuery }
+              : undefined}
             onChange={(name) => {
               setFornecedorCliente(name);
               setSelectedFornecedorId('');
