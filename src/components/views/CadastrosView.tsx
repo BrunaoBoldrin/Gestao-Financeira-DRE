@@ -1,4 +1,5 @@
 import { bankBelongsToUnit, findUnit } from '../../utils/categoryUnits';
+import { formatTaxId } from '../../utils/text';
 import { MasterDataExchange } from '../common/MasterDataExchange';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
@@ -704,7 +705,7 @@ export const CadastrosView: React.FC = () => {
                     <input
                       type="text"
                       value={cnpj}
-                      onChange={(e) => setCnpj(e.target.value)}
+                      onChange={(e) => setCnpj(formatTaxId(e.target.value))}
                       className="w-full px-3 py-2 border rounded text-xs focus:ring-2 focus:ring-[#131b2e]"
                     />
                   </div>

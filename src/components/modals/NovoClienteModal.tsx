@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { FornecedorMaster, UnitConfig } from '../../types';
+import { formatTaxId } from '../../utils/text';
 import { ModalOverlay } from '../common/ModalOverlay';
 
 interface NovoClienteModalProps {
@@ -16,7 +17,7 @@ export function NovoClienteModal({ branch, query, onClose, onSaved }: NovoClient
   const { addCliente } = useApp();
   const isDocument = /^[0-9./\s-]+$/.test(query);
   const [name, setName] = useState(isDocument ? '' : query);
-  const [document, setDocument] = useState(isDocument ? query : '');
+  const [document, setDocument] = useState(isDocument ? formatTaxId(query) : '');
   const [city, setCity] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -54,7 +55,8 @@ export function NovoClienteModal({ branch, query, onClose, onSaved }: NovoClient
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs font-semibold text-gray-700">
               CPF ou CNPJ (opcional)
-              <input value={document} onChange={(event) => setDocument(event.target.value)} maxLength={18} className={fieldClass} />
+              <input value={document} onChange={(event) => setDocument(formatTaxId(event.target.value))}
+                placeholder="CPF ou CNPJ" className={fieldClass} />
             </label>
             <label className="block text-xs font-semibold text-gray-700">
               Cidade / UF (opcional)

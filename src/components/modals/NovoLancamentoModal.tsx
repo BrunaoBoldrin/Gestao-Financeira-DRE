@@ -94,11 +94,12 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
   const activeCenters = centrosCusto.filter((item) => item.ativo);
   const selectedPlan = defaultExpensePlan || plans.find((item) => item.id === categoria);
   const defaultCenter = activeCenters.find((item) => item.id === selectedPlan?.centroCustoId);
+  const isTransfer = formaPagamento === 'TRANSFERENCIA';
   const availableBanks = bancos.filter((banco) =>
     banco.ativo && bankBelongsToUnit(banco, targetUnit, units) &&
-    (formaPagamento === 'TRANSFERENCIA' || isPhysicalCashAccount(banco) === (formaPagamento === 'DINHEIRO'))
+    (isTransfer || isPhysicalCashAccount(banco) === (formaPagamento === 'DINHEIRO'))
   );
-  const mustSelectBank = status === 'PAGO' || formaPagamento === 'TRANSFERENCIA';
+  const mustSelectBank = status === 'PAGO' || isTransfer;
   const selectedBank = availableBanks.find((item) => item.id === bancoId);
   const selectedDestination = availableBanks.find((item) => item.id === contaDestinoBancoId && item.id !== bancoId);
 
@@ -173,16 +174,16 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
     if (!targetUnit) { showToast('Selecione uma filial ativa para continuar.', 'error'); return; }
     if (!Number.isFinite(numVal) || numVal <= 0) { showToast('Informe um valor maior que zero.', 'error'); return; }
 
-    if (tipo === 'DESPESA' && !selectedParty) {
+    if (!isTransfer && tipo === 'DESPESA' && !selectedParty) {
       showToast('Selecione um favorecido cadastrado na lista.', 'error'); return;
     }
     const selectedCadastro = selectedPlan;
-    if (!selectedCadastro) {
+    if (!isTransfer && !selectedCadastro) {
       showToast('Selecione uma receita ou despesa da lista de cadastros.', 'error');
       return;
     }
     const linkedCenter = defaultCenter ?? activeCenters.find((item) => item.nome === centroCusto);
-    if (!linkedCenter) {
+    if (!isTransfer && !linkedCenter) {
       showToast('Selecione um centro de custo ativo para continuar.', 'error');
       return;
     }
@@ -191,7 +192,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       showToast(`Cadastre ou selecione uma conta bancária para a unidade "${targetUnit}".`, 'error');
       return;
     }
-    if (formaPagamento === 'TRANSFERENCIA' && !selectedDestination) {
+    if (isTransfer && !selectedDestination) {
       showToast('Selecione uma conta de destino diferente da origem.', 'error');
       return;
     }
@@ -210,13 +211,14 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       }
     }
 
-    if (formaPagamento === 'TRANSFERENCIA') {
+    if (isTransfer) {
+      const action = selectedBank && isPhysicalCashAccount(selectedBank) ? 'Depósito em conta' : 'Transferência entre contas';
       const created = addTransferencia({
         origemBancoId: bancoId,
         destinoBancoId: contaDestinoBancoId,
         valor: numVal,
         data: dataEmissao,
-        descricao: observacoes.trim() ? selectedCadastro.nome + ' — ' + observacoes.trim() : selectedCadastro.nome,
+        descricao: observacoes.trim() || action,
         unidade: targetUnit,
         comprovanteUrl,
         documentoRef: anexo?.name
@@ -234,6 +236,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
       return;
     }
 
+    if (!selectedCadastro || !linkedCenter) { setIsSubmitting(false); return; }
     const payload = {
       descricao: selectedCadastro.nome,
       tipo,
@@ -338,6 +341,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                   : 'Escolha a filial para carregar as contas e os favorecidos.'}</p>
               )}
             </div>
+          {!isTransfer && <>
           <CadastroSearch
             label={tipo === 'DESPESA' ? 'Favorecido / Fornecedor' : 'Cliente (opcional)'}
             value={fornecedorCliente}
@@ -524,6 +528,23 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
           </div>
 
+          </>}
+
+          {isTransfer && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs font-semibold text-gray-700">
+                Valor da transferência (R$)
+                <input type="number" min="0.01" step="0.01" required value={valor} onChange={(event) => setValor(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+              </label>
+              <label className="text-xs font-semibold text-gray-700">
+                Data da transferência
+                <input type="date" required value={dataEmissao} onChange={(event) => setDataEmissao(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+              </label>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="manual-forma" className="block text-xs font-semibold text-gray-700 mb-1">Forma de Pagamento</label>
@@ -579,10 +600,11 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
 
           {formaPagamento === 'TRANSFERENCIA' && (
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+              <label htmlFor="manual-conta-destino" className="block text-xs font-semibold text-gray-700 mb-1">
                 Conta de destino <span className="text-red-500">*</span>
               </label>
               <select
+                id="manual-conta-destino"
                 value={selectedDestination?.id ?? ''}
                 onChange={(e) => setContaDestinoBancoId(e.target.value)}
                 required disabled={!selectedBank}
@@ -593,6 +615,11 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
                   <option key={banco.id} value={banco.id}>{banco.banco}</option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-gray-600">
+                {selectedBank && isPhysicalCashAccount(selectedBank)
+                  ? 'O depósito reduz o Caixa Físico e credita a conta de destino.'
+                  : 'A transferência debita a origem e credita a conta de destino.'}
+              </p>
             </div>
           )}
 
@@ -657,7 +684,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               className="px-5 py-2 bg-[#131b2e] text-white rounded-md text-xs font-bold hover:bg-[#0b1c30] disabled:bg-gray-400 disabled:cursor-not-allowed shadow-xs transition flex items-center gap-1.5"
             >
               <span className="material-symbols-outlined text-base">check_circle</span>
-              {isSubmitting ? 'Confirmando...' : 'Salvar Lançamento'}
+              {isSubmitting ? 'Confirmando...' : isTransfer ? 'Confirmar transferência' : 'Salvar Lançamento'}
             </button>
           </div>
         </form>

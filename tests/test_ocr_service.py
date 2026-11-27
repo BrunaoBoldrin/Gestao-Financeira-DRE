@@ -171,7 +171,7 @@ class OCRServiceTests(unittest.TestCase):
         self.assertEqual(result["formaPagamento"], "BOLETO")
         self.assertEqual(result["valorTotal"], 1250.0)
 
-    def test_splits_nfe_installments(self):
+    def test_reads_nfe_installments_in_one_review(self):
         xml = """<nfeProc><NFe><infNFe Id="NFe35123456789012345678901234567890123456789012">
         <ide><dhEmi>2026-08-05T10:00:00-03:00</dhEmi></ide>
         <emit><CNPJ>02345678000112</CNPJ><xNome>Galderma Brasil Ltda</xNome></emit>
@@ -186,11 +186,89 @@ class OCRServiceTests(unittest.TestCase):
             max_pages=5,
         )
 
-        entities = result["entidadesFinanceiras"]
-        self.assertEqual(len(entities), 2)
-        self.assertEqual(entities[0]["parcelaNumero"], "001")
-        self.assertEqual(entities[1]["dataVencimento"], "2026-10-05")
-        self.assertEqual(sum(item["valorTotal"] for item in entities), 3000.0)
+        self.assertEqual(result["entidadesFinanceiras"], [])
+        self.assertEqual(result["valorTotal"], 3000.0)
+        self.assertEqual(result["parcelas"], [
+            {"numero": "001", "dataVencimento": "2026-09-05", "valor": 1000.0},
+            {"numero": "002", "dataVencimento": "2026-10-05", "valor": 2000.0},
+        ])
+
+    def test_reads_printed_invoice_dates_and_terms_without_counting_tax_totals(self):
+        text = """DANFE Nota Fiscal Eletronica
+Emissão: 05/08/2026
+Valor Total do Frete: 100,00
+Valor Total da Nota: R$ 312,70
+Condição de pagamento: 30/60 dias
+FATURA / DUPLICATAS
+NÚMERO VENCIMENTO VALOR
+001 04/09/2026 110,00
+002
+07/10/2026
+202,70
+"""
+        result = analyze_document(b"", "text/plain", "nota.txt", text_content=text)
+        self.assertEqual(result["dataEmissao"], "2026-08-05")
+        self.assertEqual(result["valorTotal"], 312.70)
+        self.assertEqual(result["prazosPagamento"], [30, 60])
+        self.assertEqual([(row["dataVencimento"], row["valor"]) for row in result["parcelas"]], [
+            ("2026-09-04", 110.0), ("2026-10-07", 202.70)
+        ])
+
+    def test_does_not_invent_due_date_from_invoice_without_payment_information(self):
+        text = "NOTA FISCAL\nEmissao: 05/08/2026\nSaida: 05/08/2026\nValor Total: 100,00"
+        result = analyze_document(b"", "text/plain", "nota.txt", text_content=text)
+        self.assertEqual(result["dataVencimento"], "")
+        self.assertEqual(result["prazosPagamento"], [])
+
+    def test_groups_matching_boleto_pages_under_invoice(self):
+        pages = [
+            "DANFE\nEmitente: Fornecedor Alfa Ltda\nCNPJ: 11.111.111/0001-11\n"
+            "Emissao: 05/08/2026\nValor Total da Nota: 250,00",
+            "BOLETO\nBeneficiario: Fornecedor Alfa Ltda\nCNPJ: 11.111.111/0001-11\n"
+            "Vencimento: 04/09/2026\nValor do documento: 100,00\n"
+            "00190.00009 01234.567890 12345.678901 1 12340000010000",
+            "BOLETO\nBeneficiario: Fornecedor Alfa Ltda\nCNPJ: 11.111.111/0001-11\n"
+            "Vencimento: 05/10/2026\nValor do documento: 150,00\n"
+            "03399.00005 09876.543210 98765.432109 2 23450000015000",
+        ]
+        for mismatch in (False, True):
+            with self.subTest(mismatch=mismatch):
+                with pymupdf.open() as pdf:
+                    for idx, text in enumerate(pages):
+                        page = pdf.new_page()
+                        if mismatch and idx == 2:
+                            text = text.replace("11.111.111/0001-11", "22.222.222/0001-22")
+                        page.insert_text((50, 50), text, fontsize=10)
+                    result = analyze_document(pdf.tobytes(), "application/pdf", "nota.pdf")
+                if mismatch:
+                    self.assertEqual([item["tipo"] for item in result["entidadesFinanceiras"]], ["NFE", "BOLETO", "BOLETO"])
+                    self.assertEqual(result["parcelas"], [])
+                else:
+                    self.assertEqual(result["entidadesFinanceiras"], [])
+                    self.assertEqual([row["valor"] for row in result["parcelas"]], [100, 150])
+                    self.assertTrue(all(len(row["linhaDigitavel"]) == 47 for row in result["parcelas"]))
+
+    def test_coupon_and_notinha_with_counterparty_tax_id(self):
+        coupon = "CUPOM FISCAL\nCNPJ: 11.111.111/0001-11\nCPF do consumidor: 123.456.789-00\nValor total: 50,00"
+        note = "NOTINHA\nCPF: 12345678900\nValor total: 50,00"
+        for data, kind, tax_id in [(coupon, "CUPOM", "11.111.111/0001-11"), (note, "NOTINHA", "123.456.789-00")]:
+            with self.subTest(kind=kind):
+                result = analyze_document(b"", "text/plain", "documento.txt", text_content=data)
+                self.assertEqual(result["tipo"], kind)
+                self.assertEqual(result["cnpj"], tax_id)
+
+    def test_receipt_selects_payer_tax_id_for_money_received(self):
+        text = """COMPROVANTE DE PIX
+Pix recebido
+Pagador: Maria
+CPF: 123.456.789-00
+Recebedor: Clínica Teste
+CNPJ: 11.111.111/0001-11
+Valor total: 50,00
+"""
+        result = analyze_document(b"", "text/plain", "pix.txt", text_content=text)
+        self.assertEqual(result["cnpj"], "123.456.789-00")
+        self.assertEqual(result["cpfCnpjRecebedor"], "11.111.111/0001-11")
 
     def test_splits_statement_income_expense_and_transfer(self):
         text = """
