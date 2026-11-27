@@ -130,6 +130,15 @@ main > *, .grid > * { min-width: 0; }
   max-height: none;
   overflow: visible;
 }
+.mask-calendar-picker::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
 @media (max-width: 1023px) {
   main .flex > div, .modal-overlay .flex > div { min-width: 0; }
   main input, main select, main textarea,

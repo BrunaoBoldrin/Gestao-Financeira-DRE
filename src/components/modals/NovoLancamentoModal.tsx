@@ -1,5 +1,7 @@
 import { bankBelongsToUnit, findUnit, isPhysicalCashAccount, supplierBelongsToUnit } from '../../utils/categoryUnits';
 import { CadastroSearch } from '../common/CadastroSearch';
+import { CalendarInput, MoneyInput } from '../common/MaskedInputs';
+import { formatTaxId } from '../../utils/text';
 import { ModalOverlay } from '../common/ModalOverlay';
 import { NovoClienteModal } from './NovoClienteModal';
 import React, { useState } from 'react';
@@ -349,7 +351,7 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             required={tipo === 'DESPESA'}
             placeholder="Busque pelo nome ou CPF/CNPJ"
             emptyMessage={tipo === 'DESPESA' ? 'Nenhum favorecido ativo vinculado a esta filial.' : 'Nenhum cliente ativo nesta filial. Digite um nome para cadastrar.'}
-            options={parties.map((item) => ({ id: item.id, nome: item.nome, codigo: item.cnpj || '' }))}
+            options={parties.map((item) => ({ id: item.id, nome: item.nome, codigo: formatTaxId(item.cnpj || '') }))}
             createAction={tipo === 'RECEITA' && canExecuteFinancialActions
               ? { label: 'Adicionar cliente', onCreate: setNewClientQuery }
               : undefined}
@@ -400,40 +402,37 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
               <label htmlFor="manual-valor" className="block text-xs font-semibold text-gray-700 mb-1">
                 Valor Total (R$) <span className="text-red-500">*</span>
               </label>
-              <input
+              <MoneyInput
                 id="manual-valor"
-                type="number"
-                min="0.01"
-                step="0.01"
+                min={0.01}
                 required
-                placeholder="0,00"
                 value={valor}
-                onChange={(e) => setValor(e.target.value)}
+                onValueChange={setValor}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs font-bold text-[#0b1c30] focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Data de Emissão (NF/Boleto)</label>
-              <input
-                type="date"
+              <label htmlFor="manual-emissao" className="block text-xs font-semibold text-gray-700 mb-1">Data de Emissão (NF/Boleto)</label>
+              <CalendarInput
+                id="manual-emissao"
                 required
                 value={dataEmissao}
-                onChange={(e) => setDataEmissao(e.target.value)}
+                onValueChange={setDataEmissao}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-medium"
               />
             </div>
           </div>
 
           <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
-            <label className="block text-xs font-semibold text-sky-900 mb-1">
+            <label htmlFor="manual-competencia" className="block text-xs font-semibold text-sky-900 mb-1">
               Data de competência da DRE <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
+            <CalendarInput
+              id="manual-competencia"
               required
               value={dataCompetencia}
-              onChange={(e) => setDataCompetencia(e.target.value)}
+              onValueChange={setDataCompetencia}
               className="w-full px-3 py-2 border border-sky-200 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none bg-white font-medium"
             />
             <p className="text-[10px] text-sky-800 mt-1">
@@ -501,12 +500,12 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             </div>
           ) : (
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Data de Vencimento</label>
-              <input
-                type="date"
+              <label htmlFor="manual-vencimento" className="block text-xs font-semibold text-gray-700 mb-1">Data de Vencimento</label>
+              <CalendarInput
+                id="manual-vencimento"
                 required
                 value={dataVencimento}
-                onChange={(e) => setDataVencimento(e.target.value)}
+                onValueChange={setDataVencimento}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
               />
             </div>
@@ -534,14 +533,14 @@ export const NovoLancamentoModal: React.FC<NovoLancamentoModalProps> = ({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="text-xs font-semibold text-gray-700">
                 Valor da transferência (R$)
-                <input type="number" min="0.01" step="0.01" required value={valor} onChange={(event) => setValor(event.target.value)}
+                <MoneyInput min={0.01} required value={valor} onValueChange={setValor}
                   className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
               </label>
-              <label className="text-xs font-semibold text-gray-700">
-                Data da transferência
-                <input type="date" required value={dataEmissao} onChange={(event) => setDataEmissao(event.target.value)}
+              <div className="text-xs font-semibold text-gray-700">
+                <label htmlFor="manual-data-transferencia">Data da transferência</label>
+                <CalendarInput id="manual-data-transferencia" required value={dataEmissao} onValueChange={setDataEmissao}
                   className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
-              </label>
+              </div>
             </div>
           )}
 

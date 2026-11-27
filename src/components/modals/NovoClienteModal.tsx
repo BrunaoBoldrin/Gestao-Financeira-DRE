@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { FornecedorMaster, UnitConfig } from '../../types';
+import { TaxIdInput } from '../common/MaskedInputs';
 import { formatTaxId } from '../../utils/text';
 import { ModalOverlay } from '../common/ModalOverlay';
 
@@ -55,7 +56,7 @@ export function NovoClienteModal({ branch, query, onClose, onSaved }: NovoClient
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs font-semibold text-gray-700">
               CPF ou CNPJ (opcional)
-              <input value={document} onChange={(event) => setDocument(formatTaxId(event.target.value))}
+              <TaxIdInput value={document} onValueChange={setDocument}
                 placeholder="CPF ou CNPJ" className={fieldClass} />
             </label>
             <label className="block text-xs font-semibold text-gray-700">

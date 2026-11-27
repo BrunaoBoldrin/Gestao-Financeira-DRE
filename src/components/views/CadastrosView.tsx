@@ -1,5 +1,6 @@
 import { bankBelongsToUnit, findUnit } from '../../utils/categoryUnits';
 import { formatTaxId } from '../../utils/text';
+import { MoneyInput, TaxIdInput } from '../common/MaskedInputs';
 import { MasterDataExchange } from '../common/MasterDataExchange';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useState } from 'react';
@@ -402,7 +403,7 @@ export const CadastrosView: React.FC = () => {
                       <td className="p-3 font-bold text-[#0b1c30]">{f.nome}<p className="text-[10px] font-normal text-gray-500 mt-1">{f.tipo === 'CLIENTE'
                         ? 'Cliente'
                         : categorias.find((item) => item.id === f.planoContaId)?.nome || 'Favorecido sem plano padrão'}</p></td>
-                      <td className="p-3 font-mono text-gray-600">{f.cnpj || '-'}</td>
+                      <td className="p-3 font-mono text-gray-600">{formatTaxId(f.cnpj || '') || '-'}</td>
                       <td className="p-3 text-gray-600">{f.cidade || '-'}</td>
                       <td className="p-3 text-center">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${f.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
@@ -418,7 +419,7 @@ export const CadastrosView: React.FC = () => {
                             }
                             setEditingId(f.id);
                             setNome(f.nome);
-                            setCnpj(f.cnpj || '');
+                            setCnpj(formatTaxId(f.cnpj || ''));
                             setCidade(f.cidade || '');
                             setContraparteTipo(f.tipo ?? 'FORNECEDOR');
                             setFornecedorPlanoId(f.planoContaId || '');
@@ -701,11 +702,11 @@ export const CadastrosView: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">CNPJ / CPF</label>
-                    <input
-                      type="text"
+                    <label htmlFor="cadastro-documento" className="block text-xs font-semibold text-gray-700 mb-1">CNPJ / CPF</label>
+                    <TaxIdInput
+                      id="cadastro-documento"
                       value={cnpj}
-                      onChange={(e) => setCnpj(formatTaxId(e.target.value))}
+                      onValueChange={setCnpj}
                       className="w-full px-3 py-2 border rounded text-xs focus:ring-2 focus:ring-[#131b2e]"
                     />
                   </div>
@@ -806,14 +807,13 @@ export const CadastrosView: React.FC = () => {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    <label htmlFor="cadastro-saldo" className="block text-xs font-semibold text-gray-700 mb-1">
                       {editingId ? 'Saldo atual / ajuste manual (R$)' : 'Saldo inicial (R$)'}
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
+                      id="cadastro-saldo"
                       value={saldo}
-                      onChange={(e) => setSaldo(e.target.value)}
+                      onValueChange={setSaldo}
                       className="w-full px-3 py-2 border rounded text-xs font-bold focus:ring-2 focus:ring-[#131b2e]"
                     />
                     <span className="text-[10px] text-gray-500 mt-1 block">

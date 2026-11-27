@@ -110,7 +110,7 @@ function ConfiguracoesAdministrativas() {
               <div className="flex items-start justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-[#0b1c30]">{u.nome}</h4>
-                  <p className="text-[11px] text-gray-500 font-mono mt-0.5">CNPJ: {u.cnpj || 'Não informado'}</p>
+                  <p className="text-[11px] text-gray-500 font-mono mt-0.5">CNPJ: {formatTaxId(u.cnpj || '', true) || 'Não informado'}</p>
                   <p className="text-[11px] text-gray-600 mt-0.5">Cidade: {u.cidade}</p>
                 </div>
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${u.ativa !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}`}>
@@ -123,7 +123,7 @@ function ConfiguracoesAdministrativas() {
                   onClick={() => {
                     setEditingUnitId(u.id);
                     setNomeUnit(u.nome);
-                    setCnpjUnit(u.cnpj || '');
+                    setCnpjUnit(formatTaxId(u.cnpj || '', true));
                     setCidadeUnit(u.cidade || '');
                     setShowUnitModal(true);
                   }}
@@ -163,9 +163,10 @@ function ConfiguracoesAdministrativas() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-gray-500 font-semibold mb-1">CNPJ Matriz</label>
-                <input
-                  type="text"
+                <label htmlFor="config-matriz-cnpj" className="block text-gray-500 font-semibold mb-1">CNPJ Matriz</label>
+                <TaxIdInput
+                  id="config-matriz-cnpj"
+                  cnpjOnly
                   readOnly
                   value="12.345.678/0001-90"
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md font-mono text-gray-800"
@@ -213,12 +214,12 @@ function ConfiguracoesAdministrativas() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">CNPJ da Filial</label>
-                <input
-                  type="text"
-                  placeholder="00.000.000/0001-00"
+                <label htmlFor="config-filial-cnpj" className="block text-xs font-semibold text-gray-700 mb-1">CNPJ da Filial</label>
+                <TaxIdInput
+                  id="config-filial-cnpj"
+                  cnpjOnly
                   value={cnpjUnit}
-                  onChange={(e) => setCnpjUnit(e.target.value)}
+                  onValueChange={setCnpjUnit}
                   className="w-full px-3 py-2 border rounded text-xs font-mono focus:ring-2 focus:ring-[#131b2e]"
                 />
               </div>
@@ -256,3 +257,5 @@ function ConfiguracoesAdministrativas() {
     </div>
   );
 }
+import { TaxIdInput } from '../common/MaskedInputs';
+import { formatTaxId } from '../../utils/text';

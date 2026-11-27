@@ -8,9 +8,9 @@ export const normalizeText = (value?: string) =>
 export const normalizeTaxId = (value?: string) =>
   String(value || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
 
-export function formatTaxId(value: string): string {
+export function formatTaxId(value: string, cnpjOnly = false): string {
   const document = normalizeTaxId(value).slice(0, 14);
-  if (document.length > 11 || /[A-Z]/.test(document)) {
+  if (cnpjOnly || document.length > 11 || /[A-Z]/.test(document)) {
     return document
       .replace(/^(.{2})(?=.)/, '$1.')
       .replace(/^(..\....)(?=.)/, '$1.')

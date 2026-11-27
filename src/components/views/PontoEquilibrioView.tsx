@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useApp } from '../../context/AppContext';
+import { CalendarInput, MoneyInput } from '../common/MaskedInputs';
 import type { CustoPontoEquilibrio, PontoEquilibrioMensal } from '../../types';
 import { calcularPontoEquilibrio, lerDecimalEmCentavos, MAX_CUSTOS } from '../../utils/pontoEquilibrio';
 
@@ -80,8 +81,8 @@ function Editor({ id, unidadeId, competencia, existente }: {
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 space-y-5" aria-label="Premissas do cálculo">
         <div>
           <label className="block text-sm font-semibold mb-1" htmlFor="pe-receita">Faturamento mensal de referência (R$)</label>
-          <input id="pe-receita" className={campo + ' sm:max-w-72'} value={receita} inputMode="decimal" maxLength={15}
-            disabled={bloqueado} placeholder="0,00" onChange={(event) => { setReceita(event.target.value); setMensagem(''); }} />
+          <MoneyInput id="pe-receita" className={campo} value={receita} containerClassName="sm:max-w-72"
+            disabled={bloqueado} onValueChange={(value) => { setReceita(value); setMensagem(''); }} />
           <p className="mt-1 text-xs text-slate-600">Use o faturamento do mesmo período dos custos variáveis informados em reais. Custos variáveis em percentual dispensam esse valor.</p>
         </div>
 
@@ -104,8 +105,13 @@ function Editor({ id, unidadeId, competencia, existente }: {
               </label>
               <label className="block min-w-0 text-xs font-medium">
                 {linha.tipo === 'VARIAVEL_PERCENTUAL' ? 'Percentual (%)' : 'Valor (R$)'}
-                <input className={campo + ' mt-1'} value={linha.valor} inputMode="decimal" maxLength={15}
-                  aria-label={`Valor do custo ${index + 1}`} onChange={(event) => alterarLinha(linha.key, { valor: event.target.value })} />
+                {linha.tipo === 'VARIAVEL_PERCENTUAL' ? (
+                  <input className={campo + ' mt-1'} value={linha.valor} inputMode="decimal" maxLength={15}
+                    aria-label={`Valor do custo ${index + 1}`} onChange={(event) => alterarLinha(linha.key, { valor: event.target.value })} />
+                ) : (
+                  <MoneyInput className={campo + ' mt-1'} value={linha.valor} aria-label={`Valor do custo ${index + 1}`}
+                    onValueChange={(value) => alterarLinha(linha.key, { valor: value })} />
+                )}
               </label>
               {isAdmin && <button type="button" aria-label={`Remover custo ${index + 1}`} className="h-9 rounded-lg px-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700"
                 onClick={() => { setLinhas((previous) => previous.filter((item) => item.key !== linha.key)); setMensagem(''); }}>
@@ -167,10 +173,11 @@ export function PontoEquilibrioView() {
               {filiais.map((unit) => <option key={unit.id} value={unit.id}>{unit.cidade || unit.nome}</option>)}
             </select>
           </label>
-          <label className="text-sm font-semibold">Competência
-            <input className={campo + ' mt-1'} type="month" min="1000-01" max="9999-12" value={competencia}
-              onChange={(event) => setCompetencia(event.target.value)} />
-          </label>
+          <div className="text-sm font-semibold">
+            <label htmlFor="pe-competencia">Competência</label>
+            <CalendarInput id="pe-competencia" className={campo + ' mt-1'} precision="month" min="1000-01" max="9999-12"
+              value={competencia} onValueChange={setCompetencia} />
+          </div>
         </div>}
       </div>
       {!filial && <p className="text-sm text-slate-600">Cadastre uma unidade para calcular o ponto de equilíbrio.</p>}
