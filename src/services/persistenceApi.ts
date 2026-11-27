@@ -1,4 +1,4 @@
-import { ApplicationStateSnapshot, User, UserRole } from '../types';
+import { ApplicationStateSnapshot, MovimentacaoCaixaFisico, User, UserRole } from '../types';
 
 
 export class PersistenceApiError extends Error {
@@ -94,12 +94,12 @@ export const deleteAuthUser = (id: string) =>
   });
 
 export const loadApplicationState = () =>
-  requestJson<{ revision: number; empty: boolean; data: ApplicationStateSnapshot | null }>('/api/state');
+  requestJson<{ revision: number; empty: boolean; data: ApplicationStateSnapshot | null; movimentacoesCaixa?: MovimentacaoCaixaFisico[] }>('/api/state');
 
 export const saveApplicationState = (
   expectedRevision: number,
   data: ApplicationStateSnapshot
-) => requestJson<{ success: boolean; revision: number }>('/api/state', {
+) => requestJson<{ success: boolean; revision: number; movimentacoesCaixa?: MovimentacaoCaixaFisico[] }>('/api/state', {
   method: 'PUT',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ expectedRevision, data })

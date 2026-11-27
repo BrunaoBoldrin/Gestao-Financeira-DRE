@@ -113,10 +113,16 @@ export const ParcelamentosView: React.FC<ParcelamentosViewProps> = ({ onOpenNovo
               </div>
 
               <div className="text-right">
-                <p className="text-[10px] text-gray-400 font-semibold uppercase">Valor de Cada Parcela</p>
-                <p className="text-lg font-black text-rose-700">
-                  R$ {activeContract.valorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
+                {activeContract.cronograma.some((item) => item.valor !== activeContract.valorParcela) ? (
+                  <p className="text-xs font-semibold text-gray-600">Valores por parcela no cronograma</p>
+                ) : (
+                  <>
+                    <p className="text-[10px] text-gray-400 font-semibold uppercase">Valor de Cada Parcela</p>
+                    <p className="text-lg font-black text-rose-700">
+                      R$ {activeContract.valorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
 

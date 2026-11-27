@@ -63,6 +63,8 @@ export type TipoDocumentoOCR =
   | 'NFE'
   | 'NFSE'
   | 'RECIBO'
+  | 'CUPOM'
+  | 'NOTINHA'
   | 'COMPROVANTE'
   | 'BOLETO'
   | 'DDA'
@@ -138,6 +140,13 @@ export interface Parcelamento {
   }[];
 }
 
+export interface ParcelaPrevista {
+  dataVencimento: string;
+  valor: number;
+  numero?: string;
+  linhaDigitavel?: string;
+}
+
 export interface DocumentoOCR {
   id: string;
   nomeArquivo: string;
@@ -158,6 +167,8 @@ export interface DocumentoOCR {
     observacoes?: string;
     pagador?: string;
     recebedor?: string;
+    cpfCnpjPagador?: string;
+    cpfCnpjRecebedor?: string;
     documentoNumero?: string;
     linhaDigitavel?: string;
     chaveDocumento?: string;
@@ -167,6 +178,8 @@ export interface DocumentoOCR {
     impactoDRESugerido?: ImpactoDRE;
     finalidadeSugerida?: FinalidadeFinanceira;
     parcelaNumero?: string;
+    parcelas?: ParcelaPrevista[];
+    prazosPagamento?: number[];
     paginaOrigem?: number;
     itens?: { descricao: string; quantidade: number; valorUnitario: number; valorTotal: number }[];
   };
@@ -219,6 +232,7 @@ export interface DetalhesMovimentacaoCaixa {
   lancamentoRelacionadoId?: string;
   observacoes?: string;
   unidade?: string;
+  dataOperacao?: string;
 }
 
 export interface SessaoCaixaFisico {

@@ -1,5 +1,5 @@
 import { bankBelongsToUnit, findUnit, isPhysicalCashAccount, supplierBelongsToUnit } from '../utils/categoryUnits';
-import { normalizeText } from '../utils/text';
+import { normalizeTaxId, normalizeText } from '../utils/text';
 import { masterFingerprint, type MasterImport } from '../utils/masterWorkbook';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -7,8 +7,10 @@ import {
   Lancamento,
   StatusLancamento,
   Parcelamento,
+  ParcelaPrevista,
   DocumentoOCR,
   SessaoCaixaFisico,
+  MovimentacaoCaixaFisico,
   FechamentoMensal,
   FechamentoCompetencia,
   AuditLog,
@@ -30,6 +32,7 @@ import {
 } from '../types';
 import { ROLE_DEFAULT_VIEW, canAccessAllUnits, canAccessView } from '../config/accessControl';
 import { calculateDueDateSchedule } from '../utils/financialDates';
+import { centsFromAmount, paymentTotal } from '../utils/paymentSchedule';
 import { getMonthValue, isMonthValue, normalizeDateValue, resolveReferenceMonth } from '../utils/dateRange';
 import {
   INITIAL_USERS,
@@ -68,6 +71,13 @@ interface Toast {
   type: 'success' | 'error' | 'info';
 }
 
+interface DdlOptions {
+  adjustBankBalance?: boolean;
+  notify?: boolean;
+  audit?: boolean;
+  parcelas?: ParcelaPrevista[];
+}
+
 interface AppContextType {
   persistenceStatus: PersistenceStatus;
   persistenceMessage: string;
@@ -98,6 +108,7 @@ interface AppContextType {
   filteredParcelamentos: Parcelamento[];
   documentosOCR: DocumentoOCR[];
   sessaoCaixa: SessaoCaixaFisico;
+  movimentacoesCaixa: MovimentacaoCaixaFisico[];
   fechamentoMensal: FechamentoMensal;
   fechamentosMensais: FechamentoCompetencia[];
   auditLogs: AuditLog[];
@@ -159,7 +170,7 @@ interface AppContextType {
     dataEmissao: string,
     prazosDias: number[],
     primeiroVencimento?: string,
-    options?: { adjustBankBalance?: boolean; notify?: boolean; audit?: boolean }
+    options?: DdlOptions
   ) => boolean;
   addLancamentoComParcelamento: (l: Omit<Lancamento, 'id' | 'criadoEm'>, numeroParcelas: number) => void;
   addTransferencia: (dados: {
@@ -187,7 +198,7 @@ interface AppContextType {
     dadosFinal: DocumentoOCR['dadosExtraidos'],
     bancoId: string,
     justificativa?: string
-  ) => void;
+  ) => boolean;
   rejeitarDocumentoOCR: (docId: string) => void;
   
   registrarMovimentacaoCaixa: (
@@ -340,6 +351,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [parcelamentos, setParcelamentos] = useState<Parcelamento[]>(INITIAL_PARCELAMENTOS);
   const [documentosOCR, setDocumentosOCR] = useState<DocumentoOCR[]>(INITIAL_DOCUMENTS_OCR);
   const [sessaoCaixa, setSessaoCaixa] = useState<SessaoCaixaFisico>(INITIAL_SESSAO_CAIXA);
+  const [movimentacoesCaixa, setMovimentacoesCaixa] = useState<MovimentacaoCaixaFisico[] | null>(null);
   const [fechamentoMensal, setFechamentoMensal] = useState<FechamentoMensal>(INITIAL_FECHAMENTO);
   const [fechamentosMensais, setFechamentosMensais] = useState<FechamentoCompetencia[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
@@ -488,6 +500,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const result = await saveApplicationState(revisionRef.current, snapshot);
         revisionRef.current = result.revision;
+        setMovimentacoesCaixa(result.movimentacoesCaixa ?? null);
         if (latestSnapshotRef.current === snapshot) {
           hasUnsavedChangesRef.current = false;
         }
@@ -579,6 +592,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       authenticatedUserRef.current = auth.user;
 
       const stored = await loadApplicationState();
+      setMovimentacoesCaixa(stored.movimentacoesCaixa ?? null);
       revisionRef.current = stored.revision;
       let stateToApply: ApplicationStateSnapshot;
       if (stored.empty || !stored.data) {
@@ -591,6 +605,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           stateToApply
         );
         revisionRef.current = seeded.revision;
+        setMovimentacoesCaixa(seeded.movimentacoesCaixa ?? null);
       } else {
         stateToApply = stored.data;
       }
@@ -868,7 +883,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!banco || delta === 0) return;
 
     setBancos((prev) =>
-      prev.map((item) => (item.id === bancoId ? { ...item, saldo: item.saldo + delta } : item))
+      prev.map((item) => (item.id === bancoId ? { ...item, saldo: Math.round((item.saldo + delta) * 100) / 100 } : item))
     );
     addAuditLog(
       'Contas Bancárias',
@@ -881,12 +896,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     lancamento.tipo === 'RECEITA' ? lancamento.valor : -lancamento.valor;
 
   const ensurePaidLancamentoHasBanco = (
-    lancamento: Pick<Lancamento, 'bancoId' | 'contaBancaria' | 'unidade' | 'status'>
+    lancamento: Pick<Lancamento, 'bancoId' | 'contaBancaria' | 'unidade' | 'status' | 'formaPagamento'>
   ) => {
     if (lancamento.status !== 'PAGO') return true;
-    if (resolveBancoForLancamento(lancamento)?.ativo) return true;
+    const banco = resolveBancoForLancamento(lancamento);
+    if (banco?.ativo && isPhysicalCashAccount(banco) === (lancamento.formaPagamento === 'DINHEIRO')) return true;
     showToast(
-      `Selecione uma conta bancária ativa da unidade "${lancamento.unidade}" antes de registrar o pagamento.`,
+      lancamento.formaPagamento === 'DINHEIRO'
+        ? `Selecione um Caixa Físico ativo da unidade "${lancamento.unidade}" para registrar o pagamento em dinheiro.`
+        : `Selecione uma conta bancária ativa da unidade "${lancamento.unidade}" compatível com a forma de pagamento.`,
       'error'
     );
     return false;
@@ -1004,11 +1022,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return null;
     }
 
-    const documentKey = cnpj.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    const documentKey = normalizeTaxId(cnpj);
     const existing = fornecedores.find((item) =>
       item.tipo === 'CLIENTE' && supplierBelongsToUnit(item, unit.id, units) &&
       (documentKey
-        ? String(item.cnpj || '').replace(/[^a-z0-9]/gi, '').toUpperCase() === documentKey
+        ? normalizeTaxId(item.cnpj) === documentKey
         : normalizeText(item.nome) === normalizeText(nome))
     );
     if (existing && !existing.ativo) {
@@ -1117,7 +1135,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dataEmissao: string,
     prazosDias: number[],
     primeiroVencimento?: string,
-    options?: { adjustBankBalance?: boolean; notify?: boolean; audit?: boolean }
+    options?: DdlOptions
   ) => {
     if (!checkFinancialPermission('Lançamento DDL')) return false;
     dadosBase = bindLancamentoToBanco({
@@ -1132,16 +1150,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prazosDias = [0];
     }
 
-    const totalParcelas = prazosDias.length;
+    const vencimentos = calculateDueDateSchedule(dataEmissao, prazosDias, primeiroVencimento);
+    const parcelas = options?.parcelas || vencimentos.map((dataVencimento) => ({
+      dataVencimento,
+      valor: Math.round((dadosBase.valor / vencimentos.length) * 100) / 100
+    }));
+    if (options?.parcelas && (
+      parcelas.length === 0 || parcelas.some((item) => !item.dataVencimento || (centsFromAmount(item.valor) ?? 0) <= 0)
+      || paymentTotal(parcelas) !== centsFromAmount(dadosBase.valor)
+    )) {
+      showToast('Revise os vencimentos e valores dos boletos antes de aprovar.', 'error');
+      return false;
+    }
+    const totalParcelas = parcelas.length;
     const valorUnitario = Math.round((dadosBase.valor / totalParcelas) * 100) / 100;
     const parcelamentoId = totalParcelas > 1 ? createEntityId('parc') : undefined;
-    const vencimentos = calculateDueDateSchedule(dataEmissao, prazosDias, primeiroVencimento);
 
     const novosLancamentos: Lancamento[] = [];
-    const cronogramaItems: any[] = [];
+    const cronogramaItems: Parcelamento['cronograma'] = [];
 
-    prazosDias.forEach((dias, index) => {
-      const vencimentoStr = vencimentos[index];
+    parcelas.forEach((parcela: ParcelaPrevista, index) => {
+      const vencimentoStr = parcela.dataVencimento;
 
       const lancId = createEntityId('lanc');
       const statusLanc: StatusLancamento = dadosBase.status === 'PAGO'
@@ -1153,20 +1182,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             : 'PENDENTE';
 
       const descFinal = totalParcelas > 1
-        ? `${dadosBase.descricao} (${index + 1}/${totalParcelas} - ${dias} DDL)`
+        ? `${dadosBase.descricao} (${index + 1}/${totalParcelas}${options?.parcelas ? '' : ` - ${prazosDias[index]} DDL`})`
         : dadosBase.descricao;
 
       const newLanc: Lancamento = {
         ...dadosBase,
         id: lancId,
         descricao: descFinal,
-        valor: valorUnitario,
+        valor: parcela.valor,
         dataVencimento: vencimentoStr,
         status: statusLanc,
         dataPagamento: statusLanc === 'PAGO'
           ? dadosBase.dataPagamento || vencimentoStr
           : undefined,
-        numeroParcela: totalParcelas > 1 ? `${index + 1}/${totalParcelas}` : undefined,
+        numeroParcela: totalParcelas > 1 ? `${index + 1}/${totalParcelas}` : dadosBase.numeroParcela,
+        linhaDigitavel: options?.parcelas
+          ? parcela.linhaDigitavel || (totalParcelas === 1 ? dadosBase.linhaDigitavel : undefined)
+          : dadosBase.linhaDigitavel,
         parcelamentoId,
         criadoPorId: currentUser?.id,
         criadoEm: new Date().toISOString()
@@ -1178,7 +1210,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cronogramaItems.push({
           numero: index + 1,
           vencimento: vencimentoStr,
-          valor: valorUnitario,
+          valor: parcela.valor,
           status: statusLanc,
           dataPagamento: statusLanc === 'PAGO'
             ? dadosBase.dataPagamento || vencimentoStr
@@ -1223,7 +1255,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addAuditLog(
         'Lancamentos',
         'CRIACAO',
-        `Lançamento criado com DDL (${prazosDias.join('/')} dias) gerando ${totalParcelas} boleto(s)`
+        options?.parcelas
+          ? `Criou ${totalParcelas} boleto(s) com o cronograma aprovado no OCR.`
+          : `Lançamento criado com DDL (${prazosDias.join('/')} dias) gerando ${totalParcelas} boleto(s)`
       );
     }
 
@@ -1365,8 +1399,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setBancos((prev) =>
       prev.map((banco) => {
-        if (banco.id === origem.id) return { ...banco, saldo: banco.saldo - dados.valor };
-        if (banco.id === destino.id) return { ...banco, saldo: banco.saldo + dados.valor };
+        if (banco.id === origem.id) return { ...banco, saldo: Math.round((banco.saldo - dados.valor) * 100) / 100 };
+        if (banco.id === destino.id) return { ...banco, saldo: Math.round((banco.saldo + dados.valor) * 100) / 100 };
         return banco;
       })
     );
@@ -1376,14 +1410,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         'SANGRIA',
         `Transferência para ${destino.banco}: ${dados.descricao}`,
         dados.valor,
-        dados.documentoRef,
+        dados.comprovanteUrl,
         {
           finalidade: 'DEPOSITO_BANCARIO',
           impactoDRE: 'NAO_AFETA',
-          statusConciliacao: 'EM_TRANSITO',
+          statusConciliacao: 'CONCILIADO',
           bancoOrigemId: origem.id,
           bancoDestinoId: destino.id,
-          observacoes: dados.descricao
+          observacoes: dados.descricao,
+          dataOperacao: dados.data
         },
         true,
         dados.unidade
@@ -1393,14 +1428,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         'SUPRIMENTO',
         `Transferência de ${origem.banco}: ${dados.descricao}`,
         dados.valor,
-        dados.documentoRef,
+        dados.comprovanteUrl,
         {
           finalidade: 'REFORCO_TROCO',
           impactoDRE: 'NAO_AFETA',
           statusConciliacao: 'CONCILIADO',
           bancoOrigemId: origem.id,
           bancoDestinoId: destino.id,
-          observacoes: dados.descricao
+          observacoes: dados.descricao,
+          dataOperacao: dados.data
         },
         true,
         dados.unidade
@@ -1469,7 +1505,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...l,
       id,
       criadoPorId: currentUser?.id,
-      criadoEm: new Date().toISOString().substring(0, 10)
+      criadoEm: new Date().toISOString()
     };
     setLancamentos((prev) => [newL, ...prev]);
     if (newL.status === 'PAGO' && newL.bancoId) {
@@ -1668,7 +1704,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (linkedLancamento) {
       if (!marcarLancamentoComoPago(linkedLancamento.id, dados)) return false;
     } else {
-      addLancamento({
+      const created = addLancamento({
         descricao: `Parcela ${numeroParcela}/${parcelamento.numeroParcelas} - ${parcelamento.titulo}`,
         tipo: 'DESPESA',
         categoria: parcelamento.categoria,
@@ -1685,6 +1721,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         parcelamentoId: parcelamento.id,
         numeroParcela: `${numeroParcela}/${parcelamento.numeroParcelas}`
       });
+      if (!created) return false;
     }
 
     setParcelamentos((prev) =>
@@ -1812,24 +1849,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (result.success && result.dadosExtraidos) {
-        const normalizeExtractedData = (extraidos: any): DocumentoOCR['dadosExtraidos'] => ({
+        const normalizeExtractedData = (extraidos: any, tipo: DocumentoOCR['tipo']): DocumentoOCR['dadosExtraidos'] => ({
           fornecedor: (
             extraidos.sentidoSugerido === 'ENTRADA'
               ? extraidos.pagador
-              : extraidos.sentidoSugerido === 'SAIDA'
+              : extraidos.sentidoSugerido === 'SAIDA' && ['COMPROVANTE', 'RECIBO'].includes(tipo)
                 ? extraidos.recebedor
                 : ''
           ) || extraidos.fornecedor || extraidos.recebedor || extraidos.pagador || 'Contraparte Não Identificada',
           cnpj: extraidos.cnpj || '',
           dataEmissao: extraidos.dataEmissao || '',
           dataCompetencia: extraidos.dataCompetencia || extraidos.dataEmissao || extraidos.dataVencimento || '',
-          dataVencimento: extraidos.dataVencimento || extraidos.dataEmissao || '',
+          dataVencimento: extraidos.dataVencimento || '',
           valorTotal: typeof extraidos.valorTotal === 'number' ? extraidos.valorTotal : 0,
           categoria: extraidos.categoria || 'Outras Despesas Operacionais',
           centroCusto: extraidos.centroCusto || 'Administrativo',
           observacoes: extraidos.observacoes || '',
           pagador: extraidos.pagador || '',
           recebedor: extraidos.recebedor || '',
+          cpfCnpjPagador: extraidos.cpfCnpjPagador || '',
+          cpfCnpjRecebedor: extraidos.cpfCnpjRecebedor || '',
           documentoNumero: extraidos.documentoNumero || '',
           linhaDigitavel: extraidos.linhaDigitavel || '',
           chaveDocumento: extraidos.chaveDocumento || '',
@@ -1839,6 +1878,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           impactoDRESugerido: extraidos.impactoDRESugerido || 'A_CONFIRMAR',
           finalidadeSugerida: extraidos.finalidadeSugerida || 'A_CONFIRMAR',
           parcelaNumero: extraidos.parcelaNumero || '',
+          parcelas: Array.isArray(extraidos.parcelas) ? extraidos.parcelas : [],
+          prazosPagamento: Array.isArray(extraidos.prazosPagamento) ? extraidos.prazosPagamento : [],
           paginaOrigem: extraidos.paginaOrigem,
           itens: extraidos.itens || []
         });
@@ -1852,7 +1893,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           tipo: entity.tipo || result.tipo || initialDoc.tipo,
           status: 'PENDENTE_REVISAO',
           confiancaOCR: result.confiancaOCR ?? 0,
-          dadosExtraidos: normalizeExtractedData(entity.dadosExtraidos || entity),
+          dadosExtraidos: normalizeExtractedData(entity.dadosExtraidos || entity, entity.tipo || result.tipo || initialDoc.tipo),
           previewUrl: result.metadados?.previewUrl || initialDoc.previewUrl,
           hashArquivo: result.metadados?.hashArquivo,
           entidadeNumero: totalEntities > 1 ? index + 1 : undefined,
@@ -1937,19 +1978,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     bancoId: string,
     justificativa?: string
   ) => {
-    if (!checkFinancialPermission('Conciliar Documento OCR')) return;
+    if (!checkFinancialPermission('Conciliar Documento OCR')) return false;
     const doc = documentosOCR.find((item) => item.id === docId);
     const lancamento = lancamentos.find((item) => item.id === lancamentoId);
     const banco = bancos.find((item) => item.id === bancoId);
     if (!doc || !lancamento || !banco) {
       showToast('Não foi possível localizar o documento, lançamento ou conta para conciliação.', 'error');
-      return;
+      return false;
     }
-    if (isFinance && lancamento.criadoPorId !== currentUser?.id) return;
-    if (!canManageUnit(lancamento.unidade, 'Conciliar Documento OCR')) return;
-    if (banco.unidade !== lancamento.unidade) {
+    if (isFinance && lancamento.criadoPorId !== currentUser?.id) return false;
+    if (!canManageUnit(lancamento.unidade, 'Conciliar Documento OCR')) return false;
+    if (!bankBelongsToUnit(banco, lancamento.unidade, units)) {
       showToast('A conta da conciliação deve pertencer à mesma unidade do lançamento.', 'error');
-      return;
+      return false;
     }
 
     const wasPaid = lancamento.status === 'PAGO';
@@ -1960,6 +2001,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dataPagamento: lancamento.dataPagamento || dataPagamento,
       bancoId: wasPaid ? lancamento.bancoId : banco.id,
       contaBancaria: wasPaid ? lancamento.contaBancaria : banco.banco,
+      formaPagamento: wasPaid ? lancamento.formaPagamento : dadosFinal.formaPagamento || lancamento.formaPagamento,
       comprovanteUrl: doc.previewUrl || lancamento.comprovanteUrl,
       documentoRef: doc.nomeArquivo,
       cpfCnpjContraparte: dadosFinal.cnpj || lancamento.cpfCnpjContraparte,
@@ -1970,6 +2012,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       observacoes: [lancamento.observacoes, justificativa].filter(Boolean).join(' | ')
     };
 
+    if (!wasPaid && (!ensureCompetenciaAberta(lancamento.dataCompetencia || lancamento.dataVencimento, 'conciliar lançamentos')
+      || !ensurePaidLancamentoHasBanco(reconciled))) return false;
     setLancamentos((prev) => prev.map((item) => item.id === lancamentoId ? reconciled : item));
     if (!wasPaid) {
       adjustBancoBalance(banco.id, balanceDeltaForLancamento(reconciled), `Conciliação OCR de "${reconciled.descricao}"`);
@@ -1985,6 +2029,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       'CONCILIACAO',
       `Vinculou documento OCR ${docId} ao lançamento ${lancamentoId}${justificativa ? ` — ${justificativa}` : ''}`
     );
+    return true;
   };
 
   const rejeitarDocumentoOCR = (docId: string) => {
@@ -2017,17 +2062,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     const unidade = resolveAllowedUnit(unidadeSolicitada);
+    const isEntrada = tipo === 'SUPRIMENTO' || tipo === 'VENDA';
+    const transferAccountId = isEntrada ? detalhes?.bancoDestinoId : detalhes?.bancoOrigemId;
     const caixaBanco = bancos.find(
       (banco) =>
         bankBelongsToUnit(banco, unidade, units) &&
         banco.ativo &&
-        isPhysicalCashAccount(banco)
+        isPhysicalCashAccount(banco) &&
+        (!skipBankBalance || banco.id === transferAccountId)
     );
     if (!caixaBanco && !skipBankBalance) {
       showToast(`Cadastre uma conta do tipo Caixa Físico para a unidade "${unidade}".`, 'error');
       return;
     }
-    const isEntrada = tipo === 'SUPRIMENTO' || tipo === 'VENDA';
     const saldoAtual = caixaBanco?.saldo || 0;
     if (!isEntrada && saldoAtual < valor) {
       showToast(
@@ -2048,12 +2095,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
     const delta = isEntrada ? valor : -valor;
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const operationDate = detalhes?.dataOperacao;
     const novaMov = {
       id: createEntityId('mov'),
       tipo,
       descricao,
       valor,
-      dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      dataHora: operationDate && operationDate !== now.slice(0, 10) ? `${operationDate} 00:00:00` : now,
       usuario: currentUser ? currentUser.name : 'Operador',
       unidade,
       sentido: isEntrada ? 'ENTRADA' as const : 'SAIDA' as const,
@@ -2505,6 +2554,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         filteredParcelamentos,
         documentosOCR,
         sessaoCaixa,
+        movimentacoesCaixa: movimentacoesCaixa ?? sessaoCaixa.movimentacoes,
         fechamentoMensal,
         fechamentosMensais,
         auditLogs,

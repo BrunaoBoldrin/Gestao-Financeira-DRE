@@ -53,7 +53,8 @@ export const findFinancialMatches = (
       let identificadorForte = false;
 
       const strongIdentifiers = [
-        [dados.linhaDigitavel, lancamento.linhaDigitavel, 'mesma linha digitável'],
+        [dados.parcelas?.find((row) => sameIdentifier(row.linhaDigitavel, lancamento.linhaDigitavel))?.linhaDigitavel
+          || dados.linhaDigitavel, lancamento.linhaDigitavel, 'mesma linha digitável'],
         [dados.chaveDocumento, lancamento.chaveDocumento, 'mesma chave do documento fiscal'],
         [dados.identificadorTransacao, lancamento.identificadorTransacao, 'mesmo identificador da transação']
       ] as const;
@@ -67,8 +68,9 @@ export const findFinancialMatches = (
       });
 
       const sameAmount = Math.abs((dados.valorTotal || 0) - lancamento.valor) <= 0.01 && dados.valorTotal > 0;
-      if (!sameAmount && !identificadorForte) return null;
-      if (sameAmount) {
+      const sameValueRows = dados.parcelas?.filter((row) => Math.abs(row.valor - lancamento.valor) <= 0.01) || [];
+      if (!sameAmount && !sameValueRows.length && !identificadorForte) return null;
+      if (sameAmount || sameValueRows.length) {
         pontuacao += 25;
         motivos.push('mesmo valor');
       }
@@ -86,7 +88,8 @@ export const findFinancialMatches = (
 
       const distance = Math.min(
         dateDistanceInDays(dados.dataVencimento, lancamento.dataVencimento),
-        dateDistanceInDays(dados.dataEmissao, lancamento.dataPagamento || lancamento.dataVencimento)
+        dateDistanceInDays(dados.dataEmissao, lancamento.dataPagamento || lancamento.dataVencimento),
+        ...sameValueRows.map((row) => dateDistanceInDays(row.dataVencimento, lancamento.dataVencimento))
       );
       if (distance <= 2) {
         pontuacao += 20;

@@ -1,4 +1,4 @@
-import { bankBelongsToUnit, categoryBelongsToUnit } from '../../utils/categoryUnits';
+import { bankBelongsToUnit, categoryBelongsToUnit, isPhysicalCashAccount } from '../../utils/categoryUnits';
 import { ModalOverlay } from '../common/ModalOverlay';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
@@ -43,7 +43,8 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
     (category) => category.ativa && category.tipo === item?.tipo && categoryBelongsToUnit(category, item?.unidade, units)
   ), [categorias, item?.tipo, item?.unidade, units]);
   const availableCenters = centrosCusto.filter((center) => center.ativo);
-  const availableBanks = bancos.filter((bank) => bank.ativo && bankBelongsToUnit(bank, item?.unidade, units));
+  const availableBanks = bancos.filter((bank) => bank.ativo && bankBelongsToUnit(bank, item?.unidade, units) &&
+    isPhysicalCashAccount(bank) === (form.formaPagamento === 'DINHEIRO'));
   if (!item) return null;
 
   const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -56,7 +57,7 @@ export const EditarLancamentoModal: React.FC<Props> = ({ item, onClose }) => {
       showToast('Preencha descrição, contraparte, categoria, centro de custo, datas e um valor válido.', 'error');
       return;
     }
-    if (item.status === 'PAGO' && !form.bancoId) {
+    if (item.status === 'PAGO' && !availableBanks.some((bank) => bank.id === form.bancoId)) {
       showToast('Lançamentos pagos precisam permanecer vinculados a uma conta bancária.', 'error');
       return;
     }

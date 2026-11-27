@@ -1,11 +1,15 @@
-import { bankBelongsToUnit, categoryBelongsToUnit } from '../../utils/categoryUnits';
+import { bankBelongsToUnit, categoryBelongsToUnit, isPhysicalCashAccount, supplierBelongsToUnit } from '../../utils/categoryUnits';
+import { normalizeTaxId, normalizeText } from '../../utils/text';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
-import { calculateDueDateSchedule } from '../../utils/financialDates';
+import { buildPaymentSchedule, centsFromAmount, type ParcelaEditavel, paymentTotal, readPaymentSchedule } from '../../utils/paymentSchedule';
+import { OcrPaymentSchedule } from '../common/OcrPaymentSchedule';
 import { FinalidadeFinanceira, ImpactoDRE, Lancamento, SentidoFinanceiro } from '../../types';
 import { findDuplicateDocumentByHash, findFinancialMatches } from '../../utils/financialMatching';
+
+const payableDocumentTypes = ['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'];
 
 export const PendingReviewView: React.FC = () => {
   const {
@@ -18,6 +22,7 @@ export const PendingReviewView: React.FC = () => {
     addLancamento,
     addLancamentoComDDL,
     categorias,
+    fornecedores,
     centrosCusto,
     condicoesPagamento,
     bancos,
@@ -41,11 +46,11 @@ export const PendingReviewView: React.FC = () => {
   const [cnpj, setCnpj] = useState('');
   const [dataEmissao, setDataEmissao] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
-  const [dataVencimento, setDataVencimento] = useState('');
   const [valorTotal, setValorTotal] = useState('');
   const [categoria, setCategoria] = useState('');
   const [centroCusto, setCentroCusto] = useState('');
-  const [selectedCondicaoId, setSelectedCondicaoId] = useState<string>('cond-3'); // 30 dias default
+  const [parcelas, setParcelas] = useState<ParcelaEditavel[]>([]);
+  const [differenceConfirmed, setDifferenceConfirmed] = useState(false);
   const [bancoId, setBancoId] = useState('');
   const [formaPagamento, setFormaPagamento] = useState<Lancamento['formaPagamento']>('BOLETO');
   const [observacoes, setObservacoes] = useState('');
@@ -61,24 +66,31 @@ export const PendingReviewView: React.FC = () => {
 
   useEffect(() => {
     if (currentDoc) {
-      const extractedIssueDate = currentDoc.dadosExtraidos.dataEmissao || new Date().toISOString().substring(0, 10);
-      const initialCondition = condicoesPagamento.find((condition) => condition.id === selectedCondicaoId) || condicoesPagamento[0];
-      const suggestedDueDate = calculateDueDateSchedule(
-        extractedIssueDate,
-        initialCondition?.prazosDias || [0]
-      )[0];
+      const data = currentDoc.dadosExtraidos;
+      const payable = payableDocumentTypes.includes(currentDoc.tipo);
+      const extractedIssueDate = data.dataEmissao || (payable ? '' : new Date().toISOString().substring(0, 10));
+      const extractedTotal = data.valorTotal > 0 ? String(data.valorTotal) : '';
+      const automaticSchedule = data.parcelas?.length
+        ? data.parcelas.map((row) => ({ ...row, valor: String(row.valor) }))
+        : buildPaymentSchedule(data.dataEmissao, data.prazosPagamento || [], extractedTotal, data.dataVencimento);
+      setParcelas(automaticSchedule.length ? automaticSchedule : [{
+        dataVencimento: data.dataVencimento || '',
+        valor: extractedTotal,
+        numero: data.parcelaNumero,
+        linhaDigitavel: data.linhaDigitavel
+      }]);
+      setDifferenceConfirmed(false);
       setFornecedor(currentDoc.dadosExtraidos.fornecedor || '');
       setCnpj(currentDoc.dadosExtraidos.cnpj || '');
       setDataEmissao(extractedIssueDate);
       setDataCompetencia(currentDoc.dadosExtraidos.dataCompetencia || extractedIssueDate);
-      setDataVencimento(currentDoc.dadosExtraidos.dataVencimento || suggestedDueDate);
       setValorTotal(currentDoc.dadosExtraidos.valorTotal ? currentDoc.dadosExtraidos.valorTotal.toString() : '0');
       setCategoria(currentDoc.dadosExtraidos.categoria || 'Insumos Médicos & Estéticos');
       setCentroCusto(currentDoc.dadosExtraidos.centroCusto || 'Clínica / Atendimento');
       setObservacoes(currentDoc.dadosExtraidos.observacoes || '');
       setFormaPagamento(
         currentDoc.dadosExtraidos.formaPagamento ||
-        (['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo)
+        (payable
           ? 'BOLETO'
           : currentDoc.dadosExtraidos.identificadorTransacao
             ? 'PIX'
@@ -100,14 +112,15 @@ export const PendingReviewView: React.FC = () => {
 
   const unidadeLancamento = isFinance && currentUser ? currentUser.unit : unidade;
   const availableBanks = bancos.filter(
-    (banco) => banco.ativo && bankBelongsToUnit(banco, unidadeLancamento, units)
+    (banco) => banco.ativo && bankBelongsToUnit(banco, unidadeLancamento, units) &&
+      isPhysicalCashAccount(banco) === (formaPagamento === 'DINHEIRO')
   );
 
   useEffect(() => {
     if (!availableBanks.some((banco) => banco.id === bancoId)) {
       setBancoId(availableBanks[0]?.id || '');
     }
-  }, [unidadeLancamento, bancos, units, bancoId]);
+  }, [unidadeLancamento, bancos, units, bancoId, formaPagamento]);
 
   const financialMatches = useMemo(
     () => {
@@ -176,11 +189,54 @@ export const PendingReviewView: React.FC = () => {
     );
   }
 
-  const numVal = parseFloat(valorTotal) || 0;
-  const activeCond = condicoesPagamento.find((c) => c.id === selectedCondicaoId) || condicoesPagamento[0];
-  const prazos = activeCond ? activeCond.prazosDias : [0];
-  const vencimentos = calculateDueDateSchedule(dataEmissao, prazos, dataVencimento);
-  const vencimentoCalculadoDDL = calculateDueDateSchedule(dataEmissao, prazos)[0];
+  const referenceCents = centsFromAmount(valorTotal) ?? 0;
+  const taxId = normalizeTaxId(cnpj);
+  const completeTaxId = /^\d{11}$|^[\dA-Z]{12}\d{2}$/.test(taxId);
+  const partyKind = impactoDRE === 'RECEITA' || (impactoDRE !== 'DESPESA' && sentido === 'ENTRADA') ? 'CLIENTE' : 'FORNECEDOR';
+  const knownSide = impactoDRE === 'DESPESA' || impactoDRE === 'RECEITA' || sentido !== 'A_CONFIRMAR';
+  const parties = fornecedores.filter((item) =>
+    supplierBelongsToUnit(item, unidadeLancamento, units) && (
+      !knownSide || (partyKind === 'CLIENTE' ? item.tipo === 'CLIENTE' : item.tipo !== 'CLIENTE')
+    )
+  );
+  const normalizedPartyName = normalizeText(fornecedor);
+  const partyMatches = completeTaxId
+    ? parties.filter((item) => normalizeTaxId(item.cnpj) === taxId)
+    : parties.filter((item) => normalizedPartyName && normalizeText(item.nome) === normalizedPartyName);
+  const matchedParty = partyMatches.length === 1 ? partyMatches[0] : undefined;
+  const partyStatus = !unidadeLancamento
+    ? 'Selecione a unidade para verificar o cadastro.'
+    : partyMatches.length > 1
+      ? 'Mais de um cadastro corresponde ao documento. Confira a contraparte.'
+      : matchedParty
+        ? `${completeTaxId ? 'Cadastro encontrado' : 'Possível cadastro pelo nome'} · ${matchedParty.nome}${matchedParty.ativo ? '' : ' (inativo)'}`
+        : 'Cadastro não encontrado nesta unidade. Confira os dados para cadastrar a contraparte.';
+  const changeDirection = (direction: SentidoFinanceiro) => {
+    setSentido(direction);
+    const data = currentDoc.dadosExtraidos;
+    if (direction === 'A_CONFIRMAR' || !['COMPROVANTE', 'RECIBO'].includes(currentDoc.tipo)) return;
+    const partyName = direction === 'ENTRADA' ? data.pagador : data.recebedor;
+    const partyTaxId = direction === 'ENTRADA' ? data.cpfCnpjPagador : data.cpfCnpjRecebedor;
+    if (partyName) setFornecedor(partyName);
+    if (partyTaxId || data.cpfCnpjPagador || data.cpfCnpjRecebedor) setCnpj(partyTaxId || '');
+  };
+  const usesSchedule = (impactoDRE === 'DESPESA' || (impactoDRE !== 'RECEITA' && sentido === 'SAIDA'))
+    && payableDocumentTypes.includes(currentDoc.tipo);
+  const allowMultiple = !currentDoc.totalEntidadesDocumento || Boolean(currentDoc.dadosExtraidos.parcelas?.length);
+  const changeSchedule = (rows: ParcelaEditavel[]) => {
+    setParcelas(rows);
+    setDifferenceConfirmed(false);
+  };
+  const applyCondition = (terms: number[]) => {
+    const calculated = buildPaymentSchedule(dataEmissao, terms, valorTotal);
+    if (!calculated.length) {
+      showToast('Informe a data de emissão antes de calcular os vencimentos.', 'error');
+      return;
+    }
+    changeSchedule(calculated.length === parcelas.length
+      ? calculated.map((row, index) => ({ ...parcelas[index], ...row }))
+      : calculated);
+  };
   const isPdfPreview = Boolean(currentDoc.previewUrl) && currentDoc.previewMimeType === 'application/pdf';
   const isImagePreview = Boolean(currentDoc.previewUrl) && (
     currentDoc.previewMimeType?.startsWith('image/') || !currentDoc.previewMimeType
@@ -199,8 +255,8 @@ export const PendingReviewView: React.FC = () => {
     if (isSaving) return;
     setIsSaving(true);
     try {
-    if (!dataEmissao || !dataCompetencia || !dataVencimento) {
-      showToast('Informe emissão, competência e vencimento antes de aprovar.', 'error');
+    if (!dataEmissao || !dataCompetencia) {
+      showToast('Informe emissão e competência antes de aprovar.', 'error');
       return;
     }
     if (!unidadeLancamento) {
@@ -241,6 +297,22 @@ export const PendingReviewView: React.FC = () => {
       return;
     }
 
+    const approvedSchedule = usesSchedule && acaoFinanceira === 'CRIAR_NOVO' ? readPaymentSchedule(parcelas) : null;
+    if (usesSchedule && acaoFinanceira === 'CRIAR_NOVO' && !approvedSchedule) {
+      showToast('Informe um vencimento válido e um valor maior que zero para cada boleto.', 'error');
+      return;
+    }
+    const approvedCents = approvedSchedule ? paymentTotal(approvedSchedule) : referenceCents;
+    if (approvedSchedule && referenceCents > 0 && approvedCents !== referenceCents && !differenceConfirmed) {
+      showToast('Confirme a diferença entre o valor do documento e o total dos boletos.', 'error');
+      return;
+    }
+    if (acaoFinanceira === 'CRIAR_NOVO' && approvedCents <= 0) {
+      showToast('Informe um valor maior que zero antes de registrar o documento.', 'error');
+      return;
+    }
+    const dataVencimento = approvedSchedule?.[0]?.dataVencimento || currentDoc.dadosExtraidos.dataVencimento || dataEmissao;
+    const numVal = approvedCents / 100;
     const dadosFinais = {
       fornecedor,
       cnpj,
@@ -253,6 +325,8 @@ export const PendingReviewView: React.FC = () => {
       observacoes: [observacoes, justificativaNovo].filter(Boolean).join(' | '),
       pagador: currentDoc.dadosExtraidos.pagador,
       recebedor: currentDoc.dadosExtraidos.recebedor,
+      cpfCnpjPagador: currentDoc.dadosExtraidos.cpfCnpjPagador,
+      cpfCnpjRecebedor: currentDoc.dadosExtraidos.cpfCnpjRecebedor,
       documentoNumero: currentDoc.dadosExtraidos.documentoNumero,
       linhaDigitavel: currentDoc.dadosExtraidos.linhaDigitavel,
       chaveDocumento: currentDoc.dadosExtraidos.chaveDocumento,
@@ -262,6 +336,8 @@ export const PendingReviewView: React.FC = () => {
       impactoDRESugerido: impactoDRE,
       finalidadeSugerida: finalidade,
       parcelaNumero: currentDoc.dadosExtraidos.parcelaNumero,
+      parcelas: approvedSchedule ?? currentDoc.dadosExtraidos.parcelas,
+      prazosPagamento: currentDoc.dadosExtraidos.prazosPagamento,
       paginaOrigem: currentDoc.dadosExtraidos.paginaOrigem,
       itens: currentDoc.dadosExtraidos.itens || []
     };
@@ -271,13 +347,14 @@ export const PendingReviewView: React.FC = () => {
         showToast('Selecione o lançamento que será vinculado ao documento.', 'error');
         return;
       }
-      conciliarDocumentoOCR(
+      const linked = conciliarDocumentoOCR(
         currentDoc.id,
         lancamentoSelecionadoId,
         dadosFinais,
         banco.id,
         justificativaNovo
       );
+      if (!linked) return;
       const saved = await flushPersistence();
       showToast(
         saved
@@ -289,8 +366,8 @@ export const PendingReviewView: React.FC = () => {
       return;
     }
 
-    aprovarDocumentoOCR(currentDoc.id, dadosFinais);
     if (acaoFinanceira === 'SOMENTE_ARQUIVAR') {
+      aprovarDocumentoOCR(currentDoc.id, dadosFinais);
       const saved = await flushPersistence();
       showToast(
         saved
@@ -333,20 +410,18 @@ export const PendingReviewView: React.FC = () => {
         : currentDoc.dadosExtraidos.parcelaNumero
     };
 
-    if (
-      launchType === 'DESPESA' &&
-      ['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo) &&
-      !currentDoc.totalEntidadesDocumento
-    ) {
-      addLancamentoComDDL(baseLaunch, dataEmissao, prazos, dataVencimento, { notify: false });
-    } else {
-      addLancamento(baseLaunch);
-    }
+    const created = approvedSchedule
+      ? addLancamentoComDDL(baseLaunch, dataEmissao, [], dataVencimento, { notify: false, parcelas: approvedSchedule })
+      : addLancamento(baseLaunch);
+    if (!created) return;
+    aprovarDocumentoOCR(currentDoc.id, dadosFinais);
 
     const saved = await flushPersistence();
     showToast(
       saved
-        ? 'Documento aprovado e lançamento financeiro salvos.'
+        ? approvedSchedule && approvedSchedule.length > 1
+          ? `Documento aprovado e ${approvedSchedule.length} boletos salvos.`
+          : 'Documento aprovado e lançamento financeiro salvos.'
         : 'A aprovação ainda não foi confirmada. Use “Tentar salvar” antes de sair.',
       saved ? 'success' : 'error'
     );
@@ -519,7 +594,7 @@ export const PendingReviewView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-600 mb-1">Movimento</label>
-                  <select value={sentido} onChange={(e) => setSentido(e.target.value as SentidoFinanceiro)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
+                  <select value={sentido} onChange={(e) => changeDirection(e.target.value as SentidoFinanceiro)} className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
                     <option value="A_CONFIRMAR">Confirmar...</option>
                     <option value="ENTRADA">Entrada</option>
                     <option value="SAIDA">Saída</option>
@@ -555,8 +630,9 @@ export const PendingReviewView: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Unidade / Filial *</label>
+                <label htmlFor="ocr-unit" className="block text-[11px] font-semibold text-gray-700 mb-1">Unidade / Filial *</label>
                 <select
+                  id="ocr-unit"
                   value={unidade}
                   onChange={(e) => setUnidade(e.target.value)}
                   disabled={isFinance}
@@ -616,14 +692,28 @@ export const PendingReviewView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">CPF/CNPJ da contraparte</label>
+                <label htmlFor="ocr-tax-id" className="block text-[11px] font-semibold text-gray-700 mb-1">CPF/CNPJ da contraparte</label>
                 <input
+                  id="ocr-tax-id"
                   type="text"
                   value={cnpj}
                   onChange={(e) => setCnpj(e.target.value)}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs font-mono focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
                 />
               </div>
+            </div>
+
+            <div role="status" className={`rounded-lg border p-2.5 text-xs ${matchedParty?.ativo && completeTaxId
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : 'border-amber-200 bg-amber-50 text-amber-950'}`}>
+              {!completeTaxId && <p>{cnpj ? 'CPF/CNPJ incompleto. Confira no documento.' : 'CPF/CNPJ não identificado no documento.'}</p>}
+              <p>{partyStatus}</p>
+              {matchedParty?.ativo && (fornecedor !== matchedParty.nome || (!completeTaxId && matchedParty.cnpj)) && (
+                <button type="button" onClick={() => { setFornecedor(matchedParty.nome); setCnpj(matchedParty.cnpj || cnpj); }}
+                  className="mt-1 min-h-8 rounded-md border border-current px-2 font-semibold">
+                  Usar cadastro
+                </button>
+              )}
             </div>
 
             {(currentDoc.dadosExtraidos.pagador || currentDoc.dadosExtraidos.recebedor || currentDoc.dadosExtraidos.identificadorTransacao || currentDoc.dadosExtraidos.linhaDigitavel) && (
@@ -637,22 +727,27 @@ export const PendingReviewView: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Valor Total (R$)</label>
+                <label htmlFor="ocr-document-amount" className="block text-[11px] font-semibold text-gray-700 mb-1">{usesSchedule ? 'Valor do documento (R$)' : 'Valor Total (R$)'}</label>
                 <input
+                  id="ocr-document-amount"
                   type="number"
                   step="0.01"
                   value={valorTotal}
-                  onChange={(e) => setValorTotal(e.target.value)}
+                  onChange={(e) => { setValorTotal(e.target.value); setDifferenceConfirmed(false); }}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs font-black text-rose-700 focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Data de Emissão (Boleto/NF)</label>
+                <label htmlFor="ocr-issue-date" className="block text-[11px] font-semibold text-gray-700 mb-1">Data de Emissão (Boleto/NF)</label>
                 <input
+                  id="ocr-issue-date"
                   type="date"
                   value={dataEmissao}
-                  onChange={(e) => setDataEmissao(e.target.value)}
+                  onChange={(e) => {
+                    setDataEmissao(e.target.value);
+                    if (!dataCompetencia || dataCompetencia === dataEmissao) setDataCompetencia(e.target.value);
+                  }}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-xs font-semibold focus:ring-2 focus:ring-[#131b2e] focus:outline-none"
                 />
               </div>
@@ -674,89 +769,19 @@ export const PendingReviewView: React.FC = () => {
               </p>
             </div>
 
-            {/* DDL Condition selector and live preview */}
-            {impactoDRE === 'DESPESA' && ['BOLETO', 'DDA', 'NFE', 'NFSE', 'FATURA'].includes(currentDoc.tipo) && (
-            <div className="bg-[#f8f9ff] border border-[#C5A059]/40 p-3 rounded-lg space-y-2">
-              <div className="flex flex-wrap items-center justify-between">
-                <label className="text-xs font-bold text-[#0b1c30] flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[#C5A059] text-base">event_note</span>
-                  Condição de Pagamento (DDL)
-                </label>
-                {numVal > 0 && prazos.length > 1 && (
-                  <span className="text-[10px] font-extrabold text-[#775a19] bg-[#ffdea5] px-2 py-0.5 rounded">
-                    Faturado em {prazos.length} parcelas DDL
-                  </span>
-                )}
-              </div>
-
-              <select
-                value={selectedCondicaoId}
-                onChange={(e) => setSelectedCondicaoId(e.target.value)}
-                className="w-full px-2.5 py-1.5 border border-[#d3e4fe] rounded-md text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e]"
-              >
-                {condicoesPagamento.filter((c) => c.ativa && (!currentDoc.totalEntidadesDocumento || c.prazosDias.length === 1)).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome}
-                  </option>
-                ))}
-              </select>
-
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
-                <div>
-                  <label className="block text-[10px] font-semibold text-gray-600 mb-1">
-                    {prazos.length > 1 ? 'Vencimento da primeira parcela' : 'Data de vencimento'}
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={dataVencimento}
-                    onChange={(e) => setDataVencimento(e.target.value)}
-                    className="w-full px-2.5 py-1.5 border border-[#d3e4fe] rounded-md text-xs font-bold text-[#0b1c30] bg-white focus:ring-2 focus:ring-[#131b2e]"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDataVencimento(vencimentoCalculadoDDL)}
-                  className="px-3 py-1.5 border border-[#C5A059] text-[#775a19] bg-white rounded-md text-[10px] font-bold hover:bg-[#fff8e8] transition whitespace-nowrap"
-                >
-                  Usar cálculo DDL
-                </button>
-              </div>
-              <p className="text-[10px] text-gray-500">
-                A data pode ser corrigida manualmente antes da aprovação.
-                {prazos.length > 1 ? ' As demais parcelas manterão o intervalo definido no DDL.' : ''}
-              </p>
-
-              {/* Calculated Boletos List */}
-              {numVal > 0 && prazos.length > 0 && (
-                <div className="pt-1 space-y-1">
-                  <span className="text-[10px] text-gray-500 font-medium block">
-                    Vencimentos calculados pelo sistema:
-                  </span>
-                  <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
-                    {prazos.map((dias, idx) => {
-                      const dt = new Date(`${vencimentos[idx]}T12:00:00`);
-                      const dtFormatted = dt.toLocaleDateString('pt-BR');
-                      const valPart = (numVal / prazos.length);
-
-                      return (
-                        <div
-                          key={idx}
-                          className="flex flex-wrap items-center justify-between bg-white px-2 py-1 rounded border border-gray-200 text-[11px]"
-                        >
-                          <span className="font-medium text-gray-700">
-                            Boleto {idx + 1}/{prazos.length} ({dias} dias DDL)
-                          </span>
-                          <span className="font-bold text-[#0b1c30]">
-                            R$ {valPart.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} &bull; Venc: {dtFormatted}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            {usesSchedule && acaoFinanceira !== 'VINCULAR_EXISTENTE' && acaoFinanceira !== 'SOMENTE_ARQUIVAR' && (
+              <div key={currentDoc.id}><OcrPaymentSchedule
+                issueDate={dataEmissao}
+                referenceCents={referenceCents}
+                rows={parcelas}
+                conditions={condicoesPagamento.filter((item) => item.ativa)}
+                sourceTerms={currentDoc.dadosExtraidos.prazosPagamento || []}
+                allowMultiple={allowMultiple}
+                differenceConfirmed={differenceConfirmed}
+                onConfirmDifference={setDifferenceConfirmed}
+                onChange={changeSchedule}
+                onApplyCondition={applyCondition}
+              /></div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

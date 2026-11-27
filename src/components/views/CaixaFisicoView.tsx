@@ -3,14 +3,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SortableTableHeader } from '../common/SortableTableHeader';
 import { useSortableData } from '../../hooks/useSortableData';
-import { normalizeDateValue } from '../../utils/dateRange';
 
 const formatCurrency = (value: number) =>
   value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export const CaixaFisicoView: React.FC = () => {
   const {
-    sessaoCaixa,
+    movimentacoesCaixa,
     bancos,
     units,
     selectedUnit,
@@ -34,10 +33,11 @@ export const CaixaFisicoView: React.FC = () => {
   }, [currentUser, isFinance, selectedUnit]);
 
   const contasUnidade = bancos.filter((banco) => banco.ativo && bankBelongsToUnit(banco, unidadeCaixa, units));
-  const contaCaixa = contasUnidade.find(isPhysicalCashAccount);
+  const contasCaixa = contasUnidade.filter(isPhysicalCashAccount);
+  const saldoCaixa = contasCaixa.reduce((saldo, conta) => saldo + conta.saldo, 0);
   const movimentacoesDaUnidade = useMemo(
-    () => sessaoCaixa.movimentacoes.filter((movimento) => movimento.unidade === unidadeCaixa),
-    [sessaoCaixa.movimentacoes, unidadeCaixa]
+    () => movimentacoesCaixa.filter((movimento) => movimento.unidade === unidadeCaixa),
+    [movimentacoesCaixa, unidadeCaixa]
   );
   const totalEntradas = movimentacoesDaUnidade
     .filter((movimento) => movimento.sentido === 'ENTRADA')
@@ -76,7 +76,7 @@ export const CaixaFisicoView: React.FC = () => {
         </div>
       </div>
 
-      {!contaCaixa ? (
+      {!contasCaixa.length ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-900">
           <strong>Nenhum Caixa Físico ativo para {unidadeCaixa || 'a unidade selecionada'}.</strong>
           <p className="text-xs mt-1">Um administrador deve cadastrar uma conta com o nome “Caixa Físico” e vinculá-la à unidade.</p>
@@ -85,8 +85,8 @@ export const CaixaFisicoView: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="bg-[#eff4ff] p-4 rounded-xl border border-[#d3e4fe]">
             <p className="text-[10px] font-bold text-[#131b2e] uppercase">Saldo disponível agora</p>
-            <p className="text-xl font-black text-[#0b1c30] mt-0.5">{formatCurrency(contaCaixa.saldo)}</p>
-            <p className="text-[10px] text-gray-500 mt-1">{contaCaixa.banco} · {unidadeCaixa}</p>
+            <p className="text-xl font-black text-[#0b1c30] mt-0.5">{formatCurrency(saldoCaixa)}</p>
+            <p className="text-[10px] text-gray-500 mt-1">{contasCaixa.map((conta) => conta.banco).join(' · ')} · {unidadeCaixa}</p>
           </div>
           <div className="bg-white p-4 rounded-xl border border-[#e5eeff]">
             <p className="text-[10px] font-bold text-emerald-600 uppercase">Entradas registradas</p>
@@ -116,7 +116,7 @@ export const CaixaFisicoView: React.FC = () => {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#eff4ff] text-[#0b1c30] uppercase text-[10px] font-bold tracking-wider">
-                <SortableTableHeader label="Data / Hora" sortKey="data" accessor={(item) => normalizeDateValue(item.dataHora) || item.dataHora} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
+                <SortableTableHeader label="Data / Hora" sortKey="data" accessor={(item) => item.dataHora} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Operação" sortKey="operacao" accessor={(item) => item.tipo} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Descrição / Histórico" sortKey="descricao" accessor={(item) => item.descricao} sortConfig={sortConfig} onSort={requestSort} className="p-3" />
                 <SortableTableHeader label="Finalidade" sortKey="finalidade" accessor={(item) => item.finalidade || ''} sortConfig={sortConfig} onSort={requestSort} className="p-3" />

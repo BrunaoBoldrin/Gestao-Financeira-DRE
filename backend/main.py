@@ -28,6 +28,7 @@ from .auth import (
     update_auth_user,
 )
 from .database import database_configured, database_health
+from .cash_ledger import cash_ledger
 from .encryption import encryption_configured
 from .models import OCRRequest
 from .ocr_service import (
@@ -62,6 +63,8 @@ def serialize_financial_data(data: dict) -> dict:
         "cnpj": data.get("cnpj", ""),
         "dataEmissao": data.get("dataEmissao", ""),
         "dataVencimento": data.get("dataVencimento", ""),
+        "parcelas": data.get("parcelas", []),
+        "prazosPagamento": data.get("prazosPagamento", []),
         "valorTotal": data.get("valorTotal", 0),
         "categoria": data.get("categoria", "Despesas Operacionais"),
         "centroCusto": data.get("centroCusto", "Administrativo"),
@@ -72,6 +75,8 @@ def serialize_financial_data(data: dict) -> dict:
         "documentoNumero": data.get("documentoNumero", ""),
         "pagador": data.get("pagador", ""),
         "recebedor": data.get("recebedor", ""),
+        "cpfCnpjPagador": data.get("cpfCnpjPagador", ""),
+        "cpfCnpjRecebedor": data.get("cpfCnpjRecebedor", ""),
         "sentidoSugerido": data.get("sentidoSugerido", "A_CONFIRMAR"),
         "impactoDRESugerido": data.get("impactoDRESugerido", "A_CONFIRMAR"),
         "finalidadeSugerida": data.get("finalidadeSugerida", "A_CONFIRMAR"),
@@ -173,6 +178,7 @@ def get_application_state(response: Response, auth_user: dict = Depends(require_
         "revision": revision,
         "empty": state is None,
         "data": visible_state(state, auth_user).model_dump(mode="json") if state else None,
+        "movimentacoesCaixa": cash_ledger(state, auth_user),
     }
 
 
@@ -186,6 +192,7 @@ def put_application_state(
         if current_revision != payload.expectedRevision:
             raise StateConflictError(current_revision)
         state = merge_user_state(payload.data, previous, auth_user)
+        movements = cash_ledger(state, auth_user)
         revision = save_application_state(
             state,
             expected_revision=payload.expectedRevision,
@@ -205,7 +212,7 @@ def put_application_state(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Não foi possível salvar os dados no PostgreSQL.") from exc
-    return {"success": True, "revision": revision}
+    return {"success": True, "revision": revision, "movimentacoesCaixa": movements}
 
 
 @app.post("/api/files", dependencies=[Depends(require_write_access)])
